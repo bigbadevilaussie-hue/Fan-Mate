@@ -7,14 +7,10 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
-void initBLE();
+extern volatile bool notificationsPaused;
 
-void updateBLEData(
-    float temp,
-    int fanPct,
-    int rpm,
-    bool phoneConnected,
-    int alertState
-);
+void initBLE();
+void updateBLEData(float temp, int fanPct, int rpm,
+                   bool phoneConnected, int alertState);
 
 #endif

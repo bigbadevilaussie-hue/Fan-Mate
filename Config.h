@@ -1,7 +1,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define FAN_MATE_VERSION "2.02"
+#define FAN_MATE_VERSION "2.03"
 
 // Pins
 #define SDA_PIN        5
@@ -56,5 +56,11 @@
 
 #define TIME_UUID \
     "beb5483e-36e1-4688-b7f5-ea07361b26a9"
+
+#define OTA_DATA_UUID \
+    "beb5483e-36e1-4688-b7f5-ea07361b26ac"
+
+#define PAUSE_UUID \
+    "beb5483e-36e1-4688-b7f5-ea07361b26af"
 
 #endif

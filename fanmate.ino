@@ -19,14 +19,25 @@ void setup() {
     Serial.begin(115200);
     delay(500);
 
+    Serial.println("========================");
+    Serial.printf("  Fan-Mate V%s\n", FAN_MATE_VERSION);
+    Serial.printf("  Build: %s %s\n", __DATE__, __TIME__);
+    Serial.println("  Chip:  ESP32-C3");
+    Serial.println("========================");
+
     setenv("TZ", "AEST-10", 1);
     tzset();
 
     initHardware();
     initDisplay();
+
+    drawSplashScreen();
+    Serial.println("[SPLASH] 5s...");
+    delay(5000);
+
     initBLE();
 
-    Serial.println("[BOOT] Fan-Mate V2.02 ready");
+    Serial.printf("[BOOT] Fan-Mate V%s ready\n", FAN_MATE_VERSION);
 }
 
 void loop() {
