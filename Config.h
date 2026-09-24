@@ -1,7 +1,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define FAN_MATE_VERSION "2.03"
+#define FAN_MATE_VERSION "2.11 - OTA"
 
 // Pins
 #define SDA_PIN        5

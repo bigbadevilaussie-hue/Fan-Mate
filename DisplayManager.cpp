@@ -36,7 +36,6 @@ void drawSplashScreen() {
     Serial.println("[OLED] splash shown");
 }
 
-// Main screen — EXACTLY as V2.02, unchanged
 void updateDisplay(
     float temp,
     int fanPct,
@@ -99,7 +98,6 @@ void drawFwStartScreen() {
     Serial.println("[OLED] FW start shown");
 }
 
-// OTA screen — bar driven by transfer %
 void drawOtaScreen(uint8_t pct, uint32_t recv, uint32_t total) {
     display.clearDisplay();
     display.setTextColor(SSD1306_WHITE);

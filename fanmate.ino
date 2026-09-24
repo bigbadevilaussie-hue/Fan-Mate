@@ -1,5 +1,4 @@
-// FAN-MATE V2.02
-// Modular version of known-good FAN-MATE V1.10
+// FAN-MATE - Modular version
 // Requires Arduino ESP32 core 2.x (2.0.17)
 
 #include "Config.h"
@@ -63,11 +62,8 @@ void loop() {
         phonePresent
     );
 
-    updateTach();
-
     if (now - lastOLED >= 500) {
         lastOLED = now;
-
         updateDisplay(
             currentTemp,
             fanPct,
@@ -79,7 +75,6 @@ void loop() {
 
     if (now - lastPublish >= 2000) {
         lastPublish = now;
-
         updateBLEData(
             currentTemp,
             fanPct,
@@ -91,16 +86,8 @@ void loop() {
 
     if (now - lastStatus >= 10000) {
         lastStatus = now;
-
-        Serial.printf(
-            "[STATUS] temp=%.1f fan=%d%% rpm=%d phone=%d alert=%d\n",
-            currentTemp,
-            fanPct,
-            fanRPM,
-            phonePresent ? 1 : 0,
-            alertState
-        );
+        Serial.printf("[STATUS] temp=%.1f fan=%d%% rpm=%d phone=%d alert=%d\n",
+                      currentTemp, fanPct, fanRPM,
+                      phonePresent ? 1 : 0, alertState);
     }
-
-    delay(50);
 }

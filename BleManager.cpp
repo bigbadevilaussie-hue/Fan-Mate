@@ -20,17 +20,18 @@ static uint32_t millisAtSync = 0;
 static bool timeSynced = false;
 
 volatile bool notificationsPaused = false;
+volatile bool otaInProgress = false;
 
 static uint32_t otaExpectedSize = 0;
 static uint32_t otaBytesReceived = 0;
 static char otaExpectedMd5[33] = "";
-static bool otaInProgress = false;
 static uint32_t otaLastPrintBytes = 0;
+static uint32_t otaLastReadySent = 0;
 
 class ServerCallbacks : public BLEServerCallbacks {
     void onConnect(BLEServer* s) override {
-        Serial.printf("[BLE] client connected (count=%d)\n",
-                      s->getConnectedCount());
+        Serial.println("[BLE] client connected");
+        delay(200);
         uint16_t mtu = s->getPeerMTU(s->getConnId());
         Serial.printf("[BLE] MTU negotiated: %u\n", mtu);
     }
@@ -84,6 +85,7 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
         uint8_t* data = (uint8_t*)v.data();
         size_t len = v.length();
 
+        // ---- Header packet ----
         if (!otaInProgress) {
             if (len < 36) {
                 Serial.printf("[OTA] header too short (%u)\n", (unsigned)len);
@@ -105,11 +107,13 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
 
             otaBytesReceived = 0;
             otaLastPrintBytes = 0;
+            otaLastReadySent = 0;
             otaInProgress = true;
             drawFwStartScreen();
             return;
         }
 
+        // ---- Firmware chunks ----
         if (Update.write(data, len) != len) {
             Serial.printf("[OTA] Update.write FAILED at %lu: %s\n",
                           (unsigned long)otaBytesReceived,
@@ -122,6 +126,7 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
 
         otaBytesReceived += len;
 
+        // Progress print every 20KB
         if (otaBytesReceived - otaLastPrintBytes >= 20480) {
             otaLastPrintBytes = otaBytesReceived;
             uint8_t pct = (uint8_t)((otaBytesReceived * 100ULL) / otaExpectedSize);
@@ -131,6 +136,15 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
             drawOtaScreen(pct, otaBytesReceived, otaExpectedSize);
         }
 
+        // ---- Flow control: notify GUI every 2KB "ready for more" ----
+        if (otaBytesReceived - otaLastReadySent >= 2048) {
+            otaLastReadySent = otaBytesReceived;
+            uint8_t ready = 0x01;
+            pOtaChar->setValue(&ready, 1);
+            pOtaChar->notify();
+        }
+
+        // ---- Complete ----
         if (otaBytesReceived >= otaExpectedSize) {
             Serial.printf("[OTA] all chunks recv: %lu bytes\n",
                           (unsigned long)otaBytesReceived);
@@ -189,9 +203,13 @@ void initBLE() {
         BLECharacteristic::PROPERTY_WRITE);
     pTimeChar->setCallbacks(new TimeCallbacks());
 
+    // ---- OTA characteristic now supports NOTIFY for flow control ----
     pOtaChar = pService->createCharacteristic(
         OTA_DATA_UUID,
-        BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
+        BLECharacteristic::PROPERTY_WRITE |
+        BLECharacteristic::PROPERTY_WRITE_NR |
+        BLECharacteristic::PROPERTY_NOTIFY);
+    pOtaChar->addDescriptor(new BLE2902());
     pOtaChar->setCallbacks(new OtaCallbacks());
 
     pPauseChar = pService->createCharacteristic(

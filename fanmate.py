@@ -14,7 +14,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from bleak import BleakScanner, BleakClient
 
-GUI_VERSION = "2.10"
+GUI_VERSION = "2.11"
 DEVICE_NAME = "Fan-Mate"
 SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 DATA_UUID    = "beb5483e-36e1-4688-b7f5-ea07361b26a8"
@@ -196,11 +196,31 @@ class BLEWorker(threading.Thread):
         self.running = True
         self.client = None
         self.loop = None
+        self.mtu = 23
 
     def run(self):
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         self.loop.run_until_complete(self._loop())
+
+    async def _request_mtu(self, client, target=517):
+        try:
+            backend = getattr(client, "_backend", None)
+            if backend is None:
+                print("[MTU] no backend")
+                return 23
+            acquire = getattr(backend, "_acquire_mtu", None)
+            if acquire is None:
+                print("[MTU] Bleak too old for _acquire_mtu — using MTU 23 fallback")
+                return 23
+            await acquire()
+            got = getattr(backend, "_mtu_size", 23)
+            print(f"[MTU] requested {target}, got {got}")
+            self.mtu = got
+            return got
+        except Exception as e:
+            print(f"[MTU] request failed: {e}")
+            return 23
 
     async def _loop(self):
         global latest, last_parse_fail, TIME_WRITE_LOGGED, DEVICE_ADDR
@@ -244,6 +264,8 @@ class BLEWorker(threading.Thread):
                         set_status("connected")
                         print("[BLE] connected")
 
+                        await self._request_mtu(c, target=517)
+
                         try:
                             await c.write_gatt_char(
                                 TIME_UUID, int(time.time()).to_bytes(4, "little"))
@@ -274,6 +296,7 @@ class BLEWorker(threading.Thread):
                     await asyncio.sleep(2)
                 finally:
                     self.client = None
+                    self.mtu = 23
 
             except Exception as e:
                 set_status(f"err: {e}")
@@ -289,11 +312,16 @@ class BLEWorker(threading.Thread):
             self._ota_async(fw_bytes), self.loop)
         def _wait():
             try:
-                ok, msg = fut.result(timeout=180)
+                ok, msg = fut.result(timeout=1800)
             except Exception as e:
                 ok, msg = False, str(e)
             result_cb(ok, msg)
         threading.Thread(target=_wait, daemon=True).start()
+
+    def _chunk_size(self):
+        if self.mtu >= 247: return 244
+        if self.mtu >= 185: return 182
+        return 20
 
     async def _ota_async(self, fw):
         if not self.client or not self.client.is_connected:
@@ -301,45 +329,99 @@ class BLEWorker(threading.Thread):
 
         size = len(fw)
         md5_hex = hashlib.md5(fw).hexdigest().encode()
+        chunk_size = self._chunk_size()
+        total_chunks = (size + chunk_size - 1) // chunk_size
 
         print(f"[OTA] sending {size} bytes, md5={md5_hex.decode()}")
+        print(f"[OTA] MTU={self.mtu}, chunk={chunk_size}, chunks={total_chunks}")
+        print(f"[OTA] estimated time: {total_chunks * 0.015:.1f}s at 15ms/chunk")
+        print(f"[OTA] flow-control: ESP32 notifies every 2KB")
 
+        # ---- Flow-control setup ----
+        ready_event = asyncio.Event()
+        notify_count = {"n": 0}
+
+        def on_ota_notify(sender, data):
+            notify_count["n"] += 1
+            ready_event.set()
+
+        try:
+            await self.client.start_notify(OTA_UUID, on_ota_notify)
+            print("[OTA] flow-control notify subscribed")
+        except Exception as e:
+            print(f"[OTA] notify sub failed: {e}")
+            return False, f"notify sub: {e}"
+
+        # Pause regular data notifies
         try:
             await self.client.write_gatt_char(PAUSE_UUID, bytes([0x00]))
             print("[OTA] notifications paused")
         except Exception as e:
             print(f"[OTA] pause failed: {e}")
 
+        # Send header
         try:
             header = struct.pack("<I", size) + md5_hex
             await self.client.write_gatt_char(OTA_UUID, header)
             print("[OTA] header sent")
         except Exception as e:
+            try:
+                await self.client.stop_notify(OTA_UUID)
+            except Exception:
+                pass
             return False, f"header: {e}"
 
-        CHUNK = 240
+        # ---- Stream chunks with flow control ----
         sent = 0
         last_report = 0
         t0 = time.time()
+        stall_count = 0
 
-        for i in range(0, size, CHUNK):
-            chunk = fw[i:i+CHUNK]
+        for i in range(0, size, chunk_size):
+            chunk = fw[i:i+chunk_size]
             try:
-                # write-with-response: each chunk waits for ESP32 ATT ACK
                 await self.client.write_gatt_char(OTA_UUID, chunk, response=True)
             except Exception as e:
+                try:
+                    await self.client.stop_notify(OTA_UUID)
+                except Exception:
+                    pass
                 return False, f"chunk @ {i}: {e}"
 
             sent += len(chunk)
 
-            if sent - last_report >= 20000:
+            # Wait for the ESP32's "ready for more" notify every 2KB
+            if sent % 2048 < chunk_size:
+                try:
+                    await asyncio.wait_for(ready_event.wait(), timeout=3.0)
+                    ready_event.clear()
+                    stall_count = 0
+                except asyncio.TimeoutError:
+                    stall_count += 1
+                    print(f"[OTA] stall at {sent}/{size} — retry {stall_count}")
+                    if stall_count >= 3:
+                        try:
+                            await self.client.stop_notify(OTA_UUID)
+                        except Exception:
+                            pass
+                        return False, f"ESP32 stalled at {sent}"
+
+            # Progress report every 20KB
+            if sent - last_report >= 20480:
                 last_report = sent
                 pct = (sent * 100) // size
                 print(f"[OTA] {pct}% ({sent}/{size})")
                 set_status(f"OTA {pct}%")
 
         elapsed = time.time() - t0
-        print(f"[OTA] all chunks sent in {elapsed:.1f}s")
+        rate = size / elapsed / 1024 if elapsed > 0 else 0
+        print(f"[OTA] all chunks sent in {elapsed:.1f}s ({rate:.1f} KB/s)")
+        print(f"[OTA] flow-control notifies: {notify_count['n']}")
+
+        try:
+            await self.client.stop_notify(OTA_UUID)
+        except Exception:
+            pass
 
         # Wait for ESP32 reboot
         for _ in range(300):
@@ -446,7 +528,6 @@ class App:
         self.theme = current_theme()
         self.is_day = is_daytime()
 
-        # ---- Menu ----
         mb = tk.Menu(root)
         am = tk.Menu(mb, tearoff=0)
         am.add_command(label="🌦️  Refresh Weather",
@@ -462,14 +543,12 @@ class App:
         mb.add_cascade(label="🌀 Fan-Mate", menu=am)
         root.config(menu=mb)
 
-        # ---- Header ----
         self.title_lbl = tk.Label(root, text="🌀 Fan-Mate", font=FONT_TITLE)
         self.title_lbl.pack(pady=(16, 2))
         self.status_label = tk.Label(root, text="",
                                      font=("Helvetica Neue", 10, "italic"))
         self.status_label.pack(pady=(0, 10))
 
-        # ---- Weather ----
         self.weather_card = Card(root, self)
         self.weather_card.pack(fill="x", padx=18, pady=(0, 8))
         self.weather_title = tk.Label(self.weather_card, text="📍 Atkinsons Dam",
@@ -485,7 +564,6 @@ class App:
                                         font=FONT_TINY)
         self.weather_range_lbl.pack(pady=(0, 10))
 
-        # ---- Phone temperature ----
         self.temp_card = Card(root, self)
         self.temp_card.pack(fill="x", padx=18, pady=8)
         self.temp_title = tk.Label(self.temp_card, text="🌡️ PHONE TEMPERATURE",
@@ -494,7 +572,6 @@ class App:
         self.temp_lbl = tk.Label(self.temp_card, text="--.-°C", font=FONT_BIG)
         self.temp_lbl.pack(pady=(0, 10))
 
-        # ---- Fan / RPM ----
         self.fan_card = Card(root, self)
         self.fan_card.pack(fill="x", padx=18, pady=8)
         fr = tk.Frame(self.fan_card)
@@ -503,7 +580,6 @@ class App:
         self._divider(fr)
         self.rpm_lbl  = self._col(fr, "⚙️ RPM",  "--")
 
-        # ---- Phone / Alert ----
         self.status_card = Card(root, self)
         self.status_card.pack(fill="x", padx=18, pady=8)
         sr = tk.Frame(self.status_card)
@@ -512,14 +588,12 @@ class App:
         self._divider(sr)
         self.alert_lbl = self._col(sr, "🚨 ALERT", "--")
 
-        # ---- Time ----
         self.time_card = Card(root, self)
         self.time_card.pack(fill="x", padx=18, pady=8)
         self.time_lbl = tk.Label(self.time_card, text="--:--",
                                  font=("Helvetica Neue", 14, "bold"))
         self.time_lbl.pack(pady=10)
 
-        # ---- Graph ----
         self.graph_card = Card(root, self)
         self.graph_card.pack(fill="x", padx=18, pady=8)
         self.graph_title = tk.Label(self.graph_card,
@@ -529,7 +603,6 @@ class App:
         self.temp_graph = Graph(self.graph_card, self, y_min=15, y_max=55)
         self.temp_graph.pack(padx=6, pady=(4, 8))
 
-        # ---- Footer ----
         self.footer_lbl = tk.Label(root, text=f"GUI v{GUI_VERSION}",
                                    font=FONT_TINY)
         self.footer_lbl.pack(pady=(2, 10))
@@ -607,9 +680,7 @@ class App:
             self.apply_theme()
         self.root.after(60_000, self.theme_check)
 
-    # ---- OTA ----
     def menu_ota(self):
-        # Fixed path — Arduino IDE 2.x always exports here
         if not os.path.isfile(BUILD_BIN):
             messagebox.showerror(
                 "OTA",
@@ -643,6 +714,7 @@ class App:
             f"Source ver:  {src_ver}\n"
             f"Built:       {built_str}\n"
             f"Device ver:  {dev_ver}\n"
+            f"MTU:         {self.worker.mtu}\n"
         )
         if stale:
             msg += "\n⚠️  Config.h is newer than the .bin.\nRe-export the binary before updating."
@@ -673,7 +745,6 @@ class App:
         set_status("OTA starting…")
         self.worker.start_ota(fw, on_result)
 
-    # ---- Update loop ----
     def tick(self):
         t = self.theme
         d = latest
