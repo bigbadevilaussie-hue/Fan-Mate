@@ -1,4 +1,4 @@
-// FAN-MATE V2.00
+// FAN-MATE V2.02
 // Modular version of known-good FAN-MATE V1.10
 // Requires Arduino ESP32 core 2.x (2.0.17)
 
@@ -26,7 +26,7 @@ void setup() {
     initDisplay();
     initBLE();
 
-    Serial.println("[BOOT] Fan-Mate V2.00 ready");
+    Serial.println("[BOOT] Fan-Mate V2.02 ready");
 }
 
 void loop() {
@@ -36,8 +36,8 @@ void loop() {
 
     unsigned long now = millis();
 
-    updateFakeSensor(currentTemp);
-    updatePhoneDetection(currentTemp);
+    readDS18B20(currentTemp);
+    updatePhoneDetection();
 
     int fanPct = 0;
     int fanRPM = 0;

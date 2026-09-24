@@ -1,17 +1,18 @@
 #include "FanController.h"
 #include "Config.h"
 
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+static OneWire oneWire(DS18B20_PIN);
+static DallasTemperature ds18b20(&oneWire);
+
 static int fanPWM = 0;
 static int fanPct = 0;
 static int fanRPM = 0;
 static int alertLevel = 0;
 
 static bool phonePresent = false;
-
-static float lastTemp = 0.0;
-
-static unsigned long lastPhoneRead = 0;
-static unsigned long coolStart = 0;
 
 static volatile unsigned long tachPulses = 0;
 static unsigned long lastTachRead = 0;
@@ -22,82 +23,50 @@ static bool beepActive = false;
 static unsigned long beepTimer = 0;
 
 
-// Fake sensor
-void updateFakeSensor(float &currentTemp) {
+// DS18B20 temperature sensor
+void readDS18B20(float &currentTemp) {
 
-    static unsigned long lastChange = 0;
-    static int step = 0;
-
-    static const float temps[] = {
-        22.0,
-        30.0,
-        36.0,
-        42.0,
-        46.0,
-        52.0,
-        46.0,
-        42.0,
-        30.0,
-        22.0
-    };
-
-    const int NUM_STEPS = 10;
+    static unsigned long lastRead = 0;
 
     unsigned long now = millis();
 
-    if (now - lastChange >= 15000) {
-
-        lastChange = now;
-
-        step = (step + 1) % NUM_STEPS;
-
-        currentTemp = temps[step];
-
-        Serial.printf(
-            "[FAKE] step %d: %.1f\n",
-            step,
-            currentTemp
-        );
-    }
-}
-
-
-// Phone detection
-void updatePhoneDetection(float currentTemp) {
-
-    unsigned long now = millis();
-
-    if (now - lastPhoneRead < 3000) {
+    if (now - lastRead < 2000) {
         return;
     }
 
-    float delta = currentTemp - lastTemp;
-    float rate = delta / 3.0;
+    lastRead = now;
 
-    lastTemp = currentTemp;
-    lastPhoneRead = now;
+    ds18b20.requestTemperatures();
 
-    if (rate > 0.1 && currentTemp > 28.0) {
+    float t = ds18b20.getTempCByIndex(0);
 
-        if (!phonePresent) {
-            phonePresent = true;
-            Serial.println("[PHONE] detected");
-        }
+    if (t == DEVICE_DISCONNECTED_C) {
+        Serial.println("[DS18B20] disconnected");
+        return;
     }
 
-    if (currentTemp < 26.0) {
+    currentTemp = t;
+}
 
-        if (coolStart == 0) {
-            coolStart = now;
+
+// Phone presence detection (hall sensor)
+void updatePhoneDetection() {
+
+    static bool lastState = false;
+    static unsigned long lastChange = 0;
+
+    // Active LOW — hall sensor triggers when magnet is near
+    bool present = (digitalRead(PHONE_SENSE_PIN) == LOW);
+
+    if (present != lastState) {
+        unsigned long now = millis();
+        if (now - lastChange > 500) {   // debounce
+            lastState = present;
+            lastChange = now;
+            phonePresent = present;
+            Serial.printf("[PHONE] %s\n",
+                present ? "detected" : "removed");
         }
-
-        if (now - coolStart > 120000 && phonePresent) {
-            phonePresent = false;
-            Serial.println("[PHONE] removed");
-        }
-
-    } else {
-        coolStart = 0;
     }
 }
 
@@ -344,6 +313,13 @@ void updateTach() {
 
 // Hardware initialisation
 void initHardware() {
+
+    ds18b20.begin();
+
+    pinMode(
+        PHONE_SENSE_PIN,
+        INPUT_PULLUP
+    );
 
     ledcSetup(
         0,

@@ -5,9 +5,9 @@
 
 void initHardware();
 
-void updateFakeSensor(float &currentTemp);
+void readDS18B20(float &currentTemp);
 
-void updatePhoneDetection(float currentTemp);
+void updatePhoneDetection();
 
 void updateFanAndAlerts(
     float currentTemp,

@@ -12,7 +12,7 @@ from datetime import datetime
 import tkinter as tk
 from bleak import BleakScanner, BleakClient
 
-GUI_VERSION = "1.11"
+GUI_VERSION = "2.01"
 DEVICE_NAME = "Fan-Mate"
 SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 DATA_UUID   = "beb5483e-36e1-4688-b7f5-ea07361b26a8"

@@ -1,14 +1,16 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define FAN_MATE_VERSION "2.00"
+#define FAN_MATE_VERSION "2.02"
 
 // Pins
-#define SDA_PIN       5
-#define SCL_PIN       6
-#define FAN_PWM_PIN   7
-#define BUZZER_PIN    10
-#define TACH_PIN      3
+#define SDA_PIN        5
+#define SCL_PIN        6
+#define FAN_PWM_PIN    7
+#define BUZZER_PIN     10
+#define TACH_PIN       3
+#define DS18B20_PIN    4
+#define PHONE_SENSE_PIN 1
 
 // Temperature thresholds
 #define TEMP_ON       34.0
