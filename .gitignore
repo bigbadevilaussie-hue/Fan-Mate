@@ -6,3 +6,13 @@ __pycache__/
 secrets.h
 *.local.h
 backups/
+
+# No backups
+*.bak
+*.py.bak
+*.broken_*
+.broken_*/
+.bak_*/
+fanmate-backup-*.py
+fanmate-v2.*.py
+fanmate-v3.0*.py
