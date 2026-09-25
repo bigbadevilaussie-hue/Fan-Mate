@@ -71,6 +71,7 @@ void setup() {
 // ============================================================
 static unsigned long last_tick     = 0;
 static uint64_t      last_rx       = 0;
+float                lastNetKbps   = 0.0;
 static bool          have_baseline = false;
 
 static void tick_15s() {
@@ -94,6 +95,7 @@ static void tick_15s() {
         have_baseline = true;
     }
     last_rx = rx_now;
+    lastNetKbps = kbps;
 
     auto_boost_update(kbps);
 

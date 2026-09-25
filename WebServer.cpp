@@ -32,6 +32,7 @@ static void handle_root() {
     extern int   fanRPM;
     extern int   alertState;
     extern bool  phonePresent;
+    extern float lastNetKbps;
 
     String html = R"rawliteral(
 <!DOCTYPE html><html><head><meta charset="utf-8">
@@ -74,6 +75,7 @@ static void handle_status() {
     extern int   fanRPM;
     extern int   alertState;
     extern bool  phonePresent;
+    extern float lastNetKbps;
 
     String json = "{";
     json += "\"fw\":\"" + String(FAN_MATE_VERSION) + "\",";
@@ -87,6 +89,7 @@ static void handle_status() {
     json += "\"phone\":" + String(phonePresent ? 1 : 0) + ",";
     json += "\"alert\":" + String(alertState) + ",";
     json += "\"boost\":" + String(auto_boost_is_active() ? 1 : 0) + ",";
+    json += "\"net_kbps\":" + String(lastNetKbps, 1) + ",";
     json += "\"opal\":" + String(opal_logged_in() ? 1 : 0) + ",";
     json += "\"log_size\":" + String(log_get_size()) + ",";
     json += "\"log_full\":" + String(log_is_full() ? 1 : 0);
