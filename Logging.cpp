@@ -4,6 +4,7 @@
 
 #include <LittleFS.h>
 #include <time.h>
+#include <sys/time.h>
 
 // ============================================================
 //  Logging — implementation
@@ -13,30 +14,31 @@ static unsigned long last_full_beep = 0;
 static bool          warned_full    = false;
 
 // ------------------------------------------------------------
-//  Time string — real time if synced, else uptime
+//  Time string — uses RTC directly, no getLocalTime() timeout
 // ------------------------------------------------------------
 String log_time_string() {
-    struct tm timeinfo;
-    if (getLocalTime(&timeinfo, 10)) {
+    time_t now = time(nullptr);
+    if (now < 1700000000UL) {
+        // No valid time yet — fallback to uptime
         char buf[24];
-        snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d",
-                 timeinfo.tm_year + 1900,
-                 timeinfo.tm_mon + 1,
-                 timeinfo.tm_mday,
-                 timeinfo.tm_hour,
-                 timeinfo.tm_min,
-                 timeinfo.tm_sec);
+        snprintf(buf, sizeof(buf), "uptime:%lu", millis() / 1000);
         return String(buf);
     }
 
-    // Fallback: uptime
+    struct tm timeinfo;
+    localtime_r(&now, &timeinfo);
+
     char buf[24];
-    snprintf(buf, sizeof(buf), "uptime:%lu", millis() / 1000);
+    snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d",
+             timeinfo.tm_year + 1900,
+             timeinfo.tm_mon + 1,
+             timeinfo.tm_mday,
+             timeinfo.tm_hour,
+             timeinfo.tm_min,
+             timeinfo.tm_sec);
     return String(buf);
 }
 
-// ------------------------------------------------------------
-//  Init — mount LittleFS
 // ------------------------------------------------------------
 void log_init() {
     if (!LittleFS.begin(true)) {
@@ -48,7 +50,6 @@ void log_init() {
                   (unsigned)LittleFS.usedBytes(),
                   (unsigned)LittleFS.totalBytes());
 
-    // Create file with header if missing
     if (!LittleFS.exists("/log.csv")) {
         File f = LittleFS.open("/log.csv", "w");
         if (f) {
@@ -60,12 +61,7 @@ void log_init() {
 }
 
 // ------------------------------------------------------------
-//  Write one line
-// ------------------------------------------------------------
 void log_write(float temp, float mb, int boost, int rpm, int alarm, int bench) {
-    // Logging is permanent — never turned off.
-    // If file is full, stop writing (beeps continue via log_check_full).
-
     if (log_is_full()) {
         return;
     }
@@ -90,8 +86,6 @@ void log_write(float temp, float mb, int boost, int rpm, int alarm, int bench) {
 }
 
 // ------------------------------------------------------------
-//  Size
-// ------------------------------------------------------------
 size_t log_get_size() {
     if (!LittleFS.exists("/log.csv")) return 0;
     File f = LittleFS.open("/log.csv", "r");
@@ -102,18 +96,13 @@ size_t log_get_size() {
 }
 
 // ------------------------------------------------------------
-//  Full?
-// ------------------------------------------------------------
 bool log_is_full() {
     return log_get_size() >= LOG_MAX_SIZE;
 }
 
 // ------------------------------------------------------------
-//  Full check — beeps every 60s, drives OLED warning
-// ------------------------------------------------------------
 void log_check_full() {
     if (!log_is_full()) {
-        // Cleared? Reset warning state.
         if (warned_full) {
             Serial.println("[LOG] cleared — logging resumed");
             warned_full = false;
@@ -121,18 +110,15 @@ void log_check_full() {
         return;
     }
 
-    // First time hitting full
     if (!warned_full) {
         warned_full = true;
         Serial.println("[LOG] FULL — waiting for operator");
     }
 
-    // Beep beep every 60s
     unsigned long now = millis();
     if (now - last_full_beep >= 60000) {
         last_full_beep = now;
-        // Two short beeps
-        ledcWriteTone(BUZZER_CHANNEL, BUZZER_FREQ);
+
         ledcWrite(BUZZER_CHANNEL, BUZZER_MEDIUM);
         delay(100);
         ledcWrite(BUZZER_CHANNEL, 0);
@@ -140,19 +126,17 @@ void log_check_full() {
         ledcWrite(BUZZER_CHANNEL, BUZZER_MEDIUM);
         delay(100);
         ledcWrite(BUZZER_CHANNEL, 0);
+
         Serial.println("[LOG] FULL — beep beep");
     }
 }
 
-// ------------------------------------------------------------
-//  Clear — called from HTTP /log/clear
 // ------------------------------------------------------------
 void log_clear() {
     if (LittleFS.exists("/log.csv")) {
         LittleFS.remove("/log.csv");
     }
 
-    // Recreate with header
     File f = LittleFS.open("/log.csv", "w");
     if (f) {
         f.println("time,mb,temp,boost,rpm,alarm,bench");

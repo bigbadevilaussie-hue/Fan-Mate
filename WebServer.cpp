@@ -10,16 +10,21 @@
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <LittleFS.h>
+#include <Update.h>
+#include <ArduinoJson.h>
+#include <time.h>
+#include <sys/time.h>
 
 // ============================================================
 //  Web Server — HTTP interface
-//  V2.24 — fan.mode removed
+//  V3.20 — adds /time and /ota
 // ============================================================
 
 static WebServer server(HTTP_PORT);
 
-// ------------------------------------------------------------
-//  GET / — dashboard
+extern volatile bool otaInProgress;
+static bool otaStarted = false;
+
 // ------------------------------------------------------------
 static void handle_root() {
     extern float currentTemp;
@@ -38,7 +43,7 @@ h1{color:#89b4fa}.c{background:#232334;padding:14px;margin:10px 0;border-radius:
 .l{color:#9399b2;font-size:11px;text-transform:uppercase}.v{font-size:22px;font-weight:bold}
 a{color:#89b4fa}
 </style></head><body>
-<h1>🌀 Fan-Mate V2.24</h1>
+<h1>🌀 Fan-Mate V3.20</h1>
 <div class="c"><div class="l">WiFi</div><div class="v">{{SSID}} {{IP}}</div>
 <div class="l">RSSI</div><div class="v">{{RSSI}} dBm</div></div>
 <div class="c"><div class="l">Temp</div><div class="v">{{TEMP}} °C</div>
@@ -62,8 +67,6 @@ a{color:#89b4fa}
     server.send(200, "text/html", html);
 }
 
-// ------------------------------------------------------------
-//  GET /status
 // ------------------------------------------------------------
 static void handle_status() {
     extern float currentTemp;
@@ -92,8 +95,6 @@ static void handle_status() {
     server.send(200, "application/json", json);
 }
 
-// ------------------------------------------------------------
-//  GET /config — no fan.mode
 // ------------------------------------------------------------
 static void handle_config_get() {
     String json = "{";
@@ -135,8 +136,6 @@ static void handle_config_get() {
 }
 
 // ------------------------------------------------------------
-//  POST /config
-// ------------------------------------------------------------
 static void handle_config_post() {
     if (!server.hasArg("plain")) {
         server.send(400, "text/plain", "no body");
@@ -151,7 +150,37 @@ static void handle_config_post() {
 }
 
 // ------------------------------------------------------------
-//  GET /log.csv
+static void handle_time_post() {
+    if (!server.hasArg("plain")) {
+        server.send(400, "text/plain", "no body");
+        return;
+    }
+
+    String body = server.arg("plain");
+    StaticJsonDocument<128> doc;
+    DeserializationError err = deserializeJson(doc, body);
+    if (err) {
+        server.send(400, "text/plain", "bad json");
+        return;
+    }
+
+    uint32_t epoch = doc["epoch"] | 0;
+    if (epoch < 1700000000UL || epoch > 4102444800UL) {
+        server.send(400, "text/plain", "bad epoch");
+        return;
+    }
+
+    struct timeval tv;
+    tv.tv_sec  = epoch;
+    tv.tv_usec = 0;
+    settimeofday(&tv, nullptr);
+    setenv("TZ", "AEST-10", 1);
+    tzset();
+
+    Serial.printf("[TIME] synced: %lu\n", (unsigned long)epoch);
+    server.send(200, "text/plain", "OK");
+}
+
 // ------------------------------------------------------------
 static void handle_log_download() {
     if (!LittleFS.exists("/log.csv")) {
@@ -170,8 +199,6 @@ static void handle_log_download() {
 }
 
 // ------------------------------------------------------------
-//  GET /log/info
-// ------------------------------------------------------------
 static void handle_log_info() {
     String json = "{";
     json += "\"size\":" + String(log_get_size()) + ",";
@@ -182,15 +209,54 @@ static void handle_log_info() {
 }
 
 // ------------------------------------------------------------
-//  POST /log/clear
-// ------------------------------------------------------------
 static void handle_log_clear() {
     log_clear();
     server.send(200, "text/plain", "cleared");
 }
 
 // ------------------------------------------------------------
-//  GET /reboot
+static void handle_ota_upload() {
+    HTTPUpload& upload = server.upload();
+
+    if (upload.status == UPLOAD_FILE_START) {
+        Serial.printf("[OTA] start: %s\n", upload.filename.c_str());
+        otaInProgress = true;
+        otaStarted = true;
+
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+            Serial.printf("[OTA] begin FAILED: %s\n", Update.errorString());
+            otaStarted = false;
+        }
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+        if (otaStarted) {
+            if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+                Serial.printf("[OTA] write FAILED: %s\n", Update.errorString());
+                otaStarted = false;
+            }
+        }
+    } else if (upload.status == UPLOAD_FILE_END) {
+        if (otaStarted) {
+            if (Update.end(true)) {
+                Serial.printf("[OTA] OK: %u bytes\n", upload.totalSize);
+            } else {
+                Serial.printf("[OTA] end FAILED: %s\n", Update.errorString());
+            }
+        }
+    }
+}
+
+static void handle_ota_done() {
+    if (Update.hasError()) {
+        otaInProgress = false;
+        server.send(500, "text/plain",
+                    "FAIL: " + String(Update.errorString()));
+    } else {
+        server.send(200, "text/plain", "OK, rebooting");
+        delay(500);
+        ESP.restart();
+    }
+}
+
 // ------------------------------------------------------------
 static void handle_reboot() {
     server.send(200, "text/plain", "Rebooting...");
@@ -198,8 +264,6 @@ static void handle_reboot() {
     ESP.restart();
 }
 
-// ------------------------------------------------------------
-//  Setup
 // ------------------------------------------------------------
 void server_setup() {
     if (!wifi_connected()) {
@@ -211,10 +275,12 @@ void server_setup() {
     server.on("/status",     HTTP_GET,  handle_status);
     server.on("/config",     HTTP_GET,  handle_config_get);
     server.on("/config",     HTTP_POST, handle_config_post);
+    server.on("/time",       HTTP_POST, handle_time_post);
     server.on("/log.csv",    HTTP_GET,  handle_log_download);
     server.on("/log/info",   HTTP_GET,  handle_log_info);
     server.on("/log/clear",  HTTP_POST, handle_log_clear);
     server.on("/reboot",     HTTP_GET,  handle_reboot);
+    server.on("/ota",        HTTP_POST, handle_ota_done, handle_ota_upload);
 
     server.onNotFound([]() {
         server.send(404, "text/plain", "404");
@@ -225,6 +291,7 @@ void server_setup() {
     Serial.printf("[HTTP] server started on port %d\n", HTTP_PORT);
     Serial.printf("[HTTP] http://%s/\n", wifi_mdns_name().c_str());
     Serial.printf("[HTTP] http://%s/\n", wifi_ip().c_str());
+    Serial.println("[HTTP] endpoints: /, /status, /config, /time, /log.csv, /log/info, /log/clear, /ota, /reboot");
 }
 
 void server_loop() {

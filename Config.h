@@ -1,13 +1,10 @@
-// FAN-MATE V3.00 — WiFi Edition
-// Adding WiFi + HTTP server alongside BLE
+// FAN-MATE V3.20 — HTTP Edition
+// WiFi only. No BLE. OTA over HTTP.
 // Requires Arduino ESP32 core 2.x (2.0.17)
 
 #ifndef CONFIG_H
 #define CONFIG_H
 
-// ============================================================
-//  Local credentials (not committed to git)
-// ============================================================
 #if __has_include("secrets.h")
     #include "secrets.h"
 #else
@@ -15,7 +12,7 @@
     #include "secrets.example.h"
 #endif
 
-#define FAN_MATE_VERSION "3.02"
+#define FAN_MATE_VERSION "3.23"
 
 // ============================================================
 //  Pins
@@ -23,6 +20,7 @@
 #define SDA_PIN          5
 #define SCL_PIN          6
 #define FAN_PWM_PIN      7
+#define LED_PIN          8
 #define BUZZER_PIN       10
 #define TACH_PIN         3
 #define DS18B20_PIN      4
@@ -35,9 +33,6 @@
 #define TEMP_FULL     42.0
 #define TEMP_WARNING  45.0
 #define TEMP_PANIC    50.0
-
-#define FAN_MAX_WARN  191
-#define FAN_MAX_PANIC 255
 
 // ============================================================
 //  Fan PWM
@@ -77,42 +72,19 @@
 //  Opal router API
 // ============================================================
 #define OPAL_POLL_INTERVAL_MS   15000
-#define OPAL_LOGIN_REFRESH_MS   3000000    // 50 minutes
+#define OPAL_LOGIN_REFRESH_MS   3000000
 
 // ============================================================
 //  Auto Boost
 // ============================================================
 #define BOOST_DEFAULT_THRESHOLD_KBPS  300
-#define BOOST_DEFAULT_HOLD_SEC        12
+#define BOOST_DEFAULT_HOLD_SEC        4
 #define BOOST_DEFAULT_ENABLED         1
 
 // ============================================================
 //  Logging
 // ============================================================
-#define LOG_MAX_SIZE   (800 * 1024)        // 800 KB cap
-#define LOG_TICK_MS    15000               // one line every 15s
-
-// ============================================================
-//  BLE (still present in V3.00 — removed in V3.01)
-// ============================================================
-#define DEVICE_NAME "Fan-Mate"
-
-#define SERVICE_UUID \
-    "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-
-#define DATA_UUID \
-    "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-
-#define TIME_UUID \
-    "beb5483e-36e1-4688-b7f5-ea07361b26a9"
-
-#define OTA_DATA_UUID \
-    "beb5483e-36e1-4688-b7f5-ea07361b26ac"
-
-#define PAUSE_UUID \
-    "beb5483e-36e1-4688-b7f5-ea07361b26af"
-
-#define CONFIG_UUID \
-    "beb5483e-36e1-4688-b7f5-ea07361b26b0"
+#define LOG_MAX_SIZE   (800 * 1024)
+#define LOG_TICK_MS    15000
 
 #endif

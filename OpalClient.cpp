@@ -8,24 +8,14 @@
 
 // ============================================================
 //  Opal router client — implementation
-//
-//  Login:  POST /rpc  {"method":"challenge",...}
-//          → get salt, nonce, alg
-//          → compute SHA256 crypt with openssl-equivalent
-//          → POST /rpc  {"method":"login",...}
-//          → get sid
-//
-//  Poll:   POST /rpc  {"method":"call","params":[sid,"clients","get_list",{}]}
-//          → sum total_rx across all clients
+//  V3.21 — LED on during request
 // ============================================================
 
 static String   opal_sid           = "";
-static uint32_t opal_sid_time      = 0;    // millis when SID was obtained
+static uint32_t opal_sid_time      = 0;
 static uint64_t opal_last_rx       = 0;
 static bool     opal_have_baseline = false;
 
-// ------------------------------------------------------------
-//  SHA256 hex helper
 // ------------------------------------------------------------
 static String sha256_hex(const String &input) {
     byte hash[32];
@@ -40,14 +30,17 @@ static String sha256_hex(const String &input) {
 }
 
 // ------------------------------------------------------------
-//  HTTP POST to /rpc
+//  HTTP POST to /rpc — LED on during request
 // ------------------------------------------------------------
 static bool rpc_call(const String &json_body, String &response) {
+    digitalWrite(LED_PIN, LOW);   // LED ON
+
     HTTPClient http;
     String url = String("http://") + OPAL_IP + "/rpc";
 
     if (!http.begin(url)) {
         Serial.println("[OPAL] http.begin failed");
+        digitalWrite(LED_PIN, HIGH);   // LED OFF
         return false;
     }
     http.setTimeout(3000);
@@ -57,21 +50,21 @@ static bool rpc_call(const String &json_body, String &response) {
     if (code != 200) {
         Serial.printf("[OPAL] HTTP %d\n", code);
         http.end();
+        digitalWrite(LED_PIN, HIGH);   // LED OFF
         return false;
     }
 
     response = http.getString();
     http.end();
+
+    digitalWrite(LED_PIN, HIGH);   // LED OFF
     return true;
 }
 
 // ------------------------------------------------------------
-//  Login
-// ------------------------------------------------------------
 static bool opal_login() {
     Serial.println("[OPAL] logging in...");
 
-    // --- Step 1: challenge ---
     String challenge_body =
         "{\"jsonrpc\":\"2.0\",\"method\":\"challenge\","
         "\"params\":{\"username\":\"" OPAL_USER "\"},\"id\":1}";
@@ -100,13 +93,8 @@ static bool opal_login() {
 
     Serial.printf("[OPAL] salt=%s alg=%d\n", salt, alg);
 
-    // --- Step 2: pre-computed crypt hash ---
-    // We precomputed this from: openssl passwd -5 -salt <SALT> <PASSWORD>
-    // It's a fixed value as long as the password and salt don't change.
-    // Stored in secrets.h to avoid needing to implement SHA256-crypt.
     extern const char* OPAL_CRYPT_HASH;
 
-    // --- Step 3: login hash = SHA256(user:crypt:nonce) ---
     String login_input = String(OPAL_USER) + ":" + OPAL_CRYPT_HASH + ":" + nonce;
     String login_hash  = sha256_hex(login_input);
 
@@ -142,8 +130,6 @@ static bool opal_login() {
 }
 
 // ------------------------------------------------------------
-//  Init
-// ------------------------------------------------------------
 void opal_init() {
     opal_sid           = "";
     opal_sid_time      = 0;
@@ -155,22 +141,17 @@ void opal_init() {
 }
 
 // ------------------------------------------------------------
-//  Poll — fetch client list, sum total_rx
-// ------------------------------------------------------------
 bool opal_poll(uint64_t &rx_total) {
-    // Not connected to WiFi?
     if (WiFi.status() != WL_CONNECTED) {
         return false;
     }
 
-    // SID expired?
     if (opal_sid.length() == 0) {
         if (!opal_login()) {
             return false;
         }
     }
 
-    // Refresh SID every 50 minutes
     if (millis() - opal_sid_time > OPAL_LOGIN_REFRESH_MS) {
         Serial.println("[OPAL] SID refresh");
         if (!opal_login()) {
@@ -178,7 +159,6 @@ bool opal_poll(uint64_t &rx_total) {
         }
     }
 
-    // --- Fetch client list ---
     String body =
         "{\"jsonrpc\":\"2.0\",\"method\":\"call\","
         "\"params\":[\"" + opal_sid + "\",\"clients\",\"get_list\",{}],"
@@ -196,7 +176,6 @@ bool opal_poll(uint64_t &rx_total) {
         return false;
     }
 
-    // Access denied? Force re-login next time
     if (doc.containsKey("error")) {
         Serial.println("[OPAL] poll denied, forcing relogin");
         opal_sid = "";
@@ -209,10 +188,8 @@ bool opal_poll(uint64_t &rx_total) {
         return false;
     }
 
-    // Sum total_rx across all clients
     uint64_t total = 0;
     for (JsonObject c : clients) {
-        // total_rx may be string or number
         if (c["total_rx"].is<const char*>()) {
             total += strtoull(c["total_rx"].as<const char*>(), NULL, 10);
         } else {
@@ -224,16 +201,10 @@ bool opal_poll(uint64_t &rx_total) {
     return true;
 }
 
-// ------------------------------------------------------------
-//  Force relogin on next poll
-// ------------------------------------------------------------
 void opal_force_relogin() {
     opal_sid = "";
 }
 
-// ------------------------------------------------------------
-//  Status
-// ------------------------------------------------------------
 bool opal_logged_in() {
     return opal_sid.length() > 0;
 }

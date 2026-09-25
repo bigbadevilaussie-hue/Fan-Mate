@@ -12,9 +12,11 @@
 
 Adafruit_SSD1306_72x40 display(SDA_PIN, SCL_PIN);
 
-// ------------------------------------------------------------
-//  Init
-// ------------------------------------------------------------
+// ============================================================
+//  OLED driver — V3.21
+//  Bottom line: time (right-aligned) or "Logfile Full"
+// ============================================================
+
 void initDisplay() {
     Wire.begin(SDA_PIN, SCL_PIN);
     display.begin();
@@ -28,8 +30,6 @@ void initDisplay() {
     Serial.println("[OLED] ready");
 }
 
-// ------------------------------------------------------------
-//  Splash
 // ------------------------------------------------------------
 void drawSplashScreen() {
     display.clearDisplay();
@@ -48,6 +48,10 @@ void drawSplashScreen() {
 
 // ------------------------------------------------------------
 //  Main screen
+//
+//   25.4 C
+//   ████████░░░░░░░░  ← fan bar
+//                  12:35   ← time (right-aligned)
 // ------------------------------------------------------------
 void updateDisplay(
     float temp,
@@ -59,52 +63,52 @@ void updateDisplay(
     display.clearDisplay();
     display.setTextColor(SSD1306_WHITE);
 
-    // Big temp (size 2, top-left)
+    // ---- Temperature (size 2, top-left) ----
     display.setTextSize(2);
     display.setCursor(0, 2);
-    char tempBuf[8];
-    snprintf(tempBuf, sizeof(tempBuf), "%.1f", temp);
-    display.print(tempBuf);
+    if (temp > 0.0) {
+        char tempBuf[8];
+        snprintf(tempBuf, sizeof(tempBuf), "%.1f", temp);
+        display.print(tempBuf);
+    } else {
+        display.print(F("--.-"));
+    }
+
     display.setTextSize(1);
     display.setCursor(46, 8);
     display.print(F("C"));
 
-    // Fan bar (full width)
-    int barX = 0;
-    int barY = 22;
-    int barW = 72;
-    int barH = 8;
+    // ---- Fan bar (full width) ----
+    int barX = 0, barY = 22, barW = 72, barH = 8;
     display.drawRect(barX, barY, barW, barH, SSD1306_WHITE);
     int filled = (fanPct * (barW - 2)) / 100;
     if (filled > 0) {
         display.fillRect(barX + 1, barY + 1, filled, barH - 2, SSD1306_WHITE);
     }
 
-    // Bottom line — priority: log full > IP > time
+    // ---- Bottom line ----
     display.setTextSize(1);
-    display.setCursor(0, 33);
 
     if (log_is_full()) {
+        // "Logfile Full" centred-ish at bottom
+        display.setCursor(0, 33);
         display.print(F("Logfile Full"));
-    } else if (wifi_connected()) {
-        display.print(wifi_ip());
     } else {
+        // Time, right-aligned at bottom
         struct tm timeinfo;
         if (getLocalTime(&timeinfo, 10)) {
             char timeBuf[6];
             snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d",
                      timeinfo.tm_hour, timeinfo.tm_min);
+            // Each char is 6px at size 1, 5 chars = 30px, right edge at x=72
+            display.setCursor(42, 33);
             display.print(timeBuf);
-        } else {
-            display.print(F("no wifi"));
         }
     }
 
     display.display();
 }
 
-// ------------------------------------------------------------
-//  FW update start
 // ------------------------------------------------------------
 void drawFwStartScreen() {
     display.clearDisplay();
@@ -120,8 +124,6 @@ void drawFwStartScreen() {
     Serial.println("[OLED] FW start shown");
 }
 
-// ------------------------------------------------------------
-//  FW update progress
 // ------------------------------------------------------------
 void drawOtaScreen(uint8_t pct, uint32_t recv, uint32_t total) {
     display.clearDisplay();
@@ -150,8 +152,6 @@ void drawOtaScreen(uint8_t pct, uint32_t recv, uint32_t total) {
     display.display();
 }
 
-// ------------------------------------------------------------
-//  Reboot countdown
 // ------------------------------------------------------------
 void drawRebootScreen(int secondsLeft) {
     display.clearDisplay();

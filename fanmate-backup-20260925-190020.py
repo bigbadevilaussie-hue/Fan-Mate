@@ -1,15 +1,15 @@
 """
 FAN-MATE GUI V2.50
-- V2.24 with OTA changed from BLE to HTTP
-- No file picker — uses fixed BUILD_BIN path
-- Everything else identical to V2.24
+- Same as V2.24
+- Only change: OTA via HTTP instead of BLE
+- Everything else identical
 """
 
 import asyncio, json, struct, threading, time, urllib.request, os, hashlib, re, csv, subprocess
 from collections import deque
 from datetime import datetime
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 from bleak import BleakScanner, BleakClient
 import requests
 
@@ -681,48 +681,21 @@ class App:
 
     def menu_ota(self):
         if not os.path.isfile(BUILD_BIN):
-            messagebox.showerror(
-                "OTA",
-                f"Firmware not found:\n{BUILD_BIN}\n\n"
-                f"Run Sketch → Export Compiled Binary in Arduino IDE first."
-            )
+            messagebox.showerror("OTA", f"Firmware not found:\n{BUILD_BIN}")
             return
-
-        src_ver = read_firmware_version() or "?"
-
-        try:
-            bin_mtime = os.path.getmtime(BUILD_BIN)
-            cfg_mtime = os.path.getmtime(CONFIG_H)
-            stale = cfg_mtime > bin_mtime
-        except Exception:
-            stale = False
-            bin_mtime = 0
-
-        size = os.path.getsize(BUILD_BIN)
-        md5 = compute_md5(BUILD_BIN) or "?"
-        dev_ver = latest.get("fv", "?")
-
-        built_str = (datetime.fromtimestamp(bin_mtime).strftime("%Y-%m-%d %H:%M")
-                     if bin_mtime else "?")
-        size_mb = size / (1024 * 1024)
-
-        msg = (
-            f"File:        fanmate.ino.bin\n"
-            f"Size:        {size:,} bytes ({size_mb:.2f} MB)\n"
-            f"MD5:         {md5[:16]}...\n"
-            f"Source ver:  {src_ver}\n"
-            f"Built:       {built_str}\n"
-            f"Device ver:  {dev_ver}\n"
+        path = filedialog.askopenfilename(
+            title="Select firmware .bin",
+            initialdir=BUILD_DIR,
+            initialfile="fanmate.ino.bin",
+            filetypes=[("Binary", "*.bin")]
         )
-        if stale:
-            msg += "\n⚠️  Config.h is newer than the .bin.\nRe-export the binary before updating."
-        msg += "\n\nProceed with OTA update?"
-
-        if not messagebox.askyesno("Fan-Mate OTA", msg):
+        if not path:
             return
-
+        size = os.path.getsize(path)
+        if not messagebox.askyesno("OTA", f"Upload {size:,} bytes?\n\nDevice will reboot."):
+            return
         try:
-            with open(BUILD_BIN, "rb") as f:
+            with open(path, "rb") as f:
                 r = requests.post(
                     f"{FANMATE_URL}/ota",
                     files={"firmware": f},
