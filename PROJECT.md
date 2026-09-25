@@ -1,8 +1,8 @@
 # Fan-Mate — Project Status
 
 **Last updated:** 2026-09-26
-**Current version:** v3.43 (firmware + GUI)
-**Next version:** v3.44
+**Current version:** v3.44 (firmware + GUI)
+**Next version:** v3.45
 
 ## What it does
 
