@@ -16,3 +16,13 @@ backups/
 fanmate-backup-*.py
 fanmate-v2.*.py
 fanmate-v3.0*.py
+
+# Build artifacts
+build/
+*.bin
+*.elf
+*.map
+
+# Backups
+*.bak
+*.py.bak
