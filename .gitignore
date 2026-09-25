@@ -3,3 +3,5 @@ build/
 *.map
 __pycache__/
 *.pyc
+secrets.h
+*.local.h

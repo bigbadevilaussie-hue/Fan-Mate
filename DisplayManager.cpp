@@ -1,6 +1,7 @@
 #include "DisplayManager.h"
 #include "Config.h"
 #include "Settings.h"
+#include "WiFiManager.h"
 
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -8,6 +9,7 @@
 
 #include <time.h>
 
+// Exact OLED driver from the known-good FAN-MATE V1.10
 Adafruit_SSD1306_72x40 display(SDA_PIN, SCL_PIN);
 
 // ------------------------------------------------------------
@@ -49,7 +51,7 @@ void drawSplashScreen() {
 }
 
 // ------------------------------------------------------------
-//  Main screen — big temp, bar, time right-aligned
+//  Main screen — temp, time, fan bar, IP
 // ------------------------------------------------------------
 void updateDisplay(
     float temp,
@@ -68,7 +70,6 @@ void updateDisplay(
     snprintf(tempBuf, sizeof(tempBuf), "%.1f", temp);
     display.print(tempBuf);
 
-    // ---- "C" unit small after the number ----
     display.setTextSize(1);
     display.setCursor(46, 8);
     display.print(F("C"));
@@ -86,16 +87,24 @@ void updateDisplay(
         display.fillRect(barX + 1, barY + 1, filled, barH - 2, SSD1306_WHITE);
     }
 
-    // ---- Time right-aligned at bottom ----
-    struct tm timeinfo;
-    if (getLocalTime(&timeinfo, 10)) {
-        char timeBuf[6];
-        snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d",
-                 timeinfo.tm_hour, timeinfo.tm_min);
-        display.setTextSize(1);
-        // Each char is 6px wide, 5 chars = 30px. Right edge at x=72 → start at 42.
-        display.setCursor(42, 33);
-        display.print(timeBuf);
+    // ---- Bottom line: IP if connected, else time ----
+    display.setTextSize(1);
+    display.setCursor(0, 33);
+
+    if (wifi_connected()) {
+        String ip = wifi_ip();
+        display.print(ip);
+    } else {
+        // Fallback: show time
+        struct tm timeinfo;
+        if (getLocalTime(&timeinfo, 10)) {
+            char timeBuf[6];
+            snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d",
+                     timeinfo.tm_hour, timeinfo.tm_min);
+            display.print(timeBuf);
+        } else {
+            display.print(F("no wifi"));
+        }
     }
 
     display.display();
