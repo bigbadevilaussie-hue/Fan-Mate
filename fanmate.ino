@@ -160,7 +160,7 @@ static void tick_15s() {
     log_check_full();
 
     log_print("[TICK] temp=%.1f fan=%d%% net=%.1f KB/s boost=%d rpm=%d\n",
-                  currentTemp, fanPct, kbps,
+                  currentTemp, fanPct, kbps_smooth,
                   auto_boost_is_active() ? 1 : 0, fanRPM);
 }
 
@@ -214,14 +214,19 @@ void loop() {
 
     if (now - lastStatus >= 10000) {
         lastStatus = now;
-        log_print("[STATUS] temp=%.1f fan=%d%% rpm=%d phone=%d alert=%d",
-                      currentTemp, fanPct, fanRPM,
-                      phonePresent ? 1 : 0, alertState);
+        char stbuf[160];
         if (wifi_connected()) {
-            Serial.printf(" ip=%s rssi=%d\n",
-                          wifi_ip().c_str(), wifi_rssi());
+            snprintf(stbuf, sizeof(stbuf),
+                     "[STATUS] temp=%.1f fan=%d%% rpm=%d phone=%d alert=%d ip=%s rssi=%d\n",
+                     currentTemp, fanPct, fanRPM,
+                     phonePresent ? 1 : 0, alertState,
+                     wifi_ip().c_str(), wifi_rssi());
         } else {
-            Serial.printf(" wifi=disconnected\n");
+            snprintf(stbuf, sizeof(stbuf),
+                     "[STATUS] temp=%.1f fan=%d%% rpm=%d phone=%d alert=%d wifi=disconnected\n",
+                     currentTemp, fanPct, fanRPM,
+                     phonePresent ? 1 : 0, alertState);
         }
+        log_print("%s", stbuf);
     }
 }

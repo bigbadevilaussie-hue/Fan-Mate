@@ -1,5 +1,6 @@
 """
-FAN-MATE GUI V3.01
+FAN-MATE GUI V3.43
+Compatible with firmware: v3.43
 - Full HTTP. No BLE. No local logging.
 - Telemetry polled from ESP32 /status every 10s.
 - Settings pushed to ESP32 /config.
@@ -20,7 +21,7 @@ import tkinter as tk
 from tkinter import messagebox
 import requests
 
-GUI_VERSION = "3.01"
+GUI_VERSION = "3.43"
 FANMATE_URL = "http://fan-mate.local"
 FANMATE_DIR = os.path.expanduser("~/Documents/Arduino/fanmate")
 BUILD_DIR   = os.path.join(FANMATE_DIR, "build", "esp32.esp32.esp32c3")
@@ -562,17 +563,12 @@ class App:
         mb = tk.Menu(root)
         am = tk.Menu(mb, tearoff=0)
         am.add_command(label="⚙️  Settings", command=self.menu_settings)
+        am.add_command(label="🌐  Open Serial Page", command=self.open_serial_page)
+        am.add_command(label="🏠  Open Dashboard", command=self.open_dashboard)
         am.add_separator()
         am.add_command(label="🎛️  Dyna Tune Turbo Boost", command=self.menu_dyna_tune)
         am.add_separator()
-        am.add_command(label="🌦️  Refresh Weather",
-                       command=lambda: threading.Thread(target=fetch_weather, daemon=True).start())
-        am.add_separator()
-        am.add_command(label="📥  Sync Log", command=self.sync_log)
-        am.add_command(label="📂  Open Log Folder", command=self.open_log_folder)
-        am.add_command(label="🗑️  Clear Log on Device", command=self.clear_log)
-        am.add_separator()
-        am.add_command(label="📡  Update Firmware (WiFi)", command=self.menu_ota)
+        am.add_command(label="📡  Update Firmware", command=self.menu_ota)
         am.add_separator()
         am.add_command(label="🌗  Toggle Day/Night", command=self.toggle_theme)
         am.add_separator()
@@ -666,6 +662,14 @@ class App:
 
     def menu_settings(self):
         SettingsDialog(self.root, self)
+
+    def open_serial_page(self):
+        import webbrowser
+        webbrowser.open(f"{FANMATE_URL}/serial")
+
+    def open_dashboard(self):
+        import webbrowser
+        webbrowser.open(f"{FANMATE_URL}/")
 
     def menu_dyna_tune(self):
         messagebox.showinfo(

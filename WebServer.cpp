@@ -293,6 +293,7 @@ static void handle_ota_done() {
         server.send(500, "text/plain",
                     "FAIL: " + String(Update.errorString()));
     } else {
+        log_write_event("OTA");
         server.send(200, "text/plain", "OK, rebooting");
         delay(500);
         ESP.restart();
@@ -301,6 +302,7 @@ static void handle_ota_done() {
 
 // ------------------------------------------------------------
 static void handle_reboot() {
+    log_write_event("REBOOT");
     server.send(200, "text/plain", "Rebooting...");
     delay(500);
     ESP.restart();

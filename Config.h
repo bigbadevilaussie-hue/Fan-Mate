@@ -12,7 +12,7 @@
     #include "secrets.example.h"
 #endif
 
-#define FAN_MATE_VERSION "3.42"
+#define FAN_MATE_VERSION "3.43"
 
 // ============================================================
 //  Pins
