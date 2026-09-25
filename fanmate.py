@@ -544,6 +544,17 @@ class App:
         self.root = root
         root.title(f"🌀 Fan-Mate v{GUI_VERSION}")
         root.resizable(False, False)
+
+        # Window icon
+        try:
+            icon_path = os.path.join(FANMATE_DIR, "fanmate.png")
+            if os.path.exists(icon_path):
+                _icon = tk.PhotoImage(file=icon_path)
+                root.iconphoto(True, _icon)
+                root._icon_ref = _icon
+                print(f"[ICON] loaded")
+        except Exception as e:
+            print(f"[ICON] {e}")
         self.theme = current_theme()
         self.is_day = is_daytime()
         self.turbo_phase = 0
