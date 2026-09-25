@@ -1,6 +1,7 @@
 #include "DisplayManager.h"
 #include "Config.h"
 #include "Settings.h"
+#include "Logging.h"
 #include "WiFiManager.h"
 
 #include <Wire.h>
@@ -9,7 +10,6 @@
 
 #include <time.h>
 
-// Exact OLED driver from the known-good FAN-MATE V1.10
 Adafruit_SSD1306_72x40 display(SDA_PIN, SCL_PIN);
 
 // ------------------------------------------------------------
@@ -34,24 +34,20 @@ void initDisplay() {
 void drawSplashScreen() {
     display.clearDisplay();
     display.setTextColor(SSD1306_WHITE);
-
     display.setTextSize(1);
     display.setCursor(8, 4);
     display.print(F("Fan-Mate"));
-
     display.setCursor(24, 16);
     display.print(F("V"));
     display.print(FAN_MATE_VERSION);
-
     display.setCursor(8, 30);
     display.print(F("Booting..."));
-
     display.display();
     Serial.println("[OLED] splash shown");
 }
 
 // ------------------------------------------------------------
-//  Main screen — temp, time, fan bar, IP
+//  Main screen
 // ------------------------------------------------------------
 void updateDisplay(
     float temp,
@@ -63,39 +59,36 @@ void updateDisplay(
     display.clearDisplay();
     display.setTextColor(SSD1306_WHITE);
 
-    // ---- Big temperature (size 2, top-left) ----
+    // Big temp (size 2, top-left)
     display.setTextSize(2);
     display.setCursor(0, 2);
     char tempBuf[8];
     snprintf(tempBuf, sizeof(tempBuf), "%.1f", temp);
     display.print(tempBuf);
-
     display.setTextSize(1);
     display.setCursor(46, 8);
     display.print(F("C"));
 
-    // ---- Fan bar (full width, middle) ----
+    // Fan bar (full width)
     int barX = 0;
     int barY = 22;
     int barW = 72;
     int barH = 8;
-
     display.drawRect(barX, barY, barW, barH, SSD1306_WHITE);
-
     int filled = (fanPct * (barW - 2)) / 100;
     if (filled > 0) {
         display.fillRect(barX + 1, barY + 1, filled, barH - 2, SSD1306_WHITE);
     }
 
-    // ---- Bottom line: IP if connected, else time ----
+    // Bottom line — priority: log full > IP > time
     display.setTextSize(1);
     display.setCursor(0, 33);
 
-    if (wifi_connected()) {
-        String ip = wifi_ip();
-        display.print(ip);
+    if (log_is_full()) {
+        display.print(F("Logfile Full"));
+    } else if (wifi_connected()) {
+        display.print(wifi_ip());
     } else {
-        // Fallback: show time
         struct tm timeinfo;
         if (getLocalTime(&timeinfo, 10)) {
             char timeBuf[6];
@@ -133,19 +126,14 @@ void drawFwStartScreen() {
 void drawOtaScreen(uint8_t pct, uint32_t recv, uint32_t total) {
     display.clearDisplay();
     display.setTextColor(SSD1306_WHITE);
-
     display.setTextSize(1);
     display.setCursor(0, 0);
     display.print(F("FW UPDATING"));
     display.setCursor(0, 9);
     display.print(F("Dont touch"));
 
-    int barX = 0;
-    int barY = 20;
-    int barW = 72;
-    int barH = 10;
+    int barX = 0, barY = 20, barW = 72, barH = 10;
     display.drawRect(barX, barY, barW, barH, SSD1306_WHITE);
-
     int filled = (pct * (barW - 2)) / 100;
     if (filled > 0) {
         display.fillRect(barX + 1, barY + 1, filled, barH - 2, SSD1306_WHITE);
@@ -154,13 +142,11 @@ void drawOtaScreen(uint8_t pct, uint32_t recv, uint32_t total) {
     display.setCursor(0, 32);
     display.print(pct);
     display.print('%');
-
     display.setCursor(30, 32);
     display.print(recv / 1024);
     display.print('/');
     display.print(total / 1024);
     display.print('K');
-
     display.display();
 }
 

@@ -5,21 +5,10 @@
 #include <ArduinoJson.h>
 #include <time.h>
 
-// ============================================================
-//  Fan-Mate settings — NVS load/save + JSON parsing
-//
-//  Defaults live in set_defaults(). NVS overrides them.
-//  If NVS is empty, defaults apply.
-// ============================================================
-
 FanMateConfig config;
 static Preferences prefs;
 
-// ------------------------------------------------------------
-//  Defaults (compiled into the .bin)
-// ------------------------------------------------------------
 static void set_defaults() {
-    config.fanMode      = "auto";
     config.tempOn       = 34.0;
     config.tempFull     = 42.0;
     config.nightMax     = 75;
@@ -33,17 +22,19 @@ static void set_defaults() {
     config.nightEnd     = 7;
 
     config.phoneMode    = "auto";
+
+    config.boostEnabled   = true;
+    config.boostThreshold = BOOST_DEFAULT_THRESHOLD_KBPS;
+    config.boostHold      = BOOST_DEFAULT_HOLD_SEC;
+
+    config.benchMode    = false;
 }
 
-// ------------------------------------------------------------
-//  Load from NVS (called in setup)
-// ------------------------------------------------------------
 void settings_load() {
     set_defaults();
 
     prefs.begin("fanmate", true);
 
-    config.fanMode      = prefs.getString("fan.mode",      config.fanMode);
     config.tempOn       = prefs.getFloat ("fan.tempOn",    config.tempOn);
     config.tempFull     = prefs.getFloat ("fan.tempFull",  config.tempFull);
     config.nightMax     = prefs.getInt   ("fan.nightMax",  config.nightMax);
@@ -58,11 +49,16 @@ void settings_load() {
 
     config.phoneMode    = prefs.getString("phone.mode",    config.phoneMode);
 
+    config.boostEnabled   = prefs.getBool("boost.enabled",   config.boostEnabled);
+    config.boostThreshold = prefs.getInt ("boost.threshold", config.boostThreshold);
+    config.boostHold      = prefs.getInt ("boost.hold",      config.boostHold);
+
+    config.benchMode      = prefs.getBool("bench.mode",      config.benchMode);
+
     prefs.end();
 
     Serial.println("[CFG] loaded:");
-    Serial.printf("  fan.mode=%s tempOn=%.1f tempFull=%.1f nightMax=%d%%\n",
-                  config.fanMode.c_str(),
+    Serial.printf("  fan tempOn=%.1f tempFull=%.1f nightMax=%d%%\n",
                   config.tempOn, config.tempFull, config.nightMax);
     Serial.printf("  alarm.mode=%s warn=%.1f panic=%.1f\n",
                   config.alarmMode.c_str(),
@@ -70,16 +66,16 @@ void settings_load() {
     Serial.printf("  night.mode=%s %02d:00-%02d:00\n",
                   config.nightMode.c_str(),
                   config.nightStart, config.nightEnd);
-    Serial.printf("  phone.mode=%s\n", config.phoneMode.c_str());
+    Serial.printf("  phone.mode=%s bench=%d\n",
+                  config.phoneMode.c_str(), config.benchMode ? 1 : 0);
+    Serial.printf("  boost=%d threshold=%d hold=%d\n",
+                  config.boostEnabled ? 1 : 0,
+                  config.boostThreshold, config.boostHold);
 }
 
-// ------------------------------------------------------------
-//  Save all values to NVS
-// ------------------------------------------------------------
 void settings_save() {
     prefs.begin("fanmate", false);
 
-    prefs.putString("fan.mode",      config.fanMode);
     prefs.putFloat ("fan.tempOn",    config.tempOn);
     prefs.putFloat ("fan.tempFull",  config.tempFull);
     prefs.putInt   ("fan.nightMax",  config.nightMax);
@@ -94,13 +90,16 @@ void settings_save() {
 
     prefs.putString("phone.mode",    config.phoneMode);
 
+    prefs.putBool  ("boost.enabled",   config.boostEnabled);
+    prefs.putInt   ("boost.threshold", config.boostThreshold);
+    prefs.putInt   ("boost.hold",      config.boostHold);
+
+    prefs.putBool  ("bench.mode",      config.benchMode);
+
     prefs.end();
     Serial.println("[CFG] saved to NVS");
 }
 
-// ------------------------------------------------------------
-//  Wipe NVS + restore defaults
-// ------------------------------------------------------------
 void settings_reset() {
     prefs.begin("fanmate", false);
     prefs.clear();
@@ -110,36 +109,26 @@ void settings_reset() {
     Serial.println("[CFG] reset to defaults");
 }
 
-// ------------------------------------------------------------
-//  Parse JSON from BLE and apply
-//
-//  Only keys present in the JSON are updated.
-//  Everything else keeps its current value.
-// ------------------------------------------------------------
 void settings_apply_json(const char* json) {
-    StaticJsonDocument<512> doc;
+    StaticJsonDocument<1024> doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) {
         Serial.printf("[CFG] JSON parse failed: %s\n", err.c_str());
         return;
     }
 
-    // Special case — full reset
     if (doc.containsKey("reset") && doc["reset"].as<bool>()) {
         settings_reset();
         return;
     }
 
-    // ---- Fan ----
     if (doc.containsKey("fan")) {
         JsonObject fan = doc["fan"];
-        if (fan.containsKey("mode"))     config.fanMode  = fan["mode"].as<String>();
         if (fan.containsKey("tempOn"))   config.tempOn   = fan["tempOn"].as<float>();
         if (fan.containsKey("tempFull")) config.tempFull = fan["tempFull"].as<float>();
         if (fan.containsKey("nightMax")) config.nightMax = fan["nightMax"].as<int>();
     }
 
-    // ---- Alarm ----
     if (doc.containsKey("alarm")) {
         JsonObject a = doc["alarm"];
         if (a.containsKey("mode"))    config.alarmMode    = a["mode"].as<String>();
@@ -147,7 +136,6 @@ void settings_apply_json(const char* json) {
         if (a.containsKey("panic"))   config.alarmPanic   = a["panic"].as<float>();
     }
 
-    // ---- Night ----
     if (doc.containsKey("night")) {
         JsonObject n = doc["night"];
         if (n.containsKey("mode"))  config.nightMode  = n["mode"].as<String>();
@@ -155,39 +143,41 @@ void settings_apply_json(const char* json) {
         if (n.containsKey("end"))   config.nightEnd   = n["end"].as<int>();
     }
 
-    // ---- Phone ----
     if (doc.containsKey("phone")) {
         JsonObject p = doc["phone"];
         if (p.containsKey("mode")) config.phoneMode = p["mode"].as<String>();
+    }
+
+    if (doc.containsKey("boost")) {
+        JsonObject b = doc["boost"];
+        if (b.containsKey("enabled"))   config.boostEnabled   = b["enabled"].as<bool>();
+        if (b.containsKey("threshold")) config.boostThreshold = b["threshold"].as<int>();
+        if (b.containsKey("hold"))      config.boostHold      = b["hold"].as<int>();
+    }
+
+    if (doc.containsKey("bench")) {
+        JsonObject b = doc["bench"];
+        if (b.containsKey("mode")) config.benchMode = b["mode"].as<bool>();
     }
 
     settings_save();
     Serial.println("[CFG] applied + saved");
 }
 
-// ------------------------------------------------------------
-//  Is it currently night?
-// ------------------------------------------------------------
 bool settings_is_night() {
     if (config.nightMode == "off") return false;
     if (config.nightMode == "on")  return true;
 
-    // auto — check hour
     struct tm timeinfo;
-    if (!getLocalTime(&timeinfo, 10)) {
-        // no time yet — assume day
-        return false;
-    }
+    if (!getLocalTime(&timeinfo, 10)) return false;
 
-    int hour = timeinfo.tm_hour;
+    int hour  = timeinfo.tm_hour;
     int start = config.nightStart;
     int end   = config.nightEnd;
 
     if (start < end) {
-        // e.g. 2:00 → 7:00 — same day
         return (hour >= start && hour < end);
     } else {
-        // e.g. 22:00 → 7:00 — wraps midnight
         return (hour >= start || hour < end);
     }
 }

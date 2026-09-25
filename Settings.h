@@ -6,17 +6,14 @@
 // ============================================================
 //  Fan-Mate runtime configuration
 //
-//  Loaded from NVS on boot (falls back to defaults if NVS empty)
-//  Updated over BLE via CONFIG_UUID characteristic
-//  Saved to NVS on every change
+//  V2.24 — fan.mode removed. Auto Boost is the mode.
 // ============================================================
 
 struct FanMateConfig {
     // Fan
-    String  fanMode;        // "off" / "on" / "auto"
-    float   tempOn;         // °C — fan starts here
-    float   tempFull;       // °C — fan hits 100%
-    int     nightMax;       // % 0–100 — fan cap during night
+    float   tempOn;         // °C
+    float   tempFull;       // °C
+    int     nightMax;       // % 0-100
 
     // Alarm
     String  alarmMode;      // "off" / "on" / "auto"
@@ -25,28 +22,27 @@ struct FanMateConfig {
 
     // Night
     String  nightMode;      // "off" / "on" / "auto"
-    int     nightStart;     // hour 0–23
-    int     nightEnd;       // hour 0–23
+    int     nightStart;     // hour 0-23
+    int     nightEnd;       // hour 0-23
 
     // Phone
     String  phoneMode;      // "off" / "auto"
+
+    // Boost
+    bool    boostEnabled;
+    int     boostThreshold; // KB/s
+    int     boostHold;      // ticks
+
+    // Bench
+    bool    benchMode;      // force phone = 1
 };
 
 extern FanMateConfig config;
 
-// Called in setup() — before initBLE()
 void settings_load();
-
-// Writes all config values to NVS
 void settings_save();
-
-// Wipes NVS + restores defaults
 void settings_reset();
-
-// Parses JSON from BLE and applies + saves
 void settings_apply_json(const char* json);
-
-// True if current time is within night window
 bool settings_is_night();
 
 #endif

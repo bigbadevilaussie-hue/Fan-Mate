@@ -1,6 +1,7 @@
 #include "FanController.h"
 #include "Config.h"
 #include "Settings.h"
+#include "AutoBoost.h"
 
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -8,46 +9,54 @@
 static OneWire oneWire(DS18B20_PIN);
 static DallasTemperature ds18b20(&oneWire);
 
-static int fanPWM = 0;
-static int fanPct = 0;
-static int fanRPM = 0;
-static int alertLevel = 0;
-
+static int  fanPWM       = 0;
+static int  fanPctLocal  = 0;
+static int  fanRPMLocal  = 0;
+static int  alertLevel   = 0;
 static bool phonePresent = false;
 
-static volatile unsigned long tachPulses = 0;
-static unsigned long lastTachRead = 0;
+static volatile unsigned long tachPulses    = 0;
+static unsigned long          lastTachRead  = 0;
 
 static unsigned long lastAlertStart = 0;
-static int beepIndex = 0;
-static bool beepActive = false;
-static unsigned long beepTimer = 0;
+static int           beepIndex      = 0;
+static bool          beepActive     = false;
+static unsigned long beepTimer      = 0;
 
-// Hysteresis for fan on/off (prevents flapping at threshold)
 static bool fanActive = false;
 
+static bool          tempConversionRunning = false;
+static unsigned long tempConversionStart   = 0;
+static float         lastGoodTemp          = 25.0f;
 
-// DS18B20 temperature sensor
+// ------------------------------------------------------------
 void readDS18B20(float &currentTemp) {
-    static unsigned long lastRead = 0;
     unsigned long now = millis();
 
-    if (now - lastRead < 2000) return;
-    lastRead = now;
-
-    ds18b20.requestTemperatures();
-    float t = ds18b20.getTempCByIndex(0);
-
-    if (t == DEVICE_DISCONNECTED_C) {
-        Serial.println("[DS18B20] disconnected");
+    static unsigned long lastStart = 0;
+    if (!tempConversionRunning && now - lastStart >= 2000) {
+        lastStart = now;
+        ds18b20.requestTemperatures();
+        tempConversionRunning = true;
+        tempConversionStart = now;
         return;
     }
 
-    currentTemp = t;
+    if (tempConversionRunning && now - tempConversionStart >= 750) {
+        float t = ds18b20.getTempCByIndex(0);
+        tempConversionRunning = false;
+
+        if (t == DEVICE_DISCONNECTED_C || t == 0.0) {
+            Serial.println("[DS18B20] read failed");
+            return;
+        }
+
+        lastGoodTemp = t;
+        currentTemp  = t;
+    }
 }
 
-
-// Phone presence detection (hall sensor)
+// ------------------------------------------------------------
 void updatePhoneDetection() {
     static bool lastState = false;
     static unsigned long lastChange = 0;
@@ -56,25 +65,18 @@ void updatePhoneDetection() {
 
     if (present != lastState) {
         unsigned long now = millis();
-        if (now - lastChange > 500) {   // debounce
+        if (now - lastChange > 500) {
             lastState = present;
             lastChange = now;
             phonePresent = present;
-            Serial.printf("[PHONE] %s\n",
-                present ? "detected" : "removed");
+            Serial.printf("[PHONE] %s\n", present ? "detected" : "removed");
         }
     }
 }
 
-
-// Beep sequencer
-static void runBeepSequence(
-    int beeps,
-    int beepMs,
-    int gapMs,
-    int duty,
-    int intervalMs
-) {
+// ------------------------------------------------------------
+static void runBeepSequence(int beeps, int beepMs, int gapMs,
+                            int duty, int intervalMs) {
     unsigned long now = millis();
 
     if (!beepActive && beepIndex == 0) {
@@ -84,7 +86,7 @@ static void runBeepSequence(
             beepActive = true;
             beepTimer = now;
             ledcWrite(BUZZER_CHANNEL, duty);
-            Serial.printf("[BEEP] start %d beeps\n", beeps);
+            Serial.printf("[BEEP] start %d\n", beeps);
         }
         return;
     }
@@ -109,10 +111,7 @@ static void runBeepSequence(
     }
 }
 
-
-// ============================================================
-//  Fan and alerts — now uses config.* instead of hardcoded values
-// ============================================================
+// ------------------------------------------------------------
 void updateFanAndAlerts(
     float currentTemp,
     int &outFanPct,
@@ -122,44 +121,43 @@ void updateFanAndAlerts(
 ) {
     // ---- Alert level ----
     int newLevel = 0;
-    if (currentTemp >= config.alarmPanic) {
-        newLevel = 2;
-    } else if (currentTemp >= config.alarmWarning) {
-        newLevel = 1;
-    }
+    if (currentTemp >= config.alarmPanic) newLevel = 2;
+    else if (currentTemp >= config.alarmWarning) newLevel = 1;
 
     if (newLevel != alertLevel) {
         alertLevel = newLevel;
         beepActive = false;
         beepIndex = 0;
         ledcWrite(BUZZER_CHANNEL, 0);
-
         lastAlertStart = millis() -
             (alertLevel == 2 ? PANIC_INTERVAL_MS : WARNING_INTERVAL_MS);
 
-        if (alertLevel == 2)      Serial.println("[ALERT] PANIC");
+        if (alertLevel == 2) Serial.println("[ALERT] PANIC");
         else if (alertLevel == 1) Serial.println("[ALERT] WARNING");
-        else                      Serial.println("[ALERT] normal");
+        else Serial.println("[ALERT] normal");
     }
 
-    // ---- Fan speed ----
-    // Determine night cap (as 0-255 PWM)
-    int nightCapPwm = (config.nightMax * 255) / 100;
+    // ---- Effective phone ----
+    bool effectivePhone = config.benchMode ? true : phonePresent;
 
-    // Hysteresis: turn on at tempOn + 1, off at tempOn - 1
-    if (currentTemp > config.tempOn + 1.0) fanActive = true;
-    if (currentTemp < config.tempOn - 1.0) fanActive = false;
-
-    // Calculate fan PWM
+    // ---- Fan % ----
+    // V2.24: no fan.mode. Auto Boost IS the mode.
+    //   boost.enabled == true  → network controls fan (100% or 0%)
+    //   boost.enabled == false → temp curve
     int newPwm = 0;
 
-    if (config.fanMode == "off") {
-        newPwm = 0;
-        fanActive = false;
-    } else if (config.fanMode == "on") {
-        newPwm = 255;
+    if (config.boostEnabled) {
+        // Network mode — boost state directly controls fan
+        if (auto_boost_is_active()) {
+            newPwm = 255;
+        } else {
+            newPwm = 0;
+        }
     } else {
-        // auto — ramp between tempOn and tempFull
+        // Temp mode — fan follows temp curve
+        if (currentTemp > config.tempOn + 0.2) fanActive = true;
+        if (currentTemp < config.tempOn - 0.2) fanActive = false;
+
         if (fanActive) {
             if (currentTemp >= config.tempFull) {
                 newPwm = 255;
@@ -168,70 +166,47 @@ void updateFanAndAlerts(
                     (int)(currentTemp * 10),
                     (int)(config.tempOn * 10),
                     (int)(config.tempFull * 10),
-                    PWM_MIN,
-                    255
-                );
+                    PWM_MIN, 255);
             }
         }
     }
 
-    // Apply night cap
-    if (settings_is_night() && newPwm > nightCapPwm) {
-        newPwm = nightCapPwm;
+    // Night cap
+    if (settings_is_night()) {
+        int cap = (config.nightMax * 255) / 100;
+        if (newPwm > cap) newPwm = cap;
     }
 
     // Phone gate
-    if (config.phoneMode == "auto" && !phonePresent) {
+    if (config.phoneMode == "auto" && !effectivePhone) {
         newPwm = 0;
     }
 
     fanPWM = newPwm;
-    fanPct = map(fanPWM, 0, 255, 0, 100);
+    fanPctLocal = map(fanPWM, 0, 255, 0, 100);
 
     ledcWrite(0, fanPWM);
 
-    // ---- Alarm ----
-    bool alarmMuted = (config.alarmMode == "off");
-    bool alarmAlways = (config.alarmMode == "on");
-
-    if (alarmMuted) {
+    // ---- Alarm output ----
+    if (config.alarmMode == "off") {
         ledcWrite(BUZZER_CHANNEL, 0);
-    } else if (alarmAlways && alertLevel > 0) {
-        runBeepSequence(
-            alertLevel == 2 ? PANIC_BEEPS : WARNING_BEEPS,
-            alertLevel == 2 ? PANIC_BEEP_MS : WARNING_BEEP_MS,
-            alertLevel == 2 ? PANIC_GAP_MS : WARNING_GAP_MS,
-            alertLevel == 2 ? BUZZER_LOUD : BUZZER_QUIET,
-            alertLevel == 2 ? PANIC_INTERVAL_MS : WARNING_INTERVAL_MS
-        );
     } else if (alertLevel == 2) {
-        runBeepSequence(
-            PANIC_BEEPS,
-            PANIC_BEEP_MS,
-            PANIC_GAP_MS,
-            BUZZER_LOUD,
-            PANIC_INTERVAL_MS
-        );
+        runBeepSequence(PANIC_BEEPS, PANIC_BEEP_MS, PANIC_GAP_MS,
+                        BUZZER_LOUD, PANIC_INTERVAL_MS);
     } else if (alertLevel == 1) {
-        runBeepSequence(
-            WARNING_BEEPS,
-            WARNING_BEEP_MS,
-            WARNING_GAP_MS,
-            BUZZER_QUIET,
-            WARNING_INTERVAL_MS
-        );
+        runBeepSequence(WARNING_BEEPS, WARNING_BEEP_MS, WARNING_GAP_MS,
+                        BUZZER_QUIET, WARNING_INTERVAL_MS);
     } else {
         ledcWrite(BUZZER_CHANNEL, 0);
     }
 
-    outFanPct = fanPct;
-    outRpm = fanRPM;
-    outAlert = alertLevel;
+    outFanPct       = fanPctLocal;
+    outRpm          = fanRPMLocal;
+    outAlert        = alertLevel;
     outPhonePresent = phonePresent;
 }
 
-
-// Tachometer
+// ------------------------------------------------------------
 static void IRAM_ATTR onTach() {
     tachPulses++;
 }
@@ -240,15 +215,15 @@ void updateTach() {
     unsigned long now = millis();
     if (now - lastTachRead >= 1000) {
         lastTachRead = now;
-        fanRPM = (tachPulses * 60) / 2;
+        fanRPMLocal = (tachPulses * 60) / 2;
         tachPulses = 0;
     }
 }
 
-
-// Hardware initialisation
+// ------------------------------------------------------------
 void initHardware() {
     ds18b20.begin();
+    ds18b20.setWaitForConversion(false);
 
     pinMode(PHONE_SENSE_PIN, INPUT_PULLUP);
 

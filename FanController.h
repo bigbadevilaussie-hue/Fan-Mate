@@ -6,8 +6,8 @@
 void initHardware();
 
 void readDS18B20(float &currentTemp);
-
 void updatePhoneDetection();
+void updateTach();
 
 void updateFanAndAlerts(
     float currentTemp,
@@ -16,7 +16,5 @@ void updateFanAndAlerts(
     int &outAlert,
     bool &outPhonePresent
 );
-
-void updateTach();
 
 #endif

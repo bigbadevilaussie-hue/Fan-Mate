@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 secrets.h
 *.local.h
+backups/

@@ -7,7 +7,6 @@
 
 // ============================================================
 //  Local credentials (not committed to git)
-//  Copy secrets.example.h to secrets.h and fill in your values
 // ============================================================
 #if __has_include("secrets.h")
     #include "secrets.h"
@@ -16,7 +15,7 @@
     #include "secrets.example.h"
 #endif
 
-#define FAN_MATE_VERSION "3.00"
+#define FAN_MATE_VERSION "3.02"
 
 // ============================================================
 //  Pins
@@ -54,39 +53,44 @@
 #define BUZZER_FREQ    2000
 #define BUZZER_RES     8
 #define BUZZER_QUIET   64
+#define BUZZER_MEDIUM  128
 #define BUZZER_LOUD    255
 
-// Warning
 #define WARNING_BEEPS       2
 #define WARNING_BEEP_MS     150
 #define WARNING_GAP_MS      200
 #define WARNING_INTERVAL_MS 120000
 
-// Panic
 #define PANIC_BEEPS       5
 #define PANIC_BEEP_MS     200
 #define PANIC_GAP_MS      200
 #define PANIC_INTERVAL_MS 120000
 
 // ============================================================
-//  WiFi + HTTP (V3.00 — new)
+//  WiFi + HTTP
 // ============================================================
 #define HTTP_PORT                80
 #define WIFI_CONNECT_TIMEOUT_MS  15000
 #define WIFI_RETRY_INTERVAL_MS   30000
 
 // ============================================================
-//  Opal router API (V3.04 — polling for network traffic)
+//  Opal router API
 // ============================================================
-#define OPAL_POLL_INTERVAL_MS   10000
-#define OPAL_LOGIN_REFRESH_MS   3000000   // 50 minutes
+#define OPAL_POLL_INTERVAL_MS   15000
+#define OPAL_LOGIN_REFRESH_MS   3000000    // 50 minutes
 
 // ============================================================
-//  Auto Boost (V3.02 — on-device boost logic)
+//  Auto Boost
 // ============================================================
 #define BOOST_DEFAULT_THRESHOLD_KBPS  300
 #define BOOST_DEFAULT_HOLD_SEC        12
 #define BOOST_DEFAULT_ENABLED         1
+
+// ============================================================
+//  Logging
+// ============================================================
+#define LOG_MAX_SIZE   (800 * 1024)        // 800 KB cap
+#define LOG_TICK_MS    15000               // one line every 15s
 
 // ============================================================
 //  BLE (still present in V3.00 — removed in V3.01)
