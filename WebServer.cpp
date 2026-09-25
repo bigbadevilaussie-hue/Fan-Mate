@@ -24,6 +24,9 @@ static WebServer server(HTTP_PORT);
 
 extern volatile bool otaInProgress;
 static bool otaStarted = false;
+static unsigned long host_last_ms = 0;
+
+static void note_host() { host_last_ms = millis(); }
 
 // ------------------------------------------------------------
 
@@ -66,6 +69,7 @@ static void handle_serial_raw() {
 }
 
 static void handle_root() {
+    note_host();
     extern float currentTemp;
     extern int   fanPct;
     extern int   fanRPM;
@@ -83,7 +87,7 @@ h1{color:#89b4fa}.c{background:#232334;padding:14px;margin:10px 0;border-radius:
 .l{color:#9399b2;font-size:11px;text-transform:uppercase}.v{font-size:22px;font-weight:bold}
 a{color:#89b4fa}
 </style></head><body>
-<h1>🌀 Fan-Mate V3.20</h1>
+<h1>🌀 Fan-Mate V{{VERSION}}</h1>
 <div class="c"><div class="l">WiFi</div><div class="v">{{SSID}} {{IP}}</div>
 <div class="l">RSSI</div><div class="v">{{RSSI}} dBm</div></div>
 <div class="c"><div class="l">Temp</div><div class="v">{{TEMP}} °C</div>
@@ -91,7 +95,7 @@ a{color:#89b4fa}
 <div class="l">RPM</div><div class="v">{{RPM}}</div></div>
 <div class="c"><div class="l">Phone</div><div class="v">{{PHONE}}</div>
 <div class="l">Alert</div><div class="v">{{ALERT}}</div></div>
-<div class="c"><a href="/status">status</a> | <a href="/log.csv">log.csv</a> | <a href="/reboot">reboot</a></div>
+<div class="c"><a href="/status">status</a> | <a href="/serial">serial</a> | <a href="/log.csv">log.csv</a> | <a href="/reboot">reboot</a></div>
 </body></html>
 )rawliteral";
 
@@ -103,12 +107,14 @@ a{color:#89b4fa}
     html.replace("{{RPM}}",   String(fanRPM));
     html.replace("{{PHONE}}", phonePresent ? "YES" : "NO");
     html.replace("{{ALERT}}", String(alertState));
+    html.replace("{{VERSION}}", FAN_MATE_VERSION);
 
     server.send(200, "text/html", html);
 }
 
 // ------------------------------------------------------------
 static void handle_status() {
+    note_host();
     extern float currentTemp;
     extern int   fanPct;
     extern int   fanRPM;
@@ -130,6 +136,10 @@ static void handle_status() {
     json += "\"boost\":" + String(auto_boost_is_active() ? 1 : 0) + ",";
     json += "\"net_kbps\":" + String(lastNetKbps, 1) + ",";
     json += "\"opal\":" + String(opal_logged_in() ? 1 : 0) + ",";
+    unsigned long since_host = (host_last_ms > 0) ? (millis() - host_last_ms) : 999999;
+    int host_alive = (since_host < 60000) ? 1 : 0;
+    json += "\"host\":" + String(host_alive) + ",";
+    json += "\"host_last_seen\":" + String(since_host / 1000) + ",";
     json += "\"log_size\":" + String(log_get_size()) + ",";
     json += "\"log_full\":" + String(log_is_full() ? 1 : 0);
     json += "}";
@@ -139,6 +149,7 @@ static void handle_status() {
 
 // ------------------------------------------------------------
 static void handle_config_get() {
+    note_host();
     String json = "{";
 
     json += "\"fan\":{";
@@ -179,6 +190,7 @@ static void handle_config_get() {
 
 // ------------------------------------------------------------
 static void handle_config_post() {
+    note_host();
     if (!server.hasArg("plain")) {
         server.send(400, "text/plain", "no body");
         return;
@@ -193,6 +205,7 @@ static void handle_config_post() {
 
 // ------------------------------------------------------------
 static void handle_time_post() {
+    note_host();
     if (!server.hasArg("plain")) {
         server.send(400, "text/plain", "no body");
         return;
@@ -225,6 +238,7 @@ static void handle_time_post() {
 
 // ------------------------------------------------------------
 static void handle_log_download() {
+    note_host();
     if (!LittleFS.exists("/log.csv")) {
         server.send(404, "text/plain", "no log");
         return;
@@ -242,6 +256,7 @@ static void handle_log_download() {
 
 // ------------------------------------------------------------
 static void handle_log_info() {
+    note_host();
     String json = "{";
     json += "\"size\":" + String(log_get_size()) + ",";
     json += "\"max\":" + String(LOG_MAX_SIZE) + ",";
@@ -252,6 +267,7 @@ static void handle_log_info() {
 
 // ------------------------------------------------------------
 static void handle_log_clear() {
+    note_host();
     log_clear();
     server.send(200, "text/plain", "cleared");
 }
@@ -302,6 +318,7 @@ static void handle_ota_done() {
 
 // ------------------------------------------------------------
 static void handle_reboot() {
+    note_host();
     log_write_event("REBOOT");
     server.send(200, "text/plain", "Rebooting...");
     delay(500);

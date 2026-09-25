@@ -21,7 +21,7 @@ import tkinter as tk
 from tkinter import messagebox
 import requests
 
-GUI_VERSION = "3.43"
+GUI_VERSION = "3.44"
 FANMATE_URL = "http://fan-mate.local"
 FANMATE_DIR = os.path.expanduser("~/Documents/Arduino/fanmate")
 BUILD_DIR   = os.path.join(FANMATE_DIR, "build", "esp32.esp32.esp32c3")
@@ -632,7 +632,7 @@ class App:
         self.data_title.pack(pady=(8, 0))
         self.rate_lbl = tk.Label(self.data_card, text="-- KB/s", font=FONT_VALUE)
         self.rate_lbl.pack(pady=(2, 6))
-        self.data_graph = Graph(self.data_card, self, y_min=0, y_max=5120, w=380, h=100)
+        self.data_graph = Graph(self.data_card, self, y_min=0, y_max=2048, w=380, h=100)
         self.data_graph.pack(padx=6, pady=(0, 8))
 
         # Temp graph
@@ -687,7 +687,8 @@ class App:
                 return
             os.makedirs(LOG_DIR, exist_ok=True)
             ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-            path = os.path.join(LOG_DIR, f"log-{ts}.csv")
+            src_ver = read_firmware_version() or "unknown"
+            path = os.path.join(LOG_DIR, f"log-v{src_ver}-{ts}.csv")
             with open(path, "wb") as f:
                 f.write(r.content)
             lines = r.content.count(b"\n")
@@ -755,19 +756,52 @@ class App:
         if not messagebox.askyesno("Fan-Mate OTA", msg):
             return
 
+        threading.Thread(target=self._ota_worker,
+                         args=(src_ver,),
+                         daemon=True).start()
+
+    def _ota_worker(self, src_ver):
+        print("=" * 50)
+        print(f"[OTA] starting")
+        print(f"[OTA] version: {src_ver}")
+        print(f"[OTA] size:    {os.path.getsize(BUILD_BIN):,} bytes")
+
+        # Archive .bin
+        try:
+            import shutil
+            fw_dir = os.path.join(LOG_DIR, "firmware")
+            os.makedirs(fw_dir, exist_ok=True)
+            ts = datetime.now().strftime("%Y%m%d-%H%M")
+            archived = os.path.join(fw_dir, f"fanmate-v{src_ver}-{ts}.bin")
+            shutil.copy2(BUILD_BIN, archived)
+            shutil.copy2(BUILD_BIN, os.path.join(fw_dir, "fanmate-latest.bin"))
+            print(f"[OTA] archived: {archived}")
+        except Exception as e:
+            print(f"[OTA] archive failed: {e}")
+
+        print(f"[OTA] uploading...")
+        t0 = time.time()
         try:
             with open(BUILD_BIN, "rb") as f:
-                r = requests.post(
-                    f"{FANMATE_URL}/ota",
-                    files={"firmware": f},
-                    timeout=120,
-                )
+                r = requests.post(f"{FANMATE_URL}/ota",
+                                  files={"firmware": f},
+                                  timeout=120)
+            dt = time.time() - t0
+            print(f"[OTA] HTTP {r.status_code} ({dt:.1f}s)")
+
             if r.status_code == 200:
-                messagebox.showinfo("OTA", "Firmware sent. Device rebooting.")
+                self.root.after(0, lambda: messagebox.showinfo(
+                    "OTA", "Firmware sent. Device rebooting."))
             else:
-                messagebox.showerror("OTA", f"Failed: HTTP {r.status_code}\n{r.text}")
+                self.root.after(0, lambda: messagebox.showerror(
+                    "OTA", f"Failed: HTTP {r.status_code}"))
         except Exception as e:
-            messagebox.showerror("OTA", f"Failed:\n{e}")
+            print(f"[OTA] EXCEPTION: {e}")
+            self.root.after(0, lambda: messagebox.showerror(
+                "OTA", f"Failed:\n{e}"))
+
+        print("[OTA] done")
+        print("=" * 50)
 
     # ── Helpers ──────────────────────────────────────────────
 
