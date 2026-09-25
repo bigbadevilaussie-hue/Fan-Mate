@@ -1,35 +1,34 @@
 """
-FAN-MATE GUI V2.50
-- V2.24 with OTA changed from BLE to HTTP
-- No file picker — uses fixed BUILD_BIN path
-- Everything else identical to V2.24
+FAN-MATE GUI V3.01
+- Full HTTP. No BLE. No local logging.
+- Telemetry polled from ESP32 /status every 10s.
+- Settings pushed to ESP32 /config.
+- Logs live on ESP32. GUI can sync/clear/reboot.
+- Same layout as V3.00, plus:
+  - Boost section with Advanced (threshold/on/off)
+  - Phone test_delay field
+  - Alarm three levels (Warning / Oh Shit / Kill)
+  - Sleep countdown + sleeping state
+  - Opal offline indicator
+  - Dyna Tune menu (stub)
 """
 
-import asyncio, json, struct, threading, time, urllib.request, os, hashlib, re, csv, subprocess
+import json, threading, time, urllib.request, os, re
 from collections import deque
 from datetime import datetime
 import tkinter as tk
 from tkinter import messagebox
-from bleak import BleakScanner, BleakClient
 import requests
 
-GUI_VERSION = "2.50"
-DEVICE_NAME = "Fan-Mate"
-SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-DATA_UUID    = "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-TIME_UUID    = "beb5483e-36e1-4688-b7f5-ea07361b26a9"
-OTA_UUID     = "beb5483e-36e1-4688-b7f5-ea07361b26ac"
-PAUSE_UUID   = "beb5483e-36e1-4688-b7f5-ea07361b26af"
-CONFIG_UUID  = "beb5483e-36e1-4688-b7f5-ea07361b26b0"
-
-CONFIG_FILE = os.path.expanduser("~/.fanmate_config.json")
-LOG_FILE    = os.path.expanduser("~/Documents/FanMate_temp_vs_data.csv")
-LOG_DIR     = os.path.expanduser("~/Documents/FanMate_logs")
+GUI_VERSION = "3.01"
 FANMATE_URL = "http://fan-mate.local"
 FANMATE_DIR = os.path.expanduser("~/Documents/Arduino/fanmate")
 BUILD_DIR   = os.path.join(FANMATE_DIR, "build", "esp32.esp32.esp32c3")
 BUILD_BIN   = os.path.join(BUILD_DIR, "fanmate.ino.bin")
 CONFIG_H    = os.path.join(FANMATE_DIR, "Config.h")
+LOG_DIR     = os.path.expanduser("~/Documents/FanMate_logs")
+
+POLL_INTERVAL = 10.0
 
 WEATHER_LAT = -27.28
 WEATHER_LON = 152.51
@@ -37,9 +36,6 @@ WEATHER_TZ  = "Australia%2FBrisbane"
 WEATHER_REFRESH_SEC = 1800
 DAY_START_HOUR = 6
 DAY_END_HOUR   = 18
-
-BOOST_THRESHOLD_BPS = 1.0 * 1024 * 1024
-BOOST_HOLD_SECONDS  = 12
 
 THEME_DAY = {
     "bg": "#eef1f7", "card": "#ffffff", "card_border": "#d8dde8",
@@ -57,33 +53,28 @@ THEME_NIGHT = {
 }
 
 HIST_LEN = 60
-temp_hist = deque([None] * HIST_LEN, maxlen=HIST_LEN)
+temp_hist     = deque([None] * HIST_LEN, maxlen=HIST_LEN)
 download_hist = deque([None] * HIST_LEN, maxlen=HIST_LEN)
 
-latest = {"temp": None, "fan": 0, "rpm": 0, "phone": 0, "alert": 0, "fv": "?"}
-weather = {"temp": 0.0, "high": 0.0, "low": 0.0, "desc": "Loading...", "updated": 0}
+latest = {
+    "temp": None, "fan": 0, "rpm": 0, "phone": 0, "alert": 0,
+    "boost": 0, "fv": "?", "net_kbps": 0.0,
+    "sleep": 0, "sleep_countdown": 0, "opal": 1,
+}
+latest_config = {
+    "boost": {
+        "mode": 1,
+        "normal": {"threshold": 768, "on_hold": 4, "off_hold": 4},
+        "aggr":   {"threshold": 256, "on_hold": 2, "off_hold": 8},
+    },
+    "alarm": {"mode": "auto", "warning": 45.0, "panic": 50.0, "kill": 55.0},
+    "night": {"mode": "auto", "start": 22, "end": 7, "nightMax": 75},
+    "phone": {"mode": "off", "test_delay": 120},
+}
+connected = False
+time_synced = False
 status_msg = ""
 status_lock = threading.RLock()
-last_parse_fail = 0
-TIME_WRITE_LOGGED = False
-DEVICE_ADDR = None
-
-latest_config = {
-    "fan":   {"mode": "auto", "tempOn": 34.0, "tempFull": 42.0, "nightMax": 75},
-    "alarm": {"mode": "auto", "warning": 45.0, "panic": 50.0},
-    "night": {"mode": "auto", "start": 22, "end": 7},
-    "phone": {"mode": "auto"},
-}
-
-try:
-    with open(CONFIG_FILE) as _f:
-        _saved = json.load(_f)
-        latest_config.update(_saved)
-    print(f"[CFG] loaded from {CONFIG_FILE}")
-except FileNotFoundError:
-    print("[CFG] no saved config — using defaults")
-except Exception as e:
-    print(f"[CFG] load failed: {e}")
 
 FONT_TITLE   = ("Helvetica Neue", 24, "bold")
 FONT_SECTION = ("Helvetica Neue", 10)
@@ -93,39 +84,7 @@ FONT_LABEL   = ("Helvetica Neue", 9, "bold")
 FONT_TINY    = ("Helvetica Neue", 9)
 
 
-def get_rx_bytes(iface="en1"):
-    try:
-        out = subprocess.check_output(["netstat", "-ibn"], text=True)
-        for line in out.splitlines():
-            parts = line.split()
-            if parts and parts[0] == iface and len(parts) > 6 and parts[6].isdigit():
-                return int(parts[6])
-        return 0
-    except Exception:
-        return 0
-
-
-def init_log():
-    if not os.path.exists(LOG_FILE):
-        with open(LOG_FILE, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["timestamp", "temp_c", "download_mb_total", "download_kbps", "boost"])
-
-
-def log_data(temp, total_bytes, rate_bps, boost_active):
-    try:
-        with open(LOG_FILE, "a", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                f"{temp:.2f}" if temp is not None else "",
-                f"{total_bytes / (1024*1024):.2f}",
-                f"{rate_bps / 1024:.1f}",
-                "YES" if boost_active else "NO"
-            ])
-    except Exception as e:
-        print(f"[LOG] {e}")
-
+# ── Helpers ──────────────────────────────────────────────────
 
 def is_daytime():
     return DAY_START_HOUR <= datetime.now().hour < DAY_END_HOUR
@@ -145,22 +104,20 @@ def get_status():
 def read_firmware_version():
     try:
         with open(CONFIG_H) as f:
-            content = f.read()
-        m = re.search(r'#define\s+FAN_MATE_VERSION\s+"([^"]+)"', content)
-        return m.group(1) if m else None
-    except Exception as e:
-        print(f"[OTA] read version failed: {e}")
+            m = re.search(r'#define\s+FAN_MATE_VERSION\s+"([^"]+)"', f.read())
+            return m.group(1) if m else None
+    except Exception:
         return None
 
 def compute_md5(path):
+    import hashlib
     h = hashlib.md5()
     try:
         with open(path, "rb") as f:
             for chunk in iter(lambda: f.read(65536), b""):
                 h.update(chunk)
         return h.hexdigest()
-    except Exception as e:
-        print(f"[OTA] md5 failed: {e}")
+    except Exception:
         return None
 
 def local_time_str():
@@ -174,20 +131,20 @@ def time_emoji():
             "☀️" if h < 12 else "🌞" if h < 14 else "🌤️" if h < 17 else
             "🌇" if h < 19 else "🌆" if h < 21 else "🌙")
 
-def temp_emoji(temp):
-    if temp is None:   return "❔"
-    if temp < 20:      return "🥶"
-    if temp < 25:      return "❄️"
-    if temp < 30:      return "🌤️"
-    if temp < 35:      return "☀️"
-    if temp < 42:      return "🥵"
-    if temp < 48:      return "🔥"
+def temp_emoji(t):
+    if t is None: return "❔"
+    if t < 20: return "🥶"
+    if t < 25: return "❄️"
+    if t < 30: return "🌤️"
+    if t < 35: return "☀️"
+    if t < 42: return "🥵"
+    if t < 48: return "🔥"
     return "💀"
 
-def fan_emoji(pct):
-    if pct == 0:  return "💤"
-    if pct < 30:  return "🍃"
-    if pct < 70:  return "💨"
+def fan_emoji(p):
+    if p == 0:  return "💤"
+    if p < 30:  return "🍃"
+    if p < 70:  return "💨"
     return "🌪️"
 
 def weather_code_to_desc(code, is_day):
@@ -201,6 +158,116 @@ def weather_code_to_desc(code, is_day):
         80: "Light Showers", 81: "Showers", 82: "Heavy Showers",
         95: "Thunderstorm", 96: "Thunderstorm + Hail", 99: "Thunderstorm + Hail",
     }.get(code, "Unknown")
+
+
+# ── HTTP telemetry ───────────────────────────────────────────
+
+def http_poll_loop():
+    global latest, connected, time_synced
+    poll_count = 0
+    while True:
+        poll_count += 1
+        try:
+            r = requests.get(f"{FANMATE_URL}/status", timeout=5)
+            if r.status_code == 200:
+                raw = r.text
+                try:
+                    d = r.json()
+                except Exception as e:
+                    print(f"[POLL #{poll_count}] JSON PARSE FAIL: {e}")
+                    print(f"[POLL #{poll_count}] RAW: {raw[:300]}")
+                    time.sleep(POLL_INTERVAL)
+                    continue
+
+                print(f"[POLL #{poll_count}] keys={sorted(d.keys())}")
+                print(f"[POLL #{poll_count}] net_kbps={d.get('net_kbps','MISSING')} "
+                      f"temp={d.get('temp')} fan={d.get('fan')} boost={d.get('boost')}")
+                latest["temp"]     = d.get("temp")
+                latest["fan"]      = d.get("fan", 0)
+                latest["rpm"]      = d.get("rpm", 0)
+                latest["phone"]    = d.get("phone", 0)
+                latest["alert"]    = d.get("alert", 0)
+                latest["boost"]    = d.get("boost", 0)
+                latest["fv"]       = d.get("fw", "?")
+                latest["net_kbps"] = float(d.get("net_kbps", 0.0))
+                latest["sleep"]    = d.get("sleep", 0)
+                latest["sleep_countdown"] = d.get("sleep_countdown", 0)
+                latest["opal"]     = d.get("opal", 1)
+
+                if latest["temp"] is not None:
+                    temp_hist.append(float(latest["temp"]))
+                download_hist.append(latest["net_kbps"])
+
+                if not connected:
+                    connected = True
+                    print(f"[HTTP] connected {FANMATE_URL}")
+                    fetch_config()
+                    if not time_synced:
+                        sync_time_once()
+
+                set_status("connected")
+            else:
+                if connected:
+                    print(f"[HTTP] bad status {r.status_code}")
+                connected = False
+                set_status(f"HTTP {r.status_code}")
+        except Exception as e:
+            if connected:
+                print(f"[HTTP] {e}")
+            connected = False
+            set_status("disconnected")
+            latest["boost"] = 0
+            latest["sleep"] = 0
+            latest["sleep_countdown"] = 0
+        time.sleep(POLL_INTERVAL)
+
+
+def sync_time_once():
+    global time_synced
+    try:
+        r = requests.post(
+            f"{FANMATE_URL}/time",
+            json={"epoch": int(time.time())},
+            timeout=3,
+        )
+        if r.status_code == 200:
+            time_synced = True
+            print("[TIME] synced to ESP32")
+    except Exception as e:
+        print(f"[TIME] failed: {e}")
+
+
+def fetch_config():
+    global latest_config
+    try:
+        r = requests.get(f"{FANMATE_URL}/config", timeout=5)
+        if r.status_code != 200:
+            return None
+        d = r.json()
+        for sec in ("boost", "alarm", "night", "phone"):
+            if sec in d:
+                latest_config.setdefault(sec, {}).update(d[sec])
+        return latest_config
+    except Exception as e:
+        print(f"[CFG] fetch failed: {e}")
+        return None
+
+
+def post_config(payload):
+    try:
+        r = requests.post(f"{FANMATE_URL}/config", json=payload, timeout=5)
+        if r.status_code == 200:
+            print("[CFG] applied")
+            return True
+        print(f"[CFG] HTTP {r.status_code}")
+    except Exception as e:
+        print(f"[CFG] post failed: {e}")
+    return False
+
+
+# ── Weather ──────────────────────────────────────────────────
+
+weather = {"temp": 0.0, "high": 0.0, "low": 0.0, "desc": "Loading...", "updated": 0}
 
 def fetch_weather():
     global weather
@@ -223,9 +290,9 @@ def fetch_weather():
             int(cur.get("weather_code", -1)), int(cur.get("is_day", 1))
         )
         weather["updated"] = time.time()
-        print(f"[WEATHER] {weather['temp']:.1f}°C {weather['desc']}")
     except Exception as e:
-        print(f"[WEATHER] fetch failed: {e}")
+        print(f"[WEATHER] {e}")
+
 
 def weather_thread_loop():
     while True:
@@ -233,112 +300,7 @@ def weather_thread_loop():
         time.sleep(WEATHER_REFRESH_SEC)
 
 
-class BLEWorker(threading.Thread):
-    def __init__(self):
-        super().__init__(daemon=True)
-        self.running = True
-        self.client = None
-        self.loop = None
-        self.mtu = 23
-
-    def run(self):
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
-        self.loop.run_until_complete(self._loop())
-
-    async def _loop(self):
-        global latest, last_parse_fail, TIME_WRITE_LOGGED, DEVICE_ADDR, latest_config
-        def on_data(sender, data):
-            global latest, last_parse_fail, latest_config
-            payload = bytes(data)
-            if not payload:
-                return
-            try:
-                d = json.loads(payload.decode())
-                for k in ("temp", "fan", "rpm", "phone", "alert", "fv"):
-                    if k in d:
-                        latest[k] = d[k]
-                if "config" in d:
-                    latest_config = d["config"]
-                if "temp" in d and d["temp"] is not None:
-                    temp_hist.append(float(d["temp"]))
-            except Exception as e:
-                if time.time() - last_parse_fail > 10:
-                    last_parse_fail = time.time()
-                    print(f"[NOTIFY] parse fail: {e}")
-
-        while self.running:
-            try:
-                set_status("scanning…")
-                dev = await BleakScanner.find_device_by_filter(
-                    lambda d, ad: (ad.local_name and DEVICE_NAME in ad.local_name) or
-                                  (SERVICE_UUID.lower() in [str(u).lower() for u in ad.service_uuids]),
-                    timeout=8.0
-                )
-                if not dev:
-                    await asyncio.sleep(1)
-                    continue
-                DEVICE_ADDR = dev.address
-                set_status("connecting…")
-                print(f"[BLE] connecting {dev.address}")
-                try:
-                    async with BleakClient(dev, timeout=10.0) as c:
-                        self.client = c
-                        set_status("connected")
-                        print("[BLE] connected")
-                        try:
-                            await c.write_gatt_char(
-                                TIME_UUID, int(time.time()).to_bytes(4, "little"))
-                            if not TIME_WRITE_LOGGED:
-                                TIME_WRITE_LOGGED = True
-                                print("[TIME] wrote Unix time")
-                        except Exception as e:
-                            print(f"[TIME] {e}")
-                        try:
-                            await c.start_notify(DATA_UUID, on_data)
-                            print("[BLE] subscribed DATA")
-                        except Exception as e:
-                            print(f"[DATA-SUB] {e}")
-                        try:
-                            v = await c.read_gatt_char(DATA_UUID)
-                            on_data(None, v)
-                        except Exception as e:
-                            print(f"[DATA-READ] {e}")
-                        while c.is_connected:
-                            await asyncio.sleep(1.0)
-                except Exception as e:
-                    print(f"[BLE] conn err: {e}")
-                    set_status(f"err: {e}")
-                    await asyncio.sleep(2)
-                finally:
-                    self.client = None
-                    self.mtu = 23
-            except Exception as e:
-                set_status(f"err: {e}")
-                print(f"[BLE] loop err: {e}")
-                await asyncio.sleep(3)
-
-    def send_config(self, payload):
-        if not self.loop:
-            print("[CFG] worker not running")
-            return
-        asyncio.run_coroutine_threadsafe(
-            self._send_config_async(payload), self.loop)
-
-    async def _send_config_async(self, payload):
-        if not self.client or not self.client.is_connected:
-            print("[CFG] not connected – will retry later")
-            return False
-        try:
-            js = json.dumps(payload, separators=(",", ":"))
-            print(f"[CFG] sending: {js}")
-            await self.client.write_gatt_char(CONFIG_UUID, js.encode())
-            print("[CFG] sent")
-            return True
-        except Exception as e:
-            print(f"[CFG] send failed: {e}")
-            return False
-
+# ── Widgets ──────────────────────────────────────────────────
 
 class Card(tk.Frame):
     def __init__(self, parent, app, **kw):
@@ -420,12 +382,15 @@ class Graph(tk.Canvas):
 
 
 class SettingsDialog(tk.Toplevel):
-    def __init__(self, parent, worker):
+    def __init__(self, parent, app):
         super().__init__(parent)
+        self.app = app
         self.title("Fan-Mate Settings")
-        self.worker = worker
         self.resizable(False, False)
         self.grab_set()
+
+        fetch_config()
+
         row = 0
         pad = {"padx": 10, "pady": 4}
 
@@ -450,104 +415,144 @@ class SettingsDialog(tk.Toplevel):
             tk.Entry(self, textvariable=var, width=width).grid(row=row, column=1, sticky="w")
             row += 1
 
-        section("🌬️  FAN")
-        self.fan_mode = tk.StringVar(value=latest_config["fan"]["mode"])
-        radio("Mode:", self.fan_mode, ["off", "on", "auto"])
-        self.temp_on = tk.StringVar(value=str(latest_config["fan"]["tempOn"]))
-        entry("Start at (°C):", self.temp_on)
-        self.temp_full = tk.StringVar(value=str(latest_config["fan"]["tempFull"]))
-        entry("Full at (°C):", self.temp_full)
-        self.night_max = tk.StringVar(value=str(latest_config["fan"]["nightMax"]))
-        entry("Night max (%):", self.night_max)
+        # ── BOOST ────────────────────────────────────────────
+        section("⚡  BOOST")
+        mode_map = {0: "off", 1: "normal", 2: "aggressive"}
+        self.boost_mode = tk.StringVar(value=mode_map.get(latest_config["boost"].get("mode", 1), "normal"))
+        radio("Mode:", self.boost_mode, ["off", "normal", "aggressive"])
 
+        # Advanced subsection
+        adv_lbl = tk.Label(self, text="▾ Advanced", font=("Helvetica", 9, "italic"))
+        adv_lbl.grid(row=row, column=0, columnspan=3, sticky="w", padx=10, pady=(6, 2))
+        row += 1
+
+        norm = latest_config["boost"].get("normal", {})
+        aggr = latest_config["boost"].get("aggr", {})
+
+        self.norm_thr  = tk.StringVar(value=str(norm.get("threshold", 768)))
+        self.norm_on   = tk.StringVar(value=str(norm.get("on_hold", 4)))
+        self.norm_off  = tk.StringVar(value=str(norm.get("off_hold", 4)))
+        self.aggr_thr  = tk.StringVar(value=str(aggr.get("threshold", 256)))
+        self.aggr_on   = tk.StringVar(value=str(aggr.get("on_hold", 2)))
+        self.aggr_off  = tk.StringVar(value=str(aggr.get("off_hold", 8)))
+
+        tk.Label(self, text="Normal:", font=("Helvetica", 9, "bold")).grid(row=row, column=0, sticky="w", padx=10)
+        fr1 = tk.Frame(self); fr1.grid(row=row, column=1, columnspan=2, sticky="w")
+        tk.Label(fr1, text="Thr").pack(side="left")
+        tk.Entry(fr1, textvariable=self.norm_thr, width=6).pack(side="left", padx=2)
+        tk.Label(fr1, text="On").pack(side="left")
+        tk.Entry(fr1, textvariable=self.norm_on, width=3).pack(side="left", padx=2)
+        tk.Label(fr1, text="Off").pack(side="left")
+        tk.Entry(fr1, textvariable=self.norm_off, width=3).pack(side="left", padx=2)
+        row += 1
+
+        tk.Label(self, text="Aggressive:", font=("Helvetica", 9, "bold")).grid(row=row, column=0, sticky="w", padx=10)
+        fr2 = tk.Frame(self); fr2.grid(row=row, column=1, columnspan=2, sticky="w")
+        tk.Label(fr2, text="Thr").pack(side="left")
+        tk.Entry(fr2, textvariable=self.aggr_thr, width=6).pack(side="left", padx=2)
+        tk.Label(fr2, text="On").pack(side="left")
+        tk.Entry(fr2, textvariable=self.aggr_on, width=3).pack(side="left", padx=2)
+        tk.Label(fr2, text="Off").pack(side="left")
+        tk.Entry(fr2, textvariable=self.aggr_off, width=3).pack(side="left", padx=2)
+        row += 1
+
+        # ── ALARM ────────────────────────────────────────────
         section("🚨  ALARM")
         self.alarm_mode = tk.StringVar(value=latest_config["alarm"]["mode"])
         radio("Mode:", self.alarm_mode, ["off", "on", "auto"])
-        self.alarm_warn = tk.StringVar(value=str(latest_config["alarm"]["warning"]))
+        self.alarm_warn = tk.StringVar(value=str(latest_config["alarm"].get("warning", 45.0)))
         entry("Warning (°C):", self.alarm_warn)
-        self.alarm_panic = tk.StringVar(value=str(latest_config["alarm"]["panic"]))
-        entry("Panic (°C):", self.alarm_panic)
+        self.alarm_panic = tk.StringVar(value=str(latest_config["alarm"].get("panic", 50.0)))
+        entry("Oh Shit (°C):", self.alarm_panic)
+        self.alarm_kill = tk.StringVar(value=str(latest_config["alarm"].get("kill", 55.0)))
+        entry("Kill (°C):", self.alarm_kill)
 
+        # ── NIGHT ────────────────────────────────────────────
         section("🌙  NIGHT")
         self.night_mode = tk.StringVar(value=latest_config["night"]["mode"])
         radio("Mode:", self.night_mode, ["off", "on", "auto"])
-        self.night_start = tk.StringVar(value=str(latest_config["night"]["start"]))
+        self.night_start = tk.StringVar(value=str(latest_config["night"].get("start", 22)))
         entry("Start hour (0-23):", self.night_start)
-        self.night_end = tk.StringVar(value=str(latest_config["night"]["end"]))
+        self.night_end = tk.StringVar(value=str(latest_config["night"].get("end", 7)))
         entry("End hour (0-23):", self.night_end)
+        self.night_max = tk.StringVar(value=str(latest_config["night"].get("nightMax", 75)))
+        entry("Night max (%):", self.night_max)
 
+        # ── PHONE ────────────────────────────────────────────
         section("📱  PHONE")
-        self.phone_mode = tk.StringVar(value=latest_config["phone"]["mode"])
+        self.phone_mode = tk.StringVar(value=latest_config["phone"].get("mode", "off"))
         radio("Mode:", self.phone_mode, ["off", "auto"])
+        self.test_delay = tk.StringVar(value=str(latest_config["phone"].get("test_delay", 0)))
+        entry("Test delay (s):", self.test_delay)
 
         btn = tk.Frame(self)
         btn.grid(row=row, column=0, columnspan=3, pady=16)
         tk.Button(btn, text="Apply", width=10, command=self.apply).pack(side="left", padx=4)
-        tk.Button(btn, text="Reset", width=10, command=self.reset).pack(side="left", padx=4)
         tk.Button(btn, text="Cancel", width=10, command=self.destroy).pack(side="left", padx=4)
 
     def apply(self):
         try:
+            mode_str = self.boost_mode.get()
+            mode_int = {"off": 0, "normal": 1, "aggressive": 2}[mode_str]
+
             payload = {
-                "fan": {
-                    "mode":     self.fan_mode.get(),
-                    "tempOn":   float(self.temp_on.get()),
-                    "tempFull": float(self.temp_full.get()),
-                    "nightMax": int(self.night_max.get()),
+                "boost": {
+                    "mode": mode_int,
+                    "normal": {
+                        "threshold": int(self.norm_thr.get()),
+                        "on_hold":   int(self.norm_on.get()),
+                        "off_hold":  int(self.norm_off.get()),
+                    },
+                    "aggr": {
+                        "threshold": int(self.aggr_thr.get()),
+                        "on_hold":   int(self.aggr_on.get()),
+                        "off_hold":  int(self.aggr_off.get()),
+                    },
                 },
                 "alarm": {
                     "mode":    self.alarm_mode.get(),
                     "warning": float(self.alarm_warn.get()),
                     "panic":   float(self.alarm_panic.get()),
+                    "kill":    float(self.alarm_kill.get()),
                 },
                 "night": {
-                    "mode":  self.night_mode.get(),
-                    "start": int(self.night_start.get()),
-                    "end":   int(self.night_end.get()),
+                    "mode":     self.night_mode.get(),
+                    "start":    int(self.night_start.get()),
+                    "end":      int(self.night_end.get()),
+                    "nightMax": int(self.night_max.get()),
                 },
                 "phone": {
-                    "mode":  self.phone_mode.get(),
-                }
+                    "mode":       self.phone_mode.get(),
+                    "test_delay": int(self.test_delay.get()),
+                },
             }
         except ValueError as e:
             messagebox.showerror("Settings", f"Invalid value:\n{e}")
             return
-        try:
-            with open(CONFIG_FILE, "w") as f:
-                json.dump(payload, f, indent=2)
-        except Exception as e:
-            print(f"[CFG] save failed: {e}")
-        self.worker.send_config(payload)
-        self.destroy()
 
-    def reset(self):
-        if messagebox.askyesno("Reset", "Reset all settings to defaults?"):
-            self.worker.send_config({"reset": True})
+        if post_config(payload):
+            messagebox.showinfo("Settings", "Applied on ESP32")
             self.destroy()
+        else:
+            messagebox.showerror("Settings", "Failed to apply — check ESP32 connection")
 
+
+# ── App ──────────────────────────────────────────────────────
 
 class App:
     def __init__(self, root):
         self.root = root
-        root.title("🌀 Fan-Mate v2.50")
+        root.title(f"🌀 Fan-Mate v{GUI_VERSION}")
         root.resizable(False, False)
         self.theme = current_theme()
         self.is_day = is_daytime()
-
-        self.prev_rx = get_rx_bytes("en1")
-        self.current_rate = 0
-        self.total_rx = self.prev_rx
-        self.boost_enabled = tk.BooleanVar(value=True)
-        self.boost_active = False
-        self.boost_counter = 0
-        self.saved_fan_mode = latest_config["fan"]["mode"]
-        self.pending_boost = False
-
-        init_log()
+        self.turbo_phase = 0
 
         mb = tk.Menu(root)
         am = tk.Menu(mb, tearoff=0)
         am.add_command(label="⚙️  Settings", command=self.menu_settings)
+        am.add_separator()
+        am.add_command(label="🎛️  Dyna Tune Turbo Boost", command=self.menu_dyna_tune)
         am.add_separator()
         am.add_command(label="🌦️  Refresh Weather",
                        command=lambda: threading.Thread(target=fetch_weather, daemon=True).start())
@@ -566,9 +571,10 @@ class App:
 
         self.title_lbl = tk.Label(root, text="🌀 Fan-Mate", font=FONT_TITLE)
         self.title_lbl.pack(pady=(16, 2))
-        self.status_label = tk.Label(root, text="", font=("Helvetica Neue", 10, "italic"))
+        self.status_label = tk.Label(root, text="connecting…", font=("Helvetica Neue", 10, "italic"))
         self.status_label.pack(pady=(0, 8))
 
+        # Weather
         self.weather_card = Card(root, self)
         self.weather_card.pack(fill="x", padx=18, pady=(0, 8))
         self.weather_title = tk.Label(self.weather_card, text="📍 Atkinsons Dam", font=("Helvetica Neue", 11, "bold"))
@@ -580,6 +586,7 @@ class App:
         self.weather_range_lbl = tk.Label(self.weather_card, text="", font=FONT_TINY)
         self.weather_range_lbl.pack(pady=(0, 10))
 
+        # Phone temp
         self.temp_card = Card(root, self)
         self.temp_card.pack(fill="x", padx=18, pady=8)
         self.temp_title = tk.Label(self.temp_card, text="🌡️ PHONE TEMPERATURE", font=FONT_LABEL)
@@ -587,14 +594,16 @@ class App:
         self.temp_lbl = tk.Label(self.temp_card, text="--.-°C", font=FONT_BIG)
         self.temp_lbl.pack(pady=(0, 10))
 
+        # Fan / RPM
         self.fan_card = Card(root, self)
         self.fan_card.pack(fill="x", padx=18, pady=8)
         fr = tk.Frame(self.fan_card)
         fr.pack(fill="x", pady=10)
-        self.fan_lbl  = self._col(fr, "💨 FAN",  "--")
+        self.fan_lbl = self._col(fr, "💨 FAN", "--")
         self._divider(fr)
-        self.rpm_lbl  = self._col(fr, "⚙️ RPM",  "--")
+        self.rpm_lbl = self._col(fr, "⚙️ RPM", "--")
 
+        # Phone / Alert
         self.status_card = Card(root, self)
         self.status_card.pack(fill="x", padx=18, pady=8)
         sr = tk.Frame(self.status_card)
@@ -603,26 +612,23 @@ class App:
         self._divider(sr)
         self.alert_lbl = self._col(sr, "🚨 ALERT", "--")
 
+        # Time
         self.time_card = Card(root, self)
         self.time_card.pack(fill="x", padx=18, pady=8)
         self.time_lbl = tk.Label(self.time_card, text="--:--", font=("Helvetica Neue", 14, "bold"))
         self.time_lbl.pack(pady=10)
 
+        # Network rate
         self.data_card = Card(root, self)
         self.data_card.pack(fill="x", padx=18, pady=8)
-        self.data_title = tk.Label(self.data_card, text="📥 DOWNLOAD (en1) + BOOST", font=FONT_LABEL)
+        self.data_title = tk.Label(self.data_card, text="📥 NETWORK RATE (ESP32)", font=FONT_LABEL)
         self.data_title.pack(pady=(8, 0))
-        self.rate_lbl = tk.Label(self.data_card, text="0.0 KB/s", font=FONT_VALUE)
-        self.rate_lbl.pack(pady=(2, 2))
-        boost_fr = tk.Frame(self.data_card)
-        boost_fr.pack(pady=(0, 6))
-        tk.Checkbutton(boost_fr, text="Auto Boost (1.0 MB/s)", variable=self.boost_enabled,
-                       font=FONT_TINY, command=self.on_boost_toggle).pack()
-        self.boost_status_lbl = tk.Label(self.data_card, text="Boost: Ready", font=FONT_TINY)
-        self.boost_status_lbl.pack(pady=(0, 6))
-        self.data_graph = Graph(self.data_card, self, y_min=0, y_max=None, w=380, h=100)
+        self.rate_lbl = tk.Label(self.data_card, text="-- KB/s", font=FONT_VALUE)
+        self.rate_lbl.pack(pady=(2, 6))
+        self.data_graph = Graph(self.data_card, self, y_min=0, y_max=5120, w=380, h=100)
         self.data_graph.pack(padx=6, pady=(0, 8))
 
+        # Temp graph
         self.graph_card = Card(root, self)
         self.graph_card.pack(fill="x", padx=18, pady=8)
         self.graph_title = tk.Label(self.graph_card, text="📈 TEMPERATURE HISTORY", font=FONT_LABEL)
@@ -630,16 +636,33 @@ class App:
         self.temp_graph = Graph(self.graph_card, self, y_min=15, y_max=55)
         self.temp_graph.pack(padx=6, pady=(4, 8))
 
-        self.footer_lbl = tk.Label(root, text=f"GUI v{GUI_VERSION}  •  Interface: en1  •  Log: Documents/FanMate_temp_vs_data.csv",
-                                   font=FONT_TINY)
+        self.footer_lbl = tk.Label(
+            root,
+            text=f"GUI v{GUI_VERSION}  •  HTTP  •  Logs on ESP32",
+            font=FONT_TINY,
+        )
         self.footer_lbl.pack(pady=(2, 10))
 
         self.apply_theme()
-        self.worker = BLEWorker()
-        self.worker.start()
+
+        threading.Thread(target=http_poll_loop, daemon=True).start()
         threading.Thread(target=weather_thread_loop, daemon=True).start()
+
         self.theme_check()
         self.tick()
+
+    # ── Menu actions ─────────────────────────────────────────
+
+    def menu_settings(self):
+        SettingsDialog(self.root, self)
+
+    def menu_dyna_tune(self):
+        messagebox.showinfo(
+            "🎛️ Dyna Tune Turbo Boost",
+            "Analyzes all logs in ~/Documents/FanMate_logs/\n\n"
+            "Coming soon.\n\n"
+            "Minimum 3 days / 20 events needed for reliable suggestions."
+        )
 
     def sync_log(self):
         try:
@@ -652,9 +675,8 @@ class App:
             path = os.path.join(LOG_DIR, f"log-{ts}.csv")
             with open(path, "wb") as f:
                 f.write(r.content)
-            size_kb = len(r.content) / 1024
             lines = r.content.count(b"\n")
-            print(f"[SYNC] {lines} lines, {size_kb:.1f} KB → {path}")
+            size_kb = len(r.content) / 1024
             messagebox.showinfo("Sync Log", f"Saved {lines} lines ({size_kb:.1f} KB)\n\n{path}")
         except Exception as e:
             messagebox.showerror("Sync Log", f"Failed:\n{e}")
@@ -672,7 +694,6 @@ class App:
         try:
             r = requests.post(f"{FANMATE_URL}/log/clear", timeout=5)
             if r.status_code == 200:
-                print("[LOG] cleared on device")
                 messagebox.showinfo("Clear Log", "Log cleared on device.")
             else:
                 messagebox.showerror("Clear Log", f"HTTP {r.status_code}")
@@ -689,7 +710,6 @@ class App:
             return
 
         src_ver = read_firmware_version() or "?"
-
         try:
             bin_mtime = os.path.getmtime(BUILD_BIN)
             cfg_mtime = os.path.getmtime(CONFIG_H)
@@ -701,7 +721,6 @@ class App:
         size = os.path.getsize(BUILD_BIN)
         md5 = compute_md5(BUILD_BIN) or "?"
         dev_ver = latest.get("fv", "?")
-
         built_str = (datetime.fromtimestamp(bin_mtime).strftime("%Y-%m-%d %H:%M")
                      if bin_mtime else "?")
         size_mb = size / (1024 * 1024)
@@ -726,7 +745,7 @@ class App:
                 r = requests.post(
                     f"{FANMATE_URL}/ota",
                     files={"firmware": f},
-                    timeout=120
+                    timeout=120,
                 )
             if r.status_code == 200:
                 messagebox.showinfo("OTA", "Firmware sent. Device rebooting.")
@@ -735,30 +754,12 @@ class App:
         except Exception as e:
             messagebox.showerror("OTA", f"Failed:\n{e}")
 
-    def on_boost_toggle(self):
-        if not self.boost_enabled.get() and self.boost_active:
-            self._set_fan_mode(self.saved_fan_mode)
-            self.boost_active = False
-            self.pending_boost = False
-            self.boost_status_lbl.config(text="Boost: Off")
-
-    def _set_fan_mode(self, mode):
-        payload = {
-            "fan": {
-                "mode": mode,
-                "tempOn": latest_config["fan"]["tempOn"],
-                "tempFull": latest_config["fan"]["tempFull"],
-                "nightMax": latest_config["fan"]["nightMax"],
-            }
-        }
-        self.worker.send_config(payload)
-        print(f"[BOOST] Fan mode → {mode}")
+    # ── Helpers ──────────────────────────────────────────────
 
     def _col(self, parent, label, value):
         c = tk.Frame(parent)
         c.pack(side="left", expand=True, fill="both")
-        lbl1 = tk.Label(c, text=label, font=FONT_LABEL)
-        lbl1.pack(pady=(2, 2))
+        tk.Label(c, text=label, font=FONT_LABEL).pack(pady=(2, 2))
         lbl2 = tk.Label(c, text=value, font=FONT_VALUE)
         lbl2.pack(pady=(0, 2))
         return lbl2
@@ -789,7 +790,6 @@ class App:
         self.temp_lbl.configure(bg=t["card"])
         self.time_lbl.configure(bg=t["card"], fg=t["fg"])
         self.rate_lbl.configure(bg=t["card"], fg=t["fg"])
-        self.boost_status_lbl.configure(bg=t["card"], fg=t["muted"])
         for holder in (self.fan_card, self.status_card):
             for child in holder.winfo_children():
                 if isinstance(child, tk.Frame):
@@ -816,95 +816,133 @@ class App:
             self.apply_theme()
         self.root.after(60_000, self.theme_check)
 
-    def menu_settings(self):
-        SettingsDialog(self.root, self.worker)
+    # ── Main tick ────────────────────────────────────────────
 
     def tick(self):
-        now_rx = get_rx_bytes("en1")
-        diff = max(0, now_rx - self.prev_rx)
-        self.current_rate = diff
-        self.total_rx = now_rx
-        self.prev_rx = now_rx
-        download_hist.append(self.current_rate / 1024.0)
-
-        if self.boost_enabled.get():
-            if self.current_rate >= BOOST_THRESHOLD_BPS:
-                self.boost_counter += 1
-            else:
-                self.boost_counter = max(0, self.boost_counter - 2)
-
-            if self.boost_counter >= BOOST_HOLD_SECONDS and not self.boost_active:
-                self.saved_fan_mode = latest_config["fan"]["mode"]
-                self.pending_boost = True
-                self.boost_active = True
-                self.boost_status_lbl.config(text="Boost: Waiting for BLE…")
-                print("[BOOST] Triggered – waiting for connection")
-
-            if self.pending_boost and self.worker.client and self.worker.client.is_connected:
-                self._set_fan_mode("on")
-                self.pending_boost = False
-                self.boost_status_lbl.config(text="Boost: ACTIVE 🔥")
-                print("[BOOST] Fan forced ON")
-
-            elif self.boost_counter == 0 and self.boost_active and not self.pending_boost:
-                self._set_fan_mode(self.saved_fan_mode)
-                self.boost_active = False
-                self.boost_status_lbl.config(text="Boost: Ready")
-                print("[BOOST] Returned to previous mode")
-        else:
-            self.boost_status_lbl.config(text="Boost: Off")
-
-        if int(time.time()) % 5 == 0:
-            log_data(latest.get("temp"), self.total_rx, self.current_rate, self.boost_active)
-
         t = self.theme
         d = latest
+
+        # ── Status line priority ─────────────────────────────
+        self.turbo_phase = (self.turbo_phase + 1) % 4
+        sleep = d.get("sleep", 0)
+        countdown = d.get("sleep_countdown", 0)
+        boost = d.get("boost", 0)
+        opal = d.get("opal", 1)
+
+        if not connected:
+            self.status_label.config(
+                text="disconnected",
+                font=("Helvetica Neue", 10, "italic"),
+                fg=t["muted"],
+            )
+        elif sleep:
+            self.status_label.config(
+                text="💤 sleeping (phone absent)",
+                font=("Helvetica Neue", 12, "bold"),
+                fg=t["muted"],
+            )
+        elif countdown > 0:
+            self.status_label.config(
+                text=f"⚠️  Sleeping in {countdown}s",
+                font=("Helvetica Neue", 11, "bold"),
+                fg=t["orange"],
+            )
+        elif boost and connected:
+            turbo_colors = ["#00ff00", "#ffff00", "#ff8800", "#ff0000"]
+            self.status_label.config(
+                text="🏎️💨 TURBO 💨🏎️",
+                font=("Helvetica Neue", 13, "bold"),
+                fg=turbo_colors[self.turbo_phase],
+            )
+        elif not opal:
+            self.status_label.config(
+                text="🔌 opal offline",
+                font=("Helvetica Neue", 10, "italic"),
+                fg=t["orange"],
+            )
+        else:
+            self.status_label.config(
+                text=get_status(),
+                font=("Helvetica Neue", 10, "italic"),
+                fg=t["muted"],
+            )
+
+        # ── Temperature ──────────────────────────────────────
         temp = d.get("temp")
         if temp is None:
             self.temp_lbl.config(text="--.-°C  ❔", fg=t["muted"])
         else:
             em = temp_emoji(temp)
-            c = t["green"] if temp < 25 else t["blue"] if temp < 35 else t["yellow"] if temp < 45 else t["red"]
+            c = (t["green"] if temp < 25 else t["blue"] if temp < 35
+                 else t["yellow"] if temp < 45 else t["red"])
             self.temp_lbl.config(text=f"{temp:.1f}°C  {em}", fg=c)
 
+        # ── Fan / RPM ────────────────────────────────────────
         fan_pct = int(d.get("fan", 0))
         fe = fan_emoji(fan_pct)
-        self.fan_lbl.config(text=f"OFF {fe}" if fan_pct == 0 else f"{fan_pct}% {fe}",
-                            fg=t["muted"] if fan_pct == 0 else t["green"])
-
+        self.fan_lbl.config(
+            text=f"OFF {fe}" if fan_pct == 0 else f"{fan_pct}% {fe}",
+            fg=t["muted"] if fan_pct == 0 else t["green"],
+        )
         rpm = int(d.get("rpm", 0))
         self.rpm_lbl.config(text=f"{rpm}", fg=t["green"] if rpm > 0 else t["muted"])
 
-        phone_mode = latest_config.get("phone", {}).get("mode", "auto")
+        # ── Phone ────────────────────────────────────────────
+        phone_mode = latest_config.get("phone", {}).get("mode", "off")
         if phone_mode == "off":
-            self.phone_lbl.config(text="DISABLED ⚙️", fg=t["muted"])
+            self.phone_lbl.config(text="BENCH 🧪", fg=t["muted"])
         else:
             phone = bool(d.get("phone", 0))
-            self.phone_lbl.config(text="YES 📱" if phone else "NO  📴",
-                                  fg=t["green"] if phone else t["muted"])
+            self.phone_lbl.config(
+                text="YES 📱" if phone else "NO  📴",
+                fg=t["green"] if phone else t["muted"],
+            )
 
+        # ── Alert ────────────────────────────────────────────
         alert = int(d.get("alert", 0))
-        if alert == 2:
-            self.alert_lbl.config(text="PANIC 🚨", fg=t["red"])
+        if alert >= 3:
+            self.alert_lbl.config(text="KILL 💀", fg=t["red"])
+        elif alert == 2:
+            self.alert_lbl.config(text="OH SHIT 🚨", fg=t["red"])
         elif alert == 1:
             self.alert_lbl.config(text="WARN ⚠️", fg=t["orange"])
         else:
             self.alert_lbl.config(text="OK ✅", fg=t["green"])
 
+        # ── Weather ──────────────────────────────────────────
         self.weather_temp_lbl.config(text=f"{weather['temp']:.1f}°")
         self.weather_desc_lbl.config(text=weather["desc"])
-        self.weather_range_lbl.config(text=f"⬆️ {weather['high']:.0f}°   ⬇️ {weather['low']:.0f}°")
+        self.weather_range_lbl.config(
+            text=f"⬆️ {weather['high']:.0f}°   ⬇️ {weather['low']:.0f}°"
+        )
+
+        # ── Time ─────────────────────────────────────────────
         self.time_lbl.config(text=f"{local_time_str()}  {time_emoji()}")
 
-        rate_kb = self.current_rate / 1024.0
-        self.rate_lbl.config(text=f"{rate_kb/1024:.2f} MB/s" if rate_kb >= 1024 else f"{rate_kb:.1f} KB/s")
+        # ── Network rate ─────────────────────────────────────
+        rate_kbps = float(d.get("net_kbps", 0.0))
+        if rate_kbps >= 1024:
+            self.rate_lbl.config(text=f"{rate_kbps/1024:.2f} MB/s")
+        else:
+            self.rate_lbl.config(text=f"{rate_kbps:.1f} KB/s")
 
-        self.temp_graph.trigger = latest_config.get("fan", {}).get("tempOn", None)
+        # ── Graphs ───────────────────────────────────────────
+        # Temp graph — red line at alarmWarning
+        self.temp_graph.trigger = latest_config.get("alarm", {}).get("warning", None)
         self.temp_graph.set_data(temp_hist)
+
+        # Network graph — red line at current boost threshold
+        boost_mode = latest_config.get("boost", {}).get("mode", 1)
+        if boost_mode == 1:
+            thr = latest_config.get("boost", {}).get("normal", {}).get("threshold")
+        elif boost_mode == 2:
+            thr = latest_config.get("boost", {}).get("aggr", {}).get("threshold")
+        else:
+            thr = None
+        self.data_graph.trigger = thr
         self.data_graph.set_data(download_hist)
 
-        self.status_label.config(text=get_status())
-        self.root.after(1000, self.tick)
+        self.root.after(250, self.tick)
 
 
 if __name__ == "__main__":
