@@ -55,6 +55,7 @@ void setup() {
     initHardware();
     initDisplay();
     log_init();
+    log_write_reset_reason();
 
     drawSplashScreen();
     Serial.println("[SPLASH] 5s...");
@@ -96,16 +97,13 @@ static void tick_15s() {
 
     auto_boost_update(kbps);
 
-    int alarm_flag = (alertState > 0) ? 1 : 0;
-
     if (currentTemp > 0.0) {
         log_write(
             currentTemp,
-            mb,
+            kbps,
             auto_boost_is_active() ? 1 : 0,
-            fanRPM,
-            alarm_flag,
-            config.benchMode ? 1 : 0
+            fanPct,
+            fanRPM
         );
     }
 

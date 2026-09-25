@@ -4,9 +4,11 @@
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <time.h>
+#include <sys/time.h>
 
 // ============================================================
 //  WiFi Manager — implementation
+//  V3.30 — NTP time sync at boot
 // ============================================================
 
 static bool          wifi_inited        = false;
@@ -16,6 +18,7 @@ static unsigned long wifi_connected_at  = 0;
 static bool          mdns_started       = false;
 static bool          ntp_started        = false;
 
+// ------------------------------------------------------------
 void wifi_setup() {
     if (wifi_inited) return;
 
@@ -28,7 +31,7 @@ void wifi_setup() {
     WiFi.mode(WIFI_STA);
     WiFi.setHostname(MDNS_HOSTNAME);
     WiFi.setAutoReconnect(true);
-    WiFi.setSleep(true);            // REQUIRED when BLE coexists
+    WiFi.setSleep(true);
 
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
@@ -39,6 +42,7 @@ void wifi_setup() {
     Serial.printf("[WIFI] connecting...\n");
 }
 
+// ------------------------------------------------------------
 static void start_mdns() {
     if (mdns_started) return;
     if (!MDNS.begin(MDNS_HOSTNAME)) {
@@ -50,15 +54,22 @@ static void start_mdns() {
     mdns_started = true;
 }
 
+// ------------------------------------------------------------
+//  NTP — one-shot at first connection
+// ------------------------------------------------------------
 static void start_ntp() {
     if (ntp_started) return;
+
     setenv("TZ", "AEST-10", 1);
     tzset();
+
     configTime(0, 0, "pool.ntp.org", "time.nist.gov", "time.google.com");
+
     Serial.println("[NTP] sync requested");
     ntp_started = true;
 }
 
+// ------------------------------------------------------------
 void wifi_loop() {
     if (!wifi_inited) return;
 
@@ -99,6 +110,7 @@ void wifi_loop() {
     }
 }
 
+// ------------------------------------------------------------
 bool wifi_connected()           { return WiFi.status() == WL_CONNECTED; }
 String wifi_ip()                { return wifi_connected() ? WiFi.localIP().toString() : "0.0.0.0"; }
 int wifi_rssi()                 { return wifi_connected() ? WiFi.RSSI() : 0; }
