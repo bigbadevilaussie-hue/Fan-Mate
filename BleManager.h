@@ -8,6 +8,7 @@
 #include <BLE2902.h>
 
 extern volatile bool notificationsPaused;
+extern volatile bool otaInProgress;
 
 void initBLE();
 void updateBLEData(float temp, int fanPct, int rpm,

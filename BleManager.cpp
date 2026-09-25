@@ -1,17 +1,23 @@
 #include "BleManager.h"
 #include "Config.h"
 #include "DisplayManager.h"
+#include "Settings.h"
 
 #include <time.h>
 #include <sys/time.h>
 #include <cstring>
 #include <Update.h>
 
+// ============================================================
+//  BLE server — status notify + time sync + pause + OTA + config
+// ============================================================
+
 static BLEServer* pServer = nullptr;
 static BLECharacteristic* pDataChar = nullptr;
 static BLECharacteristic* pTimeChar = nullptr;
 static BLECharacteristic* pOtaChar = nullptr;
 static BLECharacteristic* pPauseChar = nullptr;
+static BLECharacteristic* pConfigChar = nullptr;
 
 static bool bleInited = false;
 
@@ -28,6 +34,9 @@ static char otaExpectedMd5[33] = "";
 static uint32_t otaLastPrintBytes = 0;
 static uint32_t otaLastReadySent = 0;
 
+// ------------------------------------------------------------
+//  Server callbacks
+// ------------------------------------------------------------
 class ServerCallbacks : public BLEServerCallbacks {
     void onConnect(BLEServer* s) override {
         Serial.println("[BLE] client connected");
@@ -42,6 +51,9 @@ class ServerCallbacks : public BLEServerCallbacks {
     }
 };
 
+// ------------------------------------------------------------
+//  Time sync
+// ------------------------------------------------------------
 class TimeCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* c) override {
         std::string value = c->getValue();
@@ -67,6 +79,9 @@ class TimeCallbacks : public BLECharacteristicCallbacks {
     }
 };
 
+// ------------------------------------------------------------
+//  Pause / resume notifications
+// ------------------------------------------------------------
 class PauseCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* c) override {
         std::string v = c->getValue();
@@ -77,6 +92,21 @@ class PauseCallbacks : public BLECharacteristicCallbacks {
     }
 };
 
+// ------------------------------------------------------------
+//  Config — settings from GUI
+// ------------------------------------------------------------
+class ConfigCallbacks : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* c) override {
+        std::string v = c->getValue();
+        if (v.length() == 0) return;
+        Serial.printf("[CFG] BLE recv: %s\n", v.c_str());
+        settings_apply_json(v.c_str());
+    }
+};
+
+// ------------------------------------------------------------
+//  OTA
+// ------------------------------------------------------------
 class OtaCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* c) override {
         std::string v = c->getValue();
@@ -85,7 +115,6 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
         uint8_t* data = (uint8_t*)v.data();
         size_t len = v.length();
 
-        // ---- Header packet ----
         if (!otaInProgress) {
             if (len < 36) {
                 Serial.printf("[OTA] header too short (%u)\n", (unsigned)len);
@@ -113,7 +142,6 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
             return;
         }
 
-        // ---- Firmware chunks ----
         if (Update.write(data, len) != len) {
             Serial.printf("[OTA] Update.write FAILED at %lu: %s\n",
                           (unsigned long)otaBytesReceived,
@@ -126,7 +154,6 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
 
         otaBytesReceived += len;
 
-        // Progress print every 20KB
         if (otaBytesReceived - otaLastPrintBytes >= 20480) {
             otaLastPrintBytes = otaBytesReceived;
             uint8_t pct = (uint8_t)((otaBytesReceived * 100ULL) / otaExpectedSize);
@@ -136,7 +163,6 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
             drawOtaScreen(pct, otaBytesReceived, otaExpectedSize);
         }
 
-        // ---- Flow control: notify GUI every 2KB "ready for more" ----
         if (otaBytesReceived - otaLastReadySent >= 2048) {
             otaLastReadySent = otaBytesReceived;
             uint8_t ready = 0x01;
@@ -144,7 +170,6 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
             pOtaChar->notify();
         }
 
-        // ---- Complete ----
         if (otaBytesReceived >= otaExpectedSize) {
             Serial.printf("[OTA] all chunks recv: %lu bytes\n",
                           (unsigned long)otaBytesReceived);
@@ -179,6 +204,9 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
     }
 };
 
+// ------------------------------------------------------------
+//  Init
+// ------------------------------------------------------------
 void initBLE() {
     if (bleInited) return;
 
@@ -203,7 +231,6 @@ void initBLE() {
         BLECharacteristic::PROPERTY_WRITE);
     pTimeChar->setCallbacks(new TimeCallbacks());
 
-    // ---- OTA characteristic now supports NOTIFY for flow control ----
     pOtaChar = pService->createCharacteristic(
         OTA_DATA_UUID,
         BLECharacteristic::PROPERTY_WRITE |
@@ -217,6 +244,11 @@ void initBLE() {
         BLECharacteristic::PROPERTY_WRITE);
     pPauseChar->setCallbacks(new PauseCallbacks());
 
+    pConfigChar = pService->createCharacteristic(
+        CONFIG_UUID,
+        BLECharacteristic::PROPERTY_WRITE);
+    pConfigChar->setCallbacks(new ConfigCallbacks());
+
     pService->start();
     Serial.println("[BLE] service started");
 
@@ -229,13 +261,16 @@ void initBLE() {
     bleInited = true;
 }
 
+// ------------------------------------------------------------
+//  Data notify — small JSON, fits BLE packets
+// ------------------------------------------------------------
 void updateBLEData(float temp, int fanPct, int rpm,
                    bool phoneConnected, int alertState) {
     if (!pDataChar || !bleInited) return;
     if (!pServer || pServer->getConnectedCount() <= 0) return;
     if (notificationsPaused) return;
 
-    char buf[160];
+    char buf[100];
     snprintf(buf, sizeof(buf),
         "{\"temp\":%.1f,\"fan\":%d,\"rpm\":%d,\"phone\":%d,\"alert\":%d,\"fv\":\"" FAN_MATE_VERSION "\"}",
         temp, fanPct, rpm, phoneConnected ? 1 : 0, alertState);

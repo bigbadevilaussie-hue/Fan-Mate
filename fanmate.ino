@@ -1,10 +1,11 @@
-// FAN-MATE - Modular version
+// FAN-MATE - Main coordinator
 // Requires Arduino ESP32 core 2.x (2.0.17)
 
 #include "Config.h"
 #include "BleManager.h"
 #include "FanController.h"
 #include "DisplayManager.h"
+#include "Settings.h"
 
 #include <esp_arduino_version.h>
 
@@ -27,6 +28,8 @@ void setup() {
     setenv("TZ", "AEST-10", 1);
     tzset();
 
+    settings_load();
+
     initHardware();
     initDisplay();
 
@@ -48,6 +51,7 @@ void loop() {
 
     readDS18B20(currentTemp);
     updatePhoneDetection();
+    updateTach();
 
     int fanPct = 0;
     int fanRPM = 0;
@@ -62,7 +66,8 @@ void loop() {
         phonePresent
     );
 
-    if (now - lastOLED >= 500) {
+    // ---- OLED update — SKIPPED during OTA ----
+    if (now - lastOLED >= 500 && !otaInProgress) {
         lastOLED = now;
         updateDisplay(
             currentTemp,
@@ -73,6 +78,7 @@ void loop() {
         );
     }
 
+    // ---- BLE notify every 2s ----
     if (now - lastPublish >= 2000) {
         lastPublish = now;
         updateBLEData(
@@ -84,6 +90,7 @@ void loop() {
         );
     }
 
+    // ---- Serial status every 10s ----
     if (now - lastStatus >= 10000) {
         lastStatus = now;
         Serial.printf("[STATUS] temp=%.1f fan=%d%% rpm=%d phone=%d alert=%d\n",

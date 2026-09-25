@@ -1,7 +1,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define FAN_MATE_VERSION "2.11 - OTA"
+#define FAN_MATE_VERSION "2.20"
 
 // Pins
 #define SDA_PIN        5
@@ -12,7 +12,7 @@
 #define DS18B20_PIN    4
 #define PHONE_SENSE_PIN 1
 
-// Temperature thresholds
+// Temperature thresholds (defaults — overridden by NVS)
 #define TEMP_ON       34.0
 #define TEMP_FULL     42.0
 #define TEMP_WARNING  45.0
@@ -62,5 +62,8 @@
 
 #define PAUSE_UUID \
     "beb5483e-36e1-4688-b7f5-ea07361b26af"
+
+#define CONFIG_UUID \
+    "beb5483e-36e1-4688-b7f5-ea07361b26b0"
 
 #endif
