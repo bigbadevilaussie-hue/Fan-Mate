@@ -12,7 +12,7 @@
     #include "secrets.example.h"
 #endif
 
-#define FAN_MATE_VERSION "3.41"
+#define FAN_MATE_VERSION "3.42"
 
 // ============================================================
 //  Pins
@@ -71,6 +71,7 @@
 // ============================================================
 //  Opal router API
 // ============================================================
+#define SERIAL_BUF_LINES      50
 #define OPAL_POLL_INTERVAL_MS   15000
 #define OPAL_LOGIN_REFRESH_MS   3000000
 

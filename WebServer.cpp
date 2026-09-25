@@ -26,6 +26,45 @@ extern volatile bool otaInProgress;
 static bool otaStarted = false;
 
 // ------------------------------------------------------------
+
+static void handle_serial_page() {
+    String html = R"rawliteral(
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Fan-Mate Serial</title>
+<style>
+body{font-family:ui-monospace,monospace;background:#181825;color:#cdd6f4;padding:20px;font-size:13px}
+h1{color:#89b4fa}
+#log{background:#232334;padding:14px;border-radius:8px;height:80vh;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+a{color:#89b4fa}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+</style>
+<script>
+function refresh(){
+  fetch('/serial-raw')
+    .then(r=>r.text())
+    .then(t=>{
+      const el=document.getElementById('log');
+      const at_bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+      el.textContent = t;
+      if(at_bottom) el.scrollTop = el.scrollHeight;
+    });
+}
+setInterval(refresh, 2000);
+window.onload = refresh;
+</script>
+</head><body>
+<div class="top"><h1>Fan-Mate Serial</h1><a href="/">dashboard</a></div>
+<div id="log">loading...</div>
+</body></html>
+)rawliteral";
+    server.send(200, "text/html", html);
+}
+
+static void handle_serial_raw() {
+    extern String get_serial_dump();
+    server.send(200, "text/plain", get_serial_dump());
+}
+
 static void handle_root() {
     extern float currentTemp;
     extern int   fanPct;
@@ -282,6 +321,8 @@ void server_setup() {
     server.on("/log.csv",    HTTP_GET,  handle_log_download);
     server.on("/log/info",   HTTP_GET,  handle_log_info);
     server.on("/log/clear",  HTTP_POST, handle_log_clear);
+    server.on("/serial",     HTTP_GET,  handle_serial_page);
+    server.on("/serial-raw", HTTP_GET,  handle_serial_raw);
     server.on("/reboot",     HTTP_GET,  handle_reboot);
     server.on("/ota",        HTTP_POST, handle_ota_done, handle_ota_upload);
 

@@ -29,6 +29,30 @@ bool  phonePresent = false;
 
 volatile bool otaInProgress = false;
 
+// ── Serial ring buffer for /serial endpoint ──
+String serial_buf[SERIAL_BUF_LINES];
+int    serial_idx = 0;
+
+void log_print(const char* fmt, ...) {
+    char buf[160];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    Serial.print(buf);
+    serial_buf[serial_idx] = String(buf);
+    serial_idx = (serial_idx + 1) % SERIAL_BUF_LINES;
+}
+
+String get_serial_dump() {
+    String out;
+    for (int i = 0; i < SERIAL_BUF_LINES; i++) {
+        int idx = (serial_idx + i) % SERIAL_BUF_LINES;
+        if (serial_buf[idx].length() > 0) out += serial_buf[idx];
+    }
+    return out;
+}
+
 // ============================================================
 //  Setup
 // ============================================================
@@ -53,6 +77,19 @@ void setup() {
 
     settings_load();
     initHardware();
+
+    // ── DS18B20 warmup: wait for first valid reading ──
+    Serial.println("[BOOT] waiting for DS18B20...");
+    for (int i = 0; i < 20; i++) {
+        float t = 0.0f;
+        readDS18B20(t);
+        if (t > -50.0f && t < 100.0f && t != 0.0f) {
+            currentTemp = t;
+            Serial.printf("[BOOT] DS18B20 first: %.1f C\n", t);
+            break;
+        }
+        delay(500);
+    }
     initDisplay();
     log_init();
     log_write_reset_reason();
@@ -95,14 +132,25 @@ static void tick_15s() {
         have_baseline = true;
     }
     last_rx = rx_now;
-    lastNetKbps = kbps;
 
-    auto_boost_update(kbps);
+    // Peak-hold smoothing (3-tick window)
+    static float peak_hist[3] = {0, 0, 0};
+    static int   peak_idx = 0;
+    peak_hist[peak_idx] = kbps;
+    peak_idx = (peak_idx + 1) % 3;
+
+    float kbps_smooth = peak_hist[0];
+    if (peak_hist[1] > kbps_smooth) kbps_smooth = peak_hist[1];
+    if (peak_hist[2] > kbps_smooth) kbps_smooth = peak_hist[2];
+
+    lastNetKbps = kbps_smooth;
+
+    auto_boost_update(kbps_smooth);
 
     if (currentTemp > 0.0) {
         log_write(
             currentTemp,
-            kbps,
+            kbps_smooth,
             auto_boost_is_active() ? 1 : 0,
             fanPct,
             fanRPM
@@ -111,7 +159,7 @@ static void tick_15s() {
 
     log_check_full();
 
-    Serial.printf("[TICK] temp=%.1f fan=%d%% net=%.1f KB/s boost=%d rpm=%d\n",
+    log_print("[TICK] temp=%.1f fan=%d%% net=%.1f KB/s boost=%d rpm=%d\n",
                   currentTemp, fanPct, kbps,
                   auto_boost_is_active() ? 1 : 0, fanRPM);
 }
@@ -166,7 +214,7 @@ void loop() {
 
     if (now - lastStatus >= 10000) {
         lastStatus = now;
-        Serial.printf("[STATUS] temp=%.1f fan=%d%% rpm=%d phone=%d alert=%d",
+        log_print("[STATUS] temp=%.1f fan=%d%% rpm=%d phone=%d alert=%d",
                       currentTemp, fanPct, fanRPM,
                       phonePresent ? 1 : 0, alertState);
         if (wifi_connected()) {
