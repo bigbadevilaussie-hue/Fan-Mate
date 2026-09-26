@@ -10,9 +10,17 @@
 #else
     #warning "secrets.h not found — copy secrets.example.h to secrets.h"
     #include "secrets.example.h"
+// Sleep state
+enum SystemState {
+    STATE_ACTIVE      = 0,
+    STATE_LIGHT_SLEEP = 1,
+};
+extern SystemState   sys_state;
+extern unsigned long phone_absent_since;
+
 #endif
 
-#define FAN_MATE_VERSION "3.44"
+#define FAN_MATE_VERSION "3.45.2"
 
 // ============================================================
 //  Pins
@@ -87,5 +95,13 @@
 // ============================================================
 #define LOG_MAX_SIZE   (800 * 1024)
 #define LOG_TICK_MS    15000
+
+// Sleep state
+enum SystemState {
+    STATE_ACTIVE      = 0,
+    STATE_LIGHT_SLEEP = 1,
+};
+extern SystemState   sys_state;
+extern unsigned long phone_absent_since;
 
 #endif

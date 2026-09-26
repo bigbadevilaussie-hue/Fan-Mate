@@ -140,6 +140,15 @@ static void handle_status() {
     int host_alive = (since_host < 60000) ? 1 : 0;
     json += "\"host\":" + String(host_alive) + ",";
     json += "\"host_last_seen\":" + String(since_host / 1000) + ",";
+    int sleep_countdown = 0;
+    if (sys_state == STATE_ACTIVE && phone_absent_since > 0) {
+        unsigned long elapsed = (millis() - phone_absent_since) / 1000;
+        int remaining = config.phoneTestDelay - (int)elapsed;
+        if (remaining < 0) remaining = 0;
+        sleep_countdown = remaining;
+    }
+    json += "\"sleep\":" + String(sys_state == STATE_LIGHT_SLEEP ? 1 : 0) + ",";
+    json += "\"sleep_countdown\":" + String(sleep_countdown) + ",";
     json += "\"log_size\":" + String(log_get_size()) + ",";
     json += "\"log_full\":" + String(log_is_full() ? 1 : 0);
     json += "}";

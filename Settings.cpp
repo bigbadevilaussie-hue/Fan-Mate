@@ -22,6 +22,7 @@ static void set_defaults() {
     config.nightEnd     = 7;
 
     config.phoneMode    = "auto";
+    config.phoneTestDelay = 0;
 
     config.boostEnabled   = true;
     config.boostThreshold = BOOST_DEFAULT_THRESHOLD_KBPS;
@@ -48,6 +49,7 @@ void settings_load() {
     config.nightEnd     = prefs.getInt   ("night.end",     config.nightEnd);
 
     config.phoneMode    = prefs.getString("phone.mode",    config.phoneMode);
+    config.phoneTestDelay = prefs.getInt("phone.test_delay", config.phoneTestDelay);
 
     config.boostEnabled   = prefs.getBool("boost.enabled",   config.boostEnabled);
     config.boostThreshold = prefs.getInt ("boost.threshold", config.boostThreshold);
@@ -89,6 +91,7 @@ void settings_save() {
     prefs.putInt   ("night.end",     config.nightEnd);
 
     prefs.putString("phone.mode",    config.phoneMode);
+    prefs.putInt   ("phone.test_delay", config.phoneTestDelay);
 
     prefs.putBool  ("boost.enabled",   config.boostEnabled);
     prefs.putInt   ("boost.threshold", config.boostThreshold);

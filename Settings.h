@@ -27,6 +27,7 @@ struct FanMateConfig {
 
     // Phone
     String  phoneMode;      // "off" / "auto"
+    int     phoneTestDelay; // seconds before sleep in auto mode
 
     // Boost
     bool    boostEnabled;

@@ -12,6 +12,7 @@
 // ============================================================
 
 static String   opal_sid           = "";
+static bool     opal_paused        = false;
 static uint32_t opal_sid_time      = 0;
 static uint64_t opal_last_rx       = 0;
 static bool     opal_have_baseline = false;
@@ -142,6 +143,7 @@ void opal_init() {
 
 // ------------------------------------------------------------
 bool opal_poll(uint64_t &rx_total) {
+    if (opal_paused) return false;
     if (WiFi.status() != WL_CONNECTED) {
         return false;
     }
@@ -207,4 +209,19 @@ void opal_force_relogin() {
 
 bool opal_logged_in() {
     return opal_sid.length() > 0;
+}
+
+void opal_pause() {
+    opal_paused = true;
+    Serial.println("[OPAL] paused");
+}
+
+void opal_resume() {
+    opal_paused = false;
+    opal_sid = "";
+    Serial.println("[OPAL] resumed");
+}
+
+bool opal_is_paused() {
+    return opal_paused;
 }

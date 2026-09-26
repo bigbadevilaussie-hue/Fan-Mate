@@ -21,7 +21,7 @@ import tkinter as tk
 from tkinter import messagebox
 import requests
 
-GUI_VERSION = "3.44"
+GUI_VERSION = "3.45.2"
 FANMATE_URL = "http://fan-mate.local"
 FANMATE_DIR = os.path.expanduser("~/Documents/Arduino/fanmate")
 BUILD_DIR   = os.path.join(FANMATE_DIR, "build", "esp32.esp32.esp32c3")
@@ -254,13 +254,24 @@ def fetch_config():
         return None
 
 
+def _flatten_cfg(prefix, d, out):
+    for k, v in d.items():
+        key = f"{prefix}.{k}" if prefix else k
+        if isinstance(v, dict):
+            _flatten_cfg(key, v, out)
+        else:
+            out.append(f"{key}={v}")
+
+
 def post_config(payload):
     try:
         r = requests.post(f"{FANMATE_URL}/config", json=payload, timeout=5)
         if r.status_code == 200:
-            print("[CFG] applied")
+            parts = []
+            _flatten_cfg("", payload, parts)
+            print(f"[CFG] applied: {', '.join(parts)}")
             return True
-        print(f"[CFG] HTTP {r.status_code}")
+        print(f"[CFG] HTTP {r.status_code}: {r.text}")
     except Exception as e:
         print(f"[CFG] post failed: {e}")
     return False

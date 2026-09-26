@@ -11,4 +11,8 @@ void drawOtaScreen(uint8_t pct, uint32_t recv, uint32_t total);
 void drawFwStartScreen();
 void drawRebootScreen(int secondsLeft);
 
+// Sleep / wake
+void clearDisplay();
+void wakeDisplay();
+
 #endif

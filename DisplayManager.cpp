@@ -167,3 +167,15 @@ void drawRebootScreen(int secondsLeft) {
     display.display();
     Serial.printf("[OLED] reboot countdown: %d\n", secondsLeft);
 }
+
+void clearDisplay() {
+    display.clearDisplay();
+    display.display();
+    Serial.println("[OLED] blanked");
+}
+
+void wakeDisplay() {
+    display.clearDisplay();
+    display.display();
+    Serial.println("[OLED] restored");
+}

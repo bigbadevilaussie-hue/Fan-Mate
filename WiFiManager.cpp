@@ -54,7 +54,7 @@ static void start_ntp() {
     if (ntp_started) return;
     setenv("TZ", "AEST-10", 1);
     tzset();
-    configTime(0, 0, "pool.ntp.org", "time.nist.gov", "time.google.com");
+    configTime(10 * 3600, 0, "pool.ntp.org", "time.nist.gov", "time.google.com");
     Serial.println("[NTP] sync requested");
     ntp_started = true;
 }

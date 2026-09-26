@@ -12,6 +12,9 @@ static bool          warned_full    = false;
 static const char* LOG_FILE = "/log.csv";
 
 String log_time_string() {
+    setenv("TZ", "AEST-10", 1);
+    tzset();
+
     time_t now = time(nullptr);
     if (now < 1700000000UL) {
         char buf[24];

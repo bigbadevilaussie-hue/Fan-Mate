@@ -29,6 +29,47 @@ bool  phonePresent = false;
 
 volatile bool otaInProgress = false;
 
+SystemState   sys_state = STATE_ACTIVE;
+unsigned long phone_absent_since = 0;
+static unsigned long sleep_start_ms = 0;
+bool          have_baseline = false;
+uint64_t      last_rx       = 0;
+unsigned long last_tick     = 0;
+
+// ── Sleep state machine ────────────────────────────────
+void silenceFanAndAlerts() {
+    ledcWrite(0, 0);
+    ledcWrite(BUZZER_CHANNEL, 0);
+}
+
+void enter_sleep() {
+    Serial.println("[SLEEP] phone absent — entering sleep");
+    sys_state = STATE_LIGHT_SLEEP;
+    sleep_start_ms = millis();
+    phone_absent_since = 0;
+    silenceFanAndAlerts();
+    auto_boost_release();
+    opal_pause();
+    log_write_event("SLEEP");
+    clearDisplay();
+    digitalWrite(LED_PIN, LOW);   // LED ON
+    Serial.println("[SLEEP] entered");
+}
+
+void exit_sleep() {
+    Serial.println("[SLEEP] phone detected — waking");
+    sys_state = STATE_ACTIVE;
+    phone_absent_since = 0;
+    log_write_event("WAKE");
+    have_baseline = false;
+    last_rx = 0;
+    last_tick = millis() - 15000;
+    opal_resume();
+    wakeDisplay();
+    digitalWrite(LED_PIN, HIGH);  // LED OFF
+    Serial.println("[SLEEP] awake");
+}
+
 // ── Serial ring buffer for /serial endpoint ──
 String serial_buf[SERIAL_BUF_LINES];
 int    serial_idx = 0;
@@ -106,10 +147,7 @@ void setup() {
 // ============================================================
 //  15-second tick
 // ============================================================
-static unsigned long last_tick     = 0;
-static uint64_t      last_rx       = 0;
 float                lastNetKbps   = 0.0;
-static bool          have_baseline = false;
 
 static void tick_15s() {
     readDS18B20(currentTemp);
@@ -188,28 +226,56 @@ void loop() {
     updatePhoneDetection();
     updateTach();
 
-    updateFanAndAlerts(
-        currentTemp,
-        fanPct,
-        fanRPM,
-        alertState,
-        phonePresent
-    );
+    // ── Sleep state machine ────────────────────────────────
+    bool phone_now;
+    if (config.phoneMode == "off") {
+        phone_now = true;                     // bypass
+    } else if (config.benchMode) {
+        phone_now = true;                     // force present
+    } else {
+        phone_now = phonePresent;             // real sensor
+    }
 
-    if (now - lastOLED >= 500 && !otaInProgress) {
-        lastOLED = now;
-        updateDisplay(
+    if (!phone_now && sys_state == STATE_ACTIVE) {
+        if (phone_absent_since == 0) {
+            phone_absent_since = now;
+            Serial.printf("[SLEEP] phone absent — delay %d s\n", config.phoneTestDelay);
+        }
+        unsigned long delay_ms = (unsigned long)config.phoneTestDelay * 1000UL;
+        if (now - phone_absent_since >= delay_ms) {
+            enter_sleep();
+        }
+    } else if (phone_now && sys_state == STATE_LIGHT_SLEEP) {
+        exit_sleep();
+    } else if (phone_now) {
+        phone_absent_since = 0;
+    }
+
+    // ── Active-only work ────────────────────────────────────
+    if (sys_state == STATE_ACTIVE) {
+        updateFanAndAlerts(
             currentTemp,
             fanPct,
             fanRPM,
             alertState,
             phonePresent
         );
-    }
 
-    if (server_ready && now - last_tick >= 15000) {
-        last_tick = now;
-        tick_15s();
+        if (now - lastOLED >= 500 && !otaInProgress) {
+            lastOLED = now;
+            updateDisplay(
+                currentTemp,
+                fanPct,
+                fanRPM,
+                alertState,
+                phonePresent
+            );
+        }
+
+        if (server_ready && now - last_tick >= 15000) {
+            last_tick = now;
+            tick_15s();
+        }
     }
 
     if (now - lastStatus >= 10000) {

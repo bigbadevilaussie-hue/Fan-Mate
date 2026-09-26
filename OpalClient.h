@@ -29,4 +29,8 @@ void opal_force_relogin();
 // Status for logging / debug
 bool opal_logged_in();
 
+void opal_pause();
+void opal_resume();
+bool opal_is_paused();
+
 #endif
