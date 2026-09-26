@@ -15,6 +15,20 @@ from tkinter import messagebox
 import requests
 
 GUI_VERSION = "3.73"
+# ─────────────────────────────────────────────────────────────
+#  OUTLINE  (Cmd+F these markers to jump)
+#    §1  Constants & state           (line ~20)
+#    §2  Helpers — theme, emoji      (after constants)
+#    §3  HTTP polling & log sync
+#    §4  Weather
+#    §5  Widgets (Card, Graph, ReportPlot)
+#    §6  SettingsDialog
+#    §7  Report2H
+#    §8  DynaTune
+#    §9  App
+#    §10 Entry point
+# ─────────────────────────────────────────────────────────────
+
 FANMATE_URL = "http://fan-mate.local"
 FANMATE_DIR = os.path.expanduser("~/Documents/Arduino/fanmate")
 BUILD_DIR   = os.path.join(FANMATE_DIR, "build", "esp32.esp32.esp32c3")
@@ -68,6 +82,7 @@ latest_config = {
 }
 connected = False
 time_synced = False
+_http_ever_connected = False
 status_msg = ""
 status_lock = threading.RLock()
 
@@ -79,6 +94,8 @@ FONT_LABEL   = ("Helvetica Neue", 9, "bold")
 FONT_TINY    = ("Helvetica Neue", 9)
 
 
+
+# ═══ §2 HELPERS ═══
 # ── Helpers ──────────────────────────────────────────────────
 
 def is_daytime():
@@ -161,6 +178,8 @@ def weather_code_to_desc(code, is_day):
     }.get(code, "Unknown")
 
 
+
+# ═══ §3 HTTP POLLING ═══
 # ── HTTP telemetry ───────────────────────────────────────────
 
 def http_poll_loop():
@@ -169,7 +188,7 @@ def http_poll_loop():
     while True:
         poll_count += 1
         try:
-            r = requests.get(f"{FANMATE_URL}/status", timeout=5)
+            r = requests.get(f"{FANMATE_URL}/status", timeout=10)
             if r.status_code == 200:
                 try:
                     d = r.json()
@@ -201,8 +220,11 @@ def http_poll_loop():
                 download_hist.append(latest["net_kbps"])
 
                 if not connected:
+                    global _http_ever_connected
                     connected = True
-                    print(f"[HTTP] connected {FANMATE_URL}")
+                    if not _http_ever_connected:
+                        _http_ever_connected = True
+                        print(f"[HTTP] connected {FANMATE_URL}")
                     fetch_config()
                     if not time_synced:
                         sync_time_once()
@@ -225,7 +247,7 @@ def log_sync_loop():
     os.makedirs(LOG_DIR, exist_ok=True)
     while True:
         try:
-            r = requests.get(f"{FANMATE_URL}/log/list", timeout=5)
+            r = requests.get(f"{FANMATE_URL}/log/list", timeout=10)
             if r.status_code == 200:
                 for entry in r.json():
                     fname = entry.get("name")
@@ -287,7 +309,7 @@ def sync_time_once():
 def fetch_config():
     global latest_config
     try:
-        r = requests.get(f"{FANMATE_URL}/config", timeout=5)
+        r = requests.get(f"{FANMATE_URL}/config", timeout=10)
         if r.status_code != 200:
             return None
         d = r.json()
@@ -303,6 +325,8 @@ def fetch_config():
         return None
 
 
+
+# ═══ §4 WEATHER ═══
 # ── Weather ──────────────────────────────────────────────────
 
 weather = {"temp": 0.0, "high": 0.0, "low": 0.0, "desc": "Loading...", "updated": 0}
@@ -339,6 +363,8 @@ def weather_thread_loop():
         time.sleep(WEATHER_REFRESH_SEC)
 
 
+
+# ═══ §5 WIDGETS ═══
 # ── Widgets ──────────────────────────────────────────────────
 
 class Card(tk.Frame):
@@ -420,6 +446,8 @@ class Graph(tk.Canvas):
         self.create_oval(lx - 4, ly - 4, lx + 4, ly + 4, fill=t["blue"], outline=t["card"], width=2)
 
 
+
+# ═══ §6 SETTINGS DIALOG ═══
 class SettingsDialog(tk.Toplevel):
     def __init__(self, parent, app):
         super().__init__(parent)
@@ -620,6 +648,8 @@ class SettingsDialog(tk.Toplevel):
             self.app.root.after(0, lambda m=msg: messagebox.showerror("Settings", f"Failed:\n{m}"))
 
 
+
+# ═══ §5b REPORT PLOT ═══
 class ReportPlot(tk.Canvas):
     """Simple line plot with title and x-axis time labels."""
 
@@ -689,17 +719,22 @@ class ReportPlot(tk.Canvas):
                                  anchor=anchor)
 
 
+
+# ═══ §7 REPORT 2H ═══
 class Report2H(tk.Toplevel):
     """Two-hour report: last two sealed logs, plots + exec summary."""
+
+    _TITLE = "Fan-Mate Report — Last 2 Hours"
+    _HEADER = "Last 2 Hours"
 
     def __init__(self, parent, app):
         super().__init__(parent)
         self.app = app
-        self.title("Fan-Mate Report — Last 2 Hours")
+        self.title(self._TITLE)
         self.resizable(False, False)
         self.transient(parent)
 
-        files = self._find_recent_files(2)
+        files = self._find_files()
         if not files:
             tk.Label(self, text="No log files found in\n" + LOG_DIR,
                      font=("Helvetica Neue", 13), padx=30, pady=30).pack()
@@ -714,6 +749,12 @@ class Report2H(tk.Toplevel):
         summary = self._summarise(rows, files)
         self._build_ui(rows, summary)
         self._apply_theme()
+
+    def _find_files(self):
+        return self._find_recent_files(2)
+
+    def _find_files(self):
+        return self._find_recent_files(2)
 
     def _find_recent_files(self, n):
         import glob
@@ -802,7 +843,7 @@ class Report2H(tk.Toplevel):
         wrap = tk.Frame(self)
         wrap.pack(fill="both", expand=True, padx=pad, pady=pad)
 
-        tk.Label(wrap, text=f"Last 2 Hours  ·  {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')}",
+        tk.Label(wrap, text=f"{self._HEADER}  ·  {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')}",
                  font=("Helvetica Neue", 15, "bold")).pack(anchor="w")
         tk.Label(wrap, text="  ·  ".join(s["files"]),
                  font=("Helvetica Neue", 10)).pack(anchor="w", pady=(0, 10))
@@ -895,6 +936,27 @@ class Report2H(tk.Toplevel):
             self._theme_recursive(c, t)
 
 
+
+class ReportDaily(Report2H):
+    """Daily report — all sealed logs for today (local date)."""
+
+    _TITLE = "Fan-Mate Report — Daily"
+    _HEADER = "Today"
+
+    def _find_files(self):
+        import glob
+        from datetime import date
+        today = date.today().strftime("%Y%m%d")
+        pattern = os.path.join(LOG_DIR, f"log-*-{today}-*.csv")
+        files = sorted(p for p in glob.glob(pattern) if not p.endswith(".part"))
+        if not files:
+            # nothing yet today — fall back to last 2 files
+            files = self._find_recent_files(2)
+        return files
+
+
+
+# ═══ §8 DYNATUNE ═══
 class DynaTune(tk.Toplevel):
     """Health check for fan + turbo performance. Reads ALL log files."""
 
@@ -1167,6 +1229,8 @@ class DynaTune(tk.Toplevel):
             self._theme_recursive(c, t)
 
 
+
+# ═══ §9 APP ═══
 # ── App ──────────────────────────────────────────────────────
 
 class App:
@@ -1302,7 +1366,7 @@ class App:
         Report2H(self.root, self)
 
     def menu_report_daily(self):
-        messagebox.showinfo("Daily Report", "Coming soon.")
+        ReportDaily(self.root, self)
 
     def menu_report_weekly(self):
         messagebox.showinfo("Weekly Report", "Coming soon.")
@@ -1576,6 +1640,8 @@ class App:
         self.root.after(250, self.tick)
 
 
+
+# ═══ §10 ENTRY POINT ═══
 if __name__ == "__main__":
     root = tk.Tk()
     App(root)
