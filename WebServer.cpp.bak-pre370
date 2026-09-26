@@ -268,11 +268,7 @@ static void handle_log_info() {
     String json = "{";
     json += "\"size\":" + String(log_get_size()) + ",";
     json += "\"max\":" + String(LOG_MAX_SIZE) + ",";
-    json += "\"full\":" + String(log_is_full() ? 1 : 0) + ",";
-    json += "\"sealed_count\":" + String(log_sealed_count()) + ",";
-    json += "\"sealed_bytes\":" + String(log_sealed_bytes()) + ",";
-    json += "\"free_bytes\":" + String(LittleFS.totalBytes() - LittleFS.usedBytes()) + ",";
-    json += "\"paused\":" + String(log_rotation_paused() ? 1 : 0);
+    json += "\"full\":" + String(log_is_full() ? 1 : 0);
     json += "}";
     server.send(200, "application/json", json);
 }
@@ -338,98 +334,6 @@ static void handle_reboot() {
 }
 
 // ------------------------------------------------------------
-
-extern size_t log_list_sealed(char names[][48], size_t max);
-extern bool   log_delete_sealed(const char* name);
-
-static void handle_log_list() {
-    note_host();
-    char names[32][48];
-    size_t n = log_list_sealed(names, 32);
-
-    String json = "[";
-    for (size_t i = 0; i < n; i++) {
-        char p[80];
-        snprintf(p, sizeof(p), "/%s", names[i]);
-        File f = LittleFS.open(p, "r");
-        size_t sz = 0;
-        uint32_t crc = 0xFFFFFFFF;
-        if (f) {
-            sz = f.size();
-            uint8_t buf[256];
-            while (f.available()) {
-                size_t r = f.read(buf, sizeof(buf));
-                for (size_t j = 0; j < r; j++) {
-                    crc ^= buf[j];
-                    for (int k = 0; k < 8; k++)
-                        crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
-                }
-            }
-            crc ^= 0xFFFFFFFF;
-            f.close();
-        } else {
-            crc = 0;
-        }
-        if (i > 0) json += ",";
-        char entry[128];
-        snprintf(entry, sizeof(entry),
-                 "{\"name\":\"%s\",\"size\":%u,\"crc\":\"%08x\"}",
-                 names[i], (unsigned)sz, (unsigned)crc);
-        json += entry;
-    }
-    json += "]";
-    server.send(200, "application/json", json);
-}
-
-static void handle_log_file() {
-    note_host();
-    if (!server.hasArg("name")) { server.send(400, "text/plain", "no name"); return; }
-    String name = server.arg("name");
-    if (name.indexOf("..") >= 0 || name.indexOf("/") >= 0) {
-        server.send(400, "text/plain", "bad name"); return;
-    }
-    String path = "/" + name;
-    if (!LittleFS.exists(path)) { server.send(404, "text/plain", "not found"); return; }
-    File f = LittleFS.open(path, "r");
-    if (!f) { server.send(500, "text/plain", "open failed"); return; }
-    server.streamFile(f, "text/csv");
-    f.close();
-}
-
-static void handle_log_ack() {
-    note_host();
-    if (!server.hasArg("plain")) { server.send(400, "text/plain", "no body"); return; }
-    StaticJsonDocument<256> doc;
-    if (deserializeJson(doc, server.arg("plain"))) {
-        server.send(400, "text/plain", "bad json"); return;
-    }
-    const char* name = doc["name"] | "";
-    if (name[0] == 0) { server.send(400, "text/plain", "no name"); return; }
-    bool ok = log_delete_sealed(name);
-    if (ok) {
-        char ev[80];
-        snprintf(ev, sizeof(ev), "UPLOAD,%s,OK", name);
-        log_write_event(ev);
-    }
-    server.send(200, "text/plain", "OK");
-}
-
-static void handle_log_nack() {
-    note_host();
-    if (!server.hasArg("plain")) { server.send(400, "text/plain", "no body"); return; }
-    StaticJsonDocument<256> doc;
-    if (deserializeJson(doc, server.arg("plain"))) {
-        server.send(400, "text/plain", "bad json"); return;
-    }
-    const char* name = doc["name"] | "";
-    const char* reason = doc["reason"] | "unknown";
-    if (name[0] == 0) { server.send(400, "text/plain", "no name"); return; }
-    char ev[96];
-    snprintf(ev, sizeof(ev), "UPLOAD,%s,NACK,%s", name, reason);
-    log_write_event(ev);
-    server.send(200, "text/plain", "OK");
-}
-
 void server_setup() {
     if (!wifi_connected()) {
         Serial.println("[HTTP] WiFi not connected — server not started");
@@ -444,10 +348,6 @@ void server_setup() {
     server.on("/log.csv",    HTTP_GET,  handle_log_download);
     server.on("/log/info",   HTTP_GET,  handle_log_info);
     server.on("/log/clear",  HTTP_POST, handle_log_clear);
-    server.on("/log/list",   HTTP_GET,  handle_log_list);
-    server.on("/log/file",   HTTP_GET,  handle_log_file);
-    server.on("/log/ack",    HTTP_POST, handle_log_ack);
-    server.on("/log/nack",   HTTP_POST, handle_log_nack);
     server.on("/serial",     HTTP_GET,  handle_serial_page);
     server.on("/serial-raw", HTTP_GET,  handle_serial_raw);
     server.on("/reboot",     HTTP_GET,  handle_reboot);

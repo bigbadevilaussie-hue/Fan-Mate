@@ -1,4 +1,4 @@
-// FAN-MATE V3.70 - HTTP Edition
+// FAN-MATE V3.20 — HTTP Edition
 // WiFi only. No BLE. OTA over HTTP.
 // Requires Arduino ESP32 core 2.x (2.0.17)
 
@@ -8,19 +8,17 @@
 #if __has_include("secrets.h")
     #include "secrets.h"
 #else
-    #warning "secrets.h not found - copy secrets.example.h to secrets.h"
+    #warning "secrets.h not found — copy secrets.example.h to secrets.h"
     #include "secrets.example.h"
-#endif
-
-// ============================================================
-//  Sleep state
-// ============================================================
+// Sleep state
 enum SystemState {
     STATE_ACTIVE      = 0,
     STATE_LIGHT_SLEEP = 1,
 };
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
+
+#endif
 
 #define FAN_MATE_VERSION "3.70"
 
@@ -37,7 +35,7 @@ extern unsigned long phone_absent_since;
 #define PHONE_SENSE_PIN  1
 
 // ============================================================
-//  Temperature thresholds (defaults - overridden by NVS)
+//  Temperature thresholds (defaults — overridden by NVS)
 // ============================================================
 #define TEMP_ON       34.0
 #define TEMP_FULL     42.0
@@ -98,15 +96,12 @@ extern unsigned long phone_absent_since;
 #define LOG_MAX_SIZE   (800 * 1024)
 #define LOG_TICK_MS    15000
 
-// ============================================================
-//  Log rotation (V3.70)
-// ============================================================
-#define LOG_SEAL_MIN_ROWS        10
-#define LOG_PAUSE_FREE_BYTES     (100 * 1024)
-#define LOG_FILENAME_PREFIX      "log-"
-#define LOG_FILE_LIVE            "/log.csv"
-
-#define NVS_LOG_NS               "log"
-#define NVS_LOG_START_KEY        "live_start"
+// Sleep state
+enum SystemState {
+    STATE_ACTIVE      = 0,
+    STATE_LIGHT_SLEEP = 1,
+};
+extern SystemState   sys_state;
+extern unsigned long phone_absent_since;
 
 #endif

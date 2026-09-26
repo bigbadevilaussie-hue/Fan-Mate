@@ -15,7 +15,6 @@ static unsigned long wifi_last_attempt  = 0;
 static unsigned long wifi_connected_at  = 0;
 static bool          mdns_started       = false;
 static bool          ntp_started        = false;
-static bool          _ntp_synced_flag   = false;
 
 void wifi_setup() {
     if (wifi_inited) return;
@@ -58,19 +57,6 @@ static void start_ntp() {
     configTime(10 * 3600, 0, "pool.ntp.org", "time.nist.gov", "time.google.com");
     Serial.println("[NTP] sync requested");
     ntp_started = true;
-}
-
-
-bool ntp_synced() { return _ntp_synced_flag; }
-
-void ntp_loop() {
-    if (_ntp_synced_flag) return;
-    if (WiFi.status() != WL_CONNECTED) return;
-    time_t now = time(nullptr);
-    if (now > 1700000000UL && now < 4102444800UL) {
-        _ntp_synced_flag = true;
-        Serial.printf("[NTP] synced: %lu\n", (unsigned long)now);
-    }
 }
 
 void wifi_loop() {

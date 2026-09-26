@@ -13,8 +13,6 @@
 #include "Logging.h"
 #include "WeatherClient.h"
 
-extern void ntp_loop();
-
 #include <esp_arduino_version.h>
 
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
@@ -132,7 +130,6 @@ void setup() {
     }
     initDisplay();
     log_init();
-    log_boot_recovery();
     log_write_reset_reason();
 
     drawSplashScreen();
@@ -195,7 +192,6 @@ static void tick_15s() {
         );
     }
 
-    log_rotate_check();
     log_check_full();
 
     log_print("[TICK] temp=%.1f fan=%d%% net=%.1f KB/s boost=%d rpm=%d\n",

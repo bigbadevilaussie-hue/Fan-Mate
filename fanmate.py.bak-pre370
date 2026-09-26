@@ -13,14 +13,14 @@ Compatible with firmware: v3.43
   - Dyna Tune menu (stub)
 """
 
-import zlib, json, threading, time, urllib.request, os, re
+import json, threading, time, urllib.request, os, re
 from collections import deque
 from datetime import datetime
 import tkinter as tk
 from tkinter import messagebox
 import requests
 
-GUI_VERSION = "3.70"
+GUI_VERSION = "3.46"
 FANMATE_URL = "http://fan-mate.local"
 FANMATE_DIR = os.path.expanduser("~/Documents/Arduino/fanmate")
 BUILD_DIR   = os.path.join(FANMATE_DIR, "build", "esp32.esp32.esp32c3")
@@ -102,14 +102,12 @@ def get_status():
         return status_msg
 
 def read_firmware_version():
-    """V3.70: read firmware version actually running on device."""
     try:
-        r = requests.get(f"{FANMATE_URL}/status", timeout=3)
-        if r.status_code == 200:
-            return r.json().get("fw", "?")
+        with open(CONFIG_H) as f:
+            m = re.search(r'#define\s+FAN_MATE_VERSION\s+"([^"]+)"', f.read())
+            return m.group(1) if m else None
     except Exception:
-        pass
-    return "?"
+        return None
 
 def compute_md5(path):
     import hashlib
@@ -223,54 +221,6 @@ def http_poll_loop():
             latest["sleep_countdown"] = 0
         time.sleep(POLL_INTERVAL)
 
-
-
-
-def log_sync_loop():
-    """V3.70: pull sealed logs from ESP32."""
-    os.makedirs(LOG_DIR, exist_ok=True)
-    while True:
-        try:
-            r = requests.get(f"{FANMATE_URL}/log/list", timeout=5)
-            if r.status_code == 200:
-                for entry in r.json():
-                    fname = entry.get("name")
-                    remote_crc = int(entry.get("crc", "0"), 16)
-                    if not fname:
-                        continue
-                    local_path = os.path.join(LOG_DIR, fname)
-
-                    if os.path.exists(local_path):
-                        with open(local_path, "rb") as fh:
-                            local_crc = zlib.crc32(fh.read()) & 0xFFFFFFFF
-                        if local_crc == remote_crc:
-                            requests.post(f"{FANMATE_URL}/log/ack",
-                                          json={"name": fname}, timeout=5)
-                            continue
-                        os.remove(local_path)
-
-                    fr = requests.get(f"{FANMATE_URL}/log/file",
-                                      params={"name": fname}, timeout=60)
-                    if fr.status_code != 200:
-                        continue
-                    actual_crc = zlib.crc32(fr.content) & 0xFFFFFFFF
-                    if actual_crc != remote_crc:
-                        requests.post(f"{FANMATE_URL}/log/nack",
-                                      json={"name": fname, "reason": "crc"},
-                                      timeout=5)
-                        continue
-
-                    tmp = local_path + ".part"
-                    with open(tmp, "wb") as fh:
-                        fh.write(fr.content)
-                    os.rename(tmp, local_path)
-
-                    requests.post(f"{FANMATE_URL}/log/ack",
-                                  json={"name": fname}, timeout=5)
-                    print(f"[LOG] synced {fname} ({len(fr.content)} bytes)")
-        except Exception as e:
-            print(f"[LOG] sync error: {e}")
-        time.sleep(30)
 
 def sync_time_once():
     global time_synced
@@ -726,7 +676,6 @@ class App:
         self.apply_theme()
 
         threading.Thread(target=http_poll_loop, daemon=True).start()
-        threading.Thread(target=log_sync_loop, daemon=True).start()
         threading.Thread(target=weather_thread_loop, daemon=True).start()
 
         self.theme_check()

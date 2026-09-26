@@ -13,8 +13,6 @@ String wifi_ssid_connected();
 String wifi_mdns_name();
 unsigned long wifi_uptime_ms();
 
-
-
 // V3.70: NTP sync state
 bool ntp_synced();
 
