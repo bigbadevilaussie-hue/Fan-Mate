@@ -5,17 +5,17 @@
 
 // ============================================================
 //  Fan-Mate runtime configuration
-//  V3.46 — new schema:
-//    temp  : warning/panic/kill (no mode, always on)
+//  V3.73 — schema:
+//    temp  : warning/panic/kill/hysteresis
 //    boost : mode + normal/aggr profiles (nested)
-//    night : always on, start/end/nightMax
-//    phone : mode only (no test_delay)
+//    night : start/end/nightMax
+//    phone : mode
 // ============================================================
 
 struct BoostProfile {
     int threshold;   // KB/s
     int on_hold;     // ticks over threshold to bump gear
-    int off_hold;    // unused now; kept for compat
+    int off_hold;    // ticks under threshold to drop gear
 };
 
 struct FanMateConfig {

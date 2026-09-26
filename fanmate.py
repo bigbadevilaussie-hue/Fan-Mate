@@ -1,6 +1,6 @@
 """
-FAN-MATE GUI V3.72
-Compatible with firmware: v3.72
+FAN-MATE GUI V3.73
+Compatible with firmware: v3.73
 - Full HTTP. No BLE. No local logging.
 - Telemetry polled from ESP32 /status every 10s.
 - Settings pushed to ESP32 /config.
@@ -14,7 +14,7 @@ import tkinter as tk
 from tkinter import messagebox
 import requests
 
-GUI_VERSION = "3.72"
+GUI_VERSION = "3.73"
 FANMATE_URL = "http://fan-mate.local"
 FANMATE_DIR = os.path.expanduser("~/Documents/Arduino/fanmate")
 BUILD_DIR   = os.path.join(FANMATE_DIR, "build", "esp32.esp32.esp32c3")
@@ -97,7 +97,6 @@ def get_status():
         return status_msg
 
 def read_target_version():
-    """Read firmware version from Config.h on disk (what will be flashed)."""
     try:
         with open(CONFIG_H) as f:
             m = re.search(r'#define\s+FAN_MATE_VERSION\s+"([^"]+)"', f.read())
@@ -106,7 +105,6 @@ def read_target_version():
         return "?"
 
 def read_device_version():
-    """Read firmware version actually running on device."""
     try:
         r = requests.get(f"{FANMATE_URL}/status", timeout=3)
         if r.status_code == 200:
@@ -224,7 +222,6 @@ def http_poll_loop():
 
 
 def log_sync_loop():
-    """Pull sealed logs from ESP32."""
     os.makedirs(LOG_DIR, exist_ok=True)
     while True:
         try:
@@ -624,7 +621,7 @@ class SettingsDialog(tk.Toplevel):
 
 
 class ReportPlot(tk.Canvas):
-    """Simple line plot with a title."""
+    """Simple line plot with title and x-axis time labels."""
 
     def __init__(self, parent, app, w, h, y_min, y_max, color_key):
         super().__init__(parent, width=w, height=h, highlightthickness=1, bd=0)
@@ -632,13 +629,18 @@ class ReportPlot(tk.Canvas):
         self.w, self.h = w, h
         self.y_min, self.y_max = y_min, y_max
         self.color_key = color_key
-        self.pad_l, self.pad_r, self.pad_t, self.pad_b = 46, 10, 20, 14
+        self.pad_l, self.pad_r, self.pad_t, self.pad_b = 46, 10, 20, 26
         self.series = []
         self.label = ""
+        self._t0 = None
+        self._t1 = None
 
     def set_series(self, rows, key, label):
         self.series = [r.get(key) for r in rows]
         self.label = label
+        if rows:
+            self._t0 = rows[0].get("t")
+            self._t1 = rows[-1].get("t")
         self.redraw()
 
     def redraw(self):
@@ -675,6 +677,16 @@ class ReportPlot(tk.Canvas):
         if len(pts) >= 4:
             self.create_line(*pts, fill=t[self.color_key], width=2,
                              capstyle=tk.ROUND, joinstyle=tk.ROUND)
+
+        # x-axis time labels (start / mid / end)
+        if self._t0 and self._t1:
+            for frac in (0.0, 0.5, 1.0):
+                x = self.pad_l + frac * pw
+                tt = self._t0 + (self._t1 - self._t0) * frac
+                anchor = "sw" if frac == 0.0 else ("s" if frac == 0.5 else "se")
+                self.create_text(x, self.h - 2, text=tt.strftime("%H:%M"),
+                                 fill=t["muted"], font=("Helvetica Neue", 8),
+                                 anchor=anchor)
 
 
 class Report2H(tk.Toplevel):
@@ -756,7 +768,7 @@ class Report2H(tk.Toplevel):
         expected = int(round(span_min * 60 / 15))
         missing = max(0, expected - len(rows))
 
-        gear0 = sum(1 for b in boosts if b == 0)
+        gear0  = sum(1 for b in boosts if b == 0)
         gear12 = sum(1 for b in boosts if 1 <= b <= 2)
         gear34 = sum(1 for b in boosts if 3 <= b <= 4)
         fan_on = sum(1 for f in fans if f > 0)
@@ -780,6 +792,9 @@ class Report2H(tk.Toplevel):
             "gear0_pct":  100*gear0/len(boosts) if boosts else 0,
             "gear12_pct": 100*gear12/len(boosts) if boosts else 0,
             "gear34_pct": 100*gear34/len(boosts) if boosts else 0,
+            "gear0_count":  gear0,
+            "gear12_count": gear12,
+            "gear34_count": gear34,
         }
 
     def _build_ui(self, rows, s):
@@ -792,7 +807,7 @@ class Report2H(tk.Toplevel):
         tk.Label(wrap, text="  ·  ".join(s["files"]),
                  font=("Helvetica Neue", 10)).pack(anchor="w", pady=(0, 10))
 
-        plot_w, plot_h = 620, 110
+        plot_w, plot_h = 620, 120
         self.net_plot = ReportPlot(wrap, self.app, plot_w, plot_h,
                                    y_min=0, y_max=max(2048, s["net_peak"]*1.1),
                                    color_key="blue")
@@ -850,9 +865,9 @@ class Report2H(tk.Toplevel):
         tk.Label(foot,
                  text=(f"rows: {s['rows']}  ·  missing: {s['missing']}  ·  "
                        f"span: {s['span_min']:.0f} min  ·  "
-                       f"gear 0: {s['gear0_pct']:.0f}%  "
-                       f"1-2: {s['gear12_pct']:.0f}%  "
-                       f"3-4: {s['gear34_pct']:.0f}%"),
+                       f"gear 0: {s['gear0_count']}  "
+                       f"1-2: {s['gear12_count']}  "
+                       f"3-4: {s['gear34_count']}"),
                  font=("Helvetica Neue", 10)).pack(anchor="w")
 
         tk.Button(wrap, text="Close", width=12,

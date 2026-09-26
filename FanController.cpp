@@ -96,14 +96,11 @@ static void beep_once() {
 
 // ------------------------------------------------------------
 //  Multi-beep sequence for alerts.
-//  beepMs = on duration, gapMs = off duration between beeps.
-//  intervalMs = time between full sequences.
 // ------------------------------------------------------------
 static void runBeepSequence(int beeps, int beepMs, int gapMs,
                             int duty, int intervalMs) {
     unsigned long now = millis();
 
-    // idle — waiting for next sequence
     if (!beepActive && beepIndex == 0) {
         if (now - lastAlertStart >= (unsigned long)intervalMs) {
             lastAlertStart = now;
@@ -125,7 +122,6 @@ static void runBeepSequence(int beeps, int beepMs, int gapMs,
             beepIndex++;
             if (beepIndex >= beeps) {
                 beepIndex = 0;
-                // stays idle until interval expires
             } else {
                 ledcWrite(BUZZER_CHANNEL, duty);
                 beepActive = true;
@@ -171,11 +167,13 @@ void updateFanAndAlerts(
     int boostGear = auto_boost_gear();
     int fanGear   = (tempGear > boostGear) ? tempGear : boostGear;
 
-    // ---- Beep on gear change ----
+    // ---- Beep on gear change (skip first tick after boot/wake) ----
     if (fanGear != lastFanGear) {
-        Serial.printf("[FAN] gear %d -> %d\n", lastFanGear, fanGear);
+        if (lastFanGear >= 0) {
+            Serial.printf("[FAN] gear %d -> %d\n", lastFanGear, fanGear);
+            beep_once();
+        }
         lastFanGear = fanGear;
-        beep_once();
     }
 
     // ---- Fan PWM ----
@@ -199,6 +197,7 @@ void updateFanAndAlerts(
     fanPctLocal = map(fanPWM, 0, 255, 0, 100);
     ledcWrite(0, fanPWM);
 
+#if FAN_STALL_ENABLED
     // ---- Fan stall detection ----
     // Fan commanded on (>=25%) but tach reads zero for >5s
     if (fanPctLocal >= 25 && fanRPMLocal == 0) {
@@ -220,10 +219,10 @@ void updateFanAndAlerts(
             log_write_event("FAN_RECOVERED");
         }
     }
+#endif
 
     // ---- Alarm output ----
     if (fan_stall_alarm) {
-        // stall alarm overrides temp beeps
         runBeepSequence(5, 120, 120, BUZZER_LOUD, 15000);
     } else if (alertLevel == 3) {
         runBeepSequence(10, 100, 50, BUZZER_LOUD, 30000);

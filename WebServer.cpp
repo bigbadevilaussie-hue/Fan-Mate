@@ -6,6 +6,7 @@
 #include "OpalClient.h"
 #include "AutoBoost.h"
 #include "Config.h"
+#include "SerialBuffer.h"
 
 #include <WebServer.h>
 #include <ESPmDNS.h>
@@ -17,7 +18,7 @@
 
 // ============================================================
 //  Web Server — HTTP interface
-//  V3.72 — adds /log/list, /log/file, /log/ack, /log/nack, fan_stall
+//  V3.73
 // ============================================================
 
 static WebServer server(HTTP_PORT);
@@ -64,7 +65,6 @@ window.onload = refresh;
 }
 
 static void handle_serial_raw() {
-    extern String get_serial_dump();
     server.send(200, "text/plain", get_serial_dump());
 }
 
@@ -75,7 +75,6 @@ static void handle_root() {
     extern int   fanRPM;
     extern int   alertState;
     extern bool  phonePresent;
-    extern float lastNetKbps;
 
     String html = R"rawliteral(
 <!DOCTYPE html><html><head><meta charset="utf-8">
@@ -458,10 +457,9 @@ void server_setup() {
 
     server.begin();
 
-    Serial.printf("[HTTP] server started on port %d\n", HTTP_PORT);
-    Serial.printf("[HTTP] http://%s/\n", wifi_mdns_name().c_str());
-    Serial.printf("[HTTP] http://%s/\n", wifi_ip().c_str());
-    Serial.println("[HTTP] endpoints: /, /status, /config, /time, /log.csv, /log/info, /log/clear, /ota, /reboot");
+    log_print("[HTTP] server started on port %d\n", HTTP_PORT);
+    log_print("[HTTP] http://%s/\n", wifi_mdns_name().c_str());
+    log_print("[HTTP] http://%s/\n", wifi_ip().c_str());
 }
 
 void server_loop() {

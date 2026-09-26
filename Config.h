@@ -1,4 +1,4 @@
-// FAN-MATE V3.70 - HTTP Edition
+// FAN-MATE V3.73 - HTTP Edition
 // WiFi only. No BLE. OTA over HTTP.
 // Requires Arduino ESP32 core 2.x (2.0.17)
 
@@ -22,7 +22,10 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "3.72"
+#define FAN_MATE_VERSION "3.73"
+
+// 0 = quiet serial, 1 = verbose
+#define DEBUG_VERBOSE 0
 
 // ============================================================
 //  Pins
@@ -39,6 +42,10 @@ extern unsigned long phone_absent_since;
 // ============================================================
 //  Temperature thresholds (defaults - overridden by NVS)
 // ============================================================
+#define TEMP_ON       34.0
+#define TEMP_FULL     42.0
+#define TEMP_WARNING  45.0
+#define TEMP_PANIC    50.0
 
 // ============================================================
 //  Fan PWM
@@ -46,6 +53,11 @@ extern unsigned long phone_absent_since;
 #define PWM_FREQ      25000
 #define PWM_RES       8
 #define PWM_MIN       40
+
+// ============================================================
+//  Fan stall alarm
+// ============================================================
+#define FAN_STALL_ENABLED 0   // 0 while bench-testing without fan
 
 // ============================================================
 //  Buzzer
@@ -93,9 +105,6 @@ extern unsigned long phone_absent_since;
 // ============================================================
 #define LOG_TICK_MS    15000
 
-// ============================================================
-//  Log rotation (V3.70)
-// ============================================================
 #define LOG_SEAL_MIN_ROWS        10
 #define LOG_PAUSE_FREE_BYTES     (100 * 1024)
 #define LOG_FILENAME_PREFIX      "log-"

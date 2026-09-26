@@ -1,4 +1,4 @@
-// FAN-MATE V3.72 — HTTP Edition
+// FAN-MATE V3.73 - HTTP Edition
 // WiFi only. No BLE. OTA over HTTP.
 // Requires Arduino ESP32 core 2.x (2.0.17)
 
@@ -12,6 +12,7 @@
 #include "AutoBoost.h"
 #include "Logging.h"
 #include "WeatherClient.h"
+#include "SerialBuffer.h"
 
 extern void ntp_loop();
 
@@ -21,9 +22,6 @@ extern void ntp_loop();
 #error "Fan-Mate requires Arduino ESP32 core 2.x (2.0.17)"
 #endif
 
-// ============================================================
-//  Global state — visible to WebServer.cpp via extern
-// ============================================================
 float currentTemp  = 0.0;
 int   fanPct       = 0;
 int   fanRPM       = 0;
@@ -41,7 +39,7 @@ unsigned long last_tick     = 0;
 
 // ── Sleep state machine ────────────────────────────────
 void enter_sleep() {
-    Serial.println("[SLEEP] phone absent — entering sleep");
+    log_print("[SLEEP] phone absent — entering sleep\n");
     sys_state = STATE_LIGHT_SLEEP;
     sleep_start_ms = millis();
     phone_absent_since = 0;
@@ -50,12 +48,12 @@ void enter_sleep() {
     opal_pause();
     log_write_event("SLEEP");
     clearDisplay();
-    digitalWrite(LED_PIN, LOW);   // LED ON
-    Serial.println("[SLEEP] entered");
+    digitalWrite(LED_PIN, LOW);
+    log_print("[SLEEP] entered\n");
 }
 
 void exit_sleep() {
-    Serial.println("[SLEEP] phone detected — waking");
+    log_print("[SLEEP] phone detected — waking\n");
     sys_state = STATE_ACTIVE;
     phone_absent_since = 0;
     log_write_event("WAKE");
@@ -64,32 +62,8 @@ void exit_sleep() {
     last_tick = millis() - 15000;
     opal_resume();
     wakeDisplay();
-    digitalWrite(LED_PIN, HIGH);  // LED OFF
-    Serial.println("[SLEEP] awake");
-}
-
-// ── Serial ring buffer for /serial endpoint ──
-String serial_buf[SERIAL_BUF_LINES];
-int    serial_idx = 0;
-
-void log_print(const char* fmt, ...) {
-    char buf[160];
-    va_list args;
-    va_start(args, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, args);
-    va_end(args);
-    Serial.print(buf);
-    serial_buf[serial_idx] = String(buf);
-    serial_idx = (serial_idx + 1) % SERIAL_BUF_LINES;
-}
-
-String get_serial_dump() {
-    String out;
-    for (int i = 0; i < SERIAL_BUF_LINES; i++) {
-        int idx = (serial_idx + i) % SERIAL_BUF_LINES;
-        if (serial_buf[idx].length() > 0) out += serial_buf[idx];
-    }
-    return out;
+    digitalWrite(LED_PIN, HIGH);
+    log_print("[SLEEP] awake\n");
 }
 
 // ============================================================
@@ -99,6 +73,8 @@ void setup() {
     Serial.begin(115200);
     delay(500);
 
+    serial_buf_init();
+
     Serial.println();
     Serial.println("================================");
     Serial.printf ("  Fan-Mate V%s\n", FAN_MATE_VERSION);
@@ -107,9 +83,8 @@ void setup() {
     Serial.println("  Mode:  HTTP only");
     Serial.println("================================");
 
-    // ---- Blue LED (GPIO8, inverted: LOW = ON) ----
     pinMode(LED_PIN, OUTPUT);
-    digitalWrite(LED_PIN, HIGH);   // HIGH = OFF
+    digitalWrite(LED_PIN, HIGH);
 
     setenv("TZ", "AEST-10", 1);
     tzset();
@@ -118,14 +93,13 @@ void setup() {
     weather_init();
     initHardware();
 
-    // ── DS18B20 warmup: wait for first valid reading ──
     Serial.println("[BOOT] waiting for DS18B20...");
     for (int i = 0; i < 20; i++) {
         float t = 0.0f;
         readDS18B20(t);
         if (t > -50.0f && t < 100.0f && t != 0.0f) {
             currentTemp = t;
-            Serial.printf("[BOOT] DS18B20 first: %.1f C\n", t);
+            log_print("[BOOT] DS18B20 first: %.1f C\n", t);
             break;
         }
         delay(500);
@@ -136,33 +110,29 @@ void setup() {
     log_write_reset_reason();
 
     drawSplashScreen();
-    Serial.println("[SPLASH] 5s...");
     delay(5000);
 
     wifi_setup();
 
-    Serial.printf("[BOOT] Fan-Mate V%s ready\n", FAN_MATE_VERSION);
+    log_print("[BOOT] Fan-Mate V%s ready\n", FAN_MATE_VERSION);
 }
 
 // ============================================================
 //  15-second tick
 // ============================================================
-float                lastNetKbps   = 0.0;
+float lastNetKbps = 0.0;
 
 static void tick_15s() {
     readDS18B20(currentTemp);
 
     uint64_t rx_now = 0;
-    bool opal_ok = opal_poll(rx_now);   // LED ON inside rpc_call()
+    bool opal_ok = opal_poll(rx_now);
 
     if (!opal_ok) {
-        Serial.println("[TICK] Opal failed — skipping log");
         return;
     }
 
-    float mb   = rx_now / 1048576.0f;
     float kbps = 0.0f;
-
     if (have_baseline && rx_now >= last_rx) {
         uint64_t delta = rx_now - last_rx;
         kbps = (delta / 15.0f) / 1024.0f;
@@ -171,7 +141,6 @@ static void tick_15s() {
     }
     last_rx = rx_now;
 
-    // Peak-hold smoothing (3-tick window)
     static float peak_hist[3] = {0, 0, 0};
     static int   peak_idx = 0;
     peak_hist[peak_idx] = kbps;
@@ -186,13 +155,9 @@ static void tick_15s() {
     auto_boost_update(kbps_smooth);
 
     if (currentTemp > 0.0) {
-        log_write(
-            currentTemp,
-            kbps_smooth,
-            auto_boost_gear() > 0 ? 1 : 0,
-            fanPct,
-            fanRPM
-        );
+        log_write(currentTemp, kbps_smooth,
+                  auto_boost_gear() > 0 ? 1 : 0,
+                  fanPct, fanRPM);
     }
 
     log_rotate_check();
@@ -200,8 +165,8 @@ static void tick_15s() {
 
 #if DEBUG_VERBOSE
     log_print("[TICK] temp=%.1f fan=%d%% net=%.1f KB/s boost=%d rpm=%d\n",
-                  currentTemp, fanPct, kbps_smooth,
-                  auto_boost_gear() > 0 ? 1 : 0, fanRPM);
+              currentTemp, fanPct, kbps_smooth,
+              auto_boost_gear() > 0 ? 1 : 0, fanRPM);
 #endif
 }
 
@@ -209,7 +174,6 @@ static void tick_15s() {
 //  Loop
 // ============================================================
 void loop() {
-    static unsigned long lastStatus   = 0;
     static unsigned long lastOLED     = 0;
     static bool          server_ready = false;
 
@@ -231,40 +195,25 @@ void loop() {
     updatePhoneDetection();
     updateTach();
 
-    // ── Sleep state machine ────────────────────────────────
     bool phone_now;
     if (config.phoneMode == "off") {
-        phone_now = true;                     // bypass
+        phone_now = true;
     } else {
-        phone_now = phonePresent;             // real sensor
+        phone_now = phonePresent;
     }
 
     if (!phone_now && sys_state == STATE_ACTIVE) {
-        Serial.println("[SLEEP] phone absent — instant sleep");
         enter_sleep();
     } else if (phone_now && sys_state == STATE_LIGHT_SLEEP) {
         exit_sleep();
     }
 
-    // ── Active-only work ────────────────────────────────────
     if (sys_state == STATE_ACTIVE) {
-        updateFanAndAlerts(
-            currentTemp,
-            fanPct,
-            fanRPM,
-            alertState,
-            phonePresent
-        );
+        updateFanAndAlerts(currentTemp, fanPct, fanRPM, alertState, phonePresent);
 
         if (now - lastOLED >= 500 && !otaInProgress) {
             lastOLED = now;
-            updateDisplay(
-                currentTemp,
-                fanPct,
-                fanRPM,
-                alertState,
-                phonePresent
-            );
+            updateDisplay(currentTemp, fanPct, fanRPM, alertState, phonePresent);
         }
 
         if (server_ready && now - last_tick >= 15000) {
@@ -272,24 +221,4 @@ void loop() {
             tick_15s();
         }
     }
-
-#if DEBUG_VERBOSE
-    if (now - lastStatus >= 10000) {
-        lastStatus = now;
-        char stbuf[160];
-        if (wifi_connected()) {
-            snprintf(stbuf, sizeof(stbuf),
-                     "[STATUS] temp=%.1f fan=%d%% rpm=%d phone=%d alert=%d ip=%s rssi=%d\n",
-                     currentTemp, fanPct, fanRPM,
-                     phonePresent ? 1 : 0, alertState,
-                     wifi_ip().c_str(), wifi_rssi());
-        } else {
-            snprintf(stbuf, sizeof(stbuf),
-                     "[STATUS] temp=%.1f fan=%d%% rpm=%d phone=%d alert=%d wifi=disconnected\n",
-                     currentTemp, fanPct, fanRPM,
-                     phonePresent ? 1 : 0, alertState);
-        }
-        log_print("%s", stbuf);
-    }
-#endif
 }

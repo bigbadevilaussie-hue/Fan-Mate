@@ -1,13 +1,10 @@
 #include "WiFiManager.h"
 #include "Config.h"
+#include "SerialBuffer.h"
 
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <time.h>
-
-// ============================================================
-//  WiFi Manager — implementation
-// ============================================================
 
 static bool          wifi_inited        = false;
 static unsigned long wifi_connect_start = 0;
@@ -29,7 +26,7 @@ void wifi_setup() {
     WiFi.mode(WIFI_STA);
     WiFi.setHostname(MDNS_HOSTNAME);
     WiFi.setAutoReconnect(true);
-    WiFi.setSleep(true);            // REQUIRED when BLE coexists
+    WiFi.setSleep(true);
 
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
@@ -47,7 +44,7 @@ static void start_mdns() {
         return;
     }
     MDNS.addService("http", "tcp", HTTP_PORT);
-    Serial.printf("[MDNS] http://%s.local\n", MDNS_HOSTNAME);
+    log_print("[MDNS] http://%s.local\n", MDNS_HOSTNAME);
     mdns_started = true;
 }
 
@@ -68,7 +65,7 @@ void ntp_loop() {
     time_t now = time(nullptr);
     if (now > 1700000000UL && now < 4102444800UL) {
         _ntp_synced_flag = true;
-        Serial.printf("[NTP] synced: %lu\n", (unsigned long)now);
+        log_print("[NTP] synced: %lu\n", (unsigned long)now);
     }
 }
 
@@ -77,7 +74,7 @@ void wifi_loop() {
 
     wl_status_t status = WiFi.status();
 
-    // If WiFi drops, require fresh NTP sync on reconnect
+    // Reset NTP flag if WiFi drops — require fresh sync on reconnect
     if (status != WL_CONNECTED) {
         _ntp_synced_flag = false;
     }
@@ -85,14 +82,9 @@ void wifi_loop() {
     if (status == WL_CONNECTED) {
         if (wifi_connected_at == 0) {
             wifi_connected_at = millis();
-            Serial.println();
-            Serial.println("[WIFI] ================================");
-            Serial.printf ("[WIFI] CONNECTED\n");
-            Serial.printf ("[WIFI] IP:   %s\n", WiFi.localIP().toString().c_str());
-            Serial.printf ("[WIFI] RSSI: %d dBm\n", WiFi.RSSI());
-            Serial.printf ("[WIFI] GW:   %s\n", WiFi.gatewayIP().toString().c_str());
-            Serial.println("[WIFI] ================================");
-            Serial.println();
+            log_print("[WIFI] CONNECTED\n");
+            log_print("[WIFI] IP:   %s\n", WiFi.localIP().toString().c_str());
+            log_print("[WIFI] RSSI: %d dBm\n", WiFi.RSSI());
             start_mdns();
             start_ntp();
         }

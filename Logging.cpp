@@ -2,6 +2,7 @@
 #include "Config.h"
 #include "DisplayManager.h"
 #include "WiFiManager.h"
+#include "SerialBuffer.h"
 
 #include <LittleFS.h>
 #include <Preferences.h>
@@ -113,16 +114,16 @@ static bool seal_live(time_t name_epoch) {
     snprintf(sealed_path, sizeof(sealed_path), "/%s", sealed);
 
     if (LittleFS.exists(sealed_path)) {
-        Serial.printf("[LOG] seal collision: %s\n", sealed_path);
+        log_print("[LOG] seal collision: %s\n", sealed_path);
         return false;
     }
 
     if (!LittleFS.rename(LOG_FILE, sealed_path)) {
-        Serial.printf("[LOG] rename failed\n");
+        log_print("[LOG] rename failed\n");
         return false;
     }
 
-    Serial.printf("[LOG] sealed %s\n", sealed_path);
+    log_print("[LOG] sealed %s\n", sealed_path);
 
     time_t now = time(nullptr);
     open_fresh_live(now);
@@ -145,7 +146,7 @@ void log_rotate_check() {
 
     if (now <= _live_file_start_epoch) return;
     if (now - _live_file_start_epoch > 24 * 3600UL) {
-        Serial.println("[LOG] time jump > 24h, refusing to seal");
+        log_print("[LOG] time jump > 24h, refusing to seal\n");
         return;
     }
 
@@ -157,7 +158,7 @@ void log_rotate_check() {
         now_ti.tm_yday != start_ti.tm_yday ||
         now_ti.tm_year != start_ti.tm_year) {
         if (log_rotation_paused()) {
-            Serial.println("[LOG] rotation paused, not sealing");
+            log_print("[LOG] rotation paused, not sealing\n");
             return;
         }
         seal_live(_live_file_start_epoch);
@@ -169,7 +170,7 @@ void log_boot_recovery() {
 
     size_t rows = log_count_live_rows();
     if (rows < LOG_SEAL_MIN_ROWS) {
-        Serial.printf("[LOG] boot: only %u rows, discarding\n", (unsigned)rows);
+        log_print("[LOG] boot: only %u rows, discarding\n", (unsigned)rows);
         LittleFS.remove(LOG_FILE);
         clear_start_epoch();
         write_header_if_new();
@@ -182,7 +183,7 @@ void log_boot_recovery() {
     time_t now = time(nullptr);
     time_t name_epoch = (stored > 0) ? stored : now;
 
-    Serial.printf("[LOG] boot: sealing %u rows\n", (unsigned)rows);
+    log_print("[LOG] boot: sealing %u rows\n", (unsigned)rows);
 
     if (seal_live(name_epoch)) {
         log_write_event("BOOT");
@@ -195,9 +196,9 @@ void log_init() {
         Serial.println("[LOG] LittleFS mount FAILED");
         return;
     }
-    Serial.printf("[LOG] mounted used=%u/%u\n",
-                  (unsigned)LittleFS.usedBytes(),
-                  (unsigned)LittleFS.totalBytes());
+    log_print("[LOG] mounted used=%u/%u\n",
+              (unsigned)LittleFS.usedBytes(),
+              (unsigned)LittleFS.totalBytes());
     write_header_if_new();
     _live_file_start_epoch = load_start_epoch();
     if (_live_file_start_epoch == 0) {
@@ -241,7 +242,7 @@ void log_write_reset_reason() {
         case ESP_RST_SDIO:     s = "SDIO";     break;
         default:               s = "UNKNOWN";  break;
     }
-    Serial.printf("[BOOT] reset: %s\n", s);
+    log_print("[BOOT] reset: %s\n", s);
     log_write_event(s);
 }
 
@@ -261,10 +262,10 @@ bool log_rotation_paused() {
 
 void log_check_full() {
     if (!log_rotation_paused()) {
-        if (warned_full) { warned_full = false; Serial.println("[LOG] resumed"); }
+        if (warned_full) { warned_full = false; log_print("[LOG] resumed\n"); }
         return;
     }
-    if (!warned_full) { warned_full = true; Serial.println("[LOG] PAUSED - FS nearly full"); }
+    if (!warned_full) { warned_full = true; log_print("[LOG] PAUSED - FS nearly full\n"); }
     unsigned long now = millis();
     if (now - last_full_beep >= 60000) {
         last_full_beep = now;
@@ -285,7 +286,8 @@ void log_clear() {
     last_full_beep = 0;
     _live_file_start_epoch = time(nullptr);
     save_start_epoch(_live_file_start_epoch);
-    Serial.println("[LOG] cleared");
+    log_write_event("CLEAR");
+    log_print("[LOG] cleared\n");
 }
 
 static bool is_sealed_name(const char* name) {
@@ -340,6 +342,6 @@ bool log_delete_sealed(const char* name) {
     else                snprintf(p, sizeof(p), "/%s", name);
     if (!LittleFS.exists(p)) return false;
     bool ok = LittleFS.remove(p);
-    if (ok) Serial.printf("[LOG] uploaded %s\n", p);
+    if (ok) log_print("[LOG] uploaded %s\n", p);
     return ok;
 }
