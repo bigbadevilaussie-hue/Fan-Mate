@@ -7,7 +7,6 @@ Compatible with firmware: v3.43
 - Logs live on ESP32. GUI can sync/clear/reboot.
 - Same layout as V3.00, plus:
   - Boost section with Advanced (threshold/on/off)
-  - Phone test_delay field
   - Alarm three levels (Warning / Oh Shit / Kill)
   - Sleep countdown + sleeping state
   - Opal offline indicator
@@ -21,7 +20,7 @@ import tkinter as tk
 from tkinter import messagebox
 import requests
 
-GUI_VERSION = "3.45.2"
+GUI_VERSION = "3.46"
 FANMATE_URL = "http://fan-mate.local"
 FANMATE_DIR = os.path.expanduser("~/Documents/Arduino/fanmate")
 BUILD_DIR   = os.path.join(FANMATE_DIR, "build", "esp32.esp32.esp32c3")
@@ -63,14 +62,14 @@ latest = {
     "sleep": 0, "sleep_countdown": 0, "opal": 1,
 }
 latest_config = {
+    "temp": {"warning": 32.0, "panic": 34.0, "kill": 36.0},
     "boost": {
         "mode": 1,
-        "normal": {"threshold": 768, "on_hold": 4, "off_hold": 4},
-        "aggr":   {"threshold": 256, "on_hold": 2, "off_hold": 8},
+        "normal": {"threshold": 700, "on_hold": 4, "off_hold": 4},
+        "aggr":   {"threshold": 400, "on_hold": 2, "off_hold": 8},
     },
-    "alarm": {"mode": "auto", "warning": 45.0, "panic": 50.0, "kill": 55.0},
-    "night": {"mode": "auto", "start": 22, "end": 7, "nightMax": 75},
-    "phone": {"mode": "off", "test_delay": 120},
+    "night": {"start": 22, "end": 7, "nightMax": 75},
+    "phone": {"mode": "off"},
 }
 connected = False
 time_synced = False
@@ -245,9 +244,11 @@ def fetch_config():
         if r.status_code != 200:
             return None
         d = r.json()
-        for sec in ("boost", "alarm", "night", "phone"):
+        for sec in ("temp", "boost", "alarm", "night", "phone"):
             if sec in d:
                 latest_config.setdefault(sec, {}).update(d[sec])
+        if "temp" not in latest_config:
+            latest_config["temp"] = {"warning": 32.0, "panic": 34.0, "kill": 36.0}
         return latest_config
     except Exception as e:
         print(f"[CFG] fetch failed: {e}")
@@ -427,24 +428,28 @@ class SettingsDialog(tk.Toplevel):
             tk.Entry(self, textvariable=var, width=width).grid(row=row, column=1, sticky="w")
             row += 1
 
+        # ── HEAT CONTROL ─────────────────────────────────────
+        section("🌡️  HEAT CONTROL")
+        self.temp_warn = tk.StringVar(value=str(latest_config["temp"].get("warning", 32.0)))
+        entry("Warning (°C):", self.temp_warn)
+        self.temp_panic = tk.StringVar(value=str(latest_config["temp"].get("panic", 34.0)))
+        entry("Panic (°C):", self.temp_panic)
+        self.temp_kill = tk.StringVar(value=str(latest_config["temp"].get("kill", 36.0)))
+        entry("Kill (°C):", self.temp_kill)
+
         # ── BOOST ────────────────────────────────────────────
         section("⚡  BOOST")
         mode_map = {0: "off", 1: "normal", 2: "aggressive"}
         self.boost_mode = tk.StringVar(value=mode_map.get(latest_config["boost"].get("mode", 1), "normal"))
         radio("Mode:", self.boost_mode, ["off", "normal", "aggressive"])
 
-        # Advanced subsection
-        adv_lbl = tk.Label(self, text="▾ Advanced", font=("Helvetica", 9, "italic"))
-        adv_lbl.grid(row=row, column=0, columnspan=3, sticky="w", padx=10, pady=(6, 2))
-        row += 1
-
         norm = latest_config["boost"].get("normal", {})
         aggr = latest_config["boost"].get("aggr", {})
 
-        self.norm_thr  = tk.StringVar(value=str(norm.get("threshold", 768)))
+        self.norm_thr  = tk.StringVar(value=str(norm.get("threshold", 700)))
         self.norm_on   = tk.StringVar(value=str(norm.get("on_hold", 4)))
         self.norm_off  = tk.StringVar(value=str(norm.get("off_hold", 4)))
-        self.aggr_thr  = tk.StringVar(value=str(aggr.get("threshold", 256)))
+        self.aggr_thr  = tk.StringVar(value=str(aggr.get("threshold", 400)))
         self.aggr_on   = tk.StringVar(value=str(aggr.get("on_hold", 2)))
         self.aggr_off  = tk.StringVar(value=str(aggr.get("off_hold", 8)))
 
@@ -468,21 +473,8 @@ class SettingsDialog(tk.Toplevel):
         tk.Entry(fr2, textvariable=self.aggr_off, width=3).pack(side="left", padx=2)
         row += 1
 
-        # ── ALARM ────────────────────────────────────────────
-        section("🚨  ALARM")
-        self.alarm_mode = tk.StringVar(value=latest_config["alarm"]["mode"])
-        radio("Mode:", self.alarm_mode, ["off", "on", "auto"])
-        self.alarm_warn = tk.StringVar(value=str(latest_config["alarm"].get("warning", 45.0)))
-        entry("Warning (°C):", self.alarm_warn)
-        self.alarm_panic = tk.StringVar(value=str(latest_config["alarm"].get("panic", 50.0)))
-        entry("Oh Shit (°C):", self.alarm_panic)
-        self.alarm_kill = tk.StringVar(value=str(latest_config["alarm"].get("kill", 55.0)))
-        entry("Kill (°C):", self.alarm_kill)
-
         # ── NIGHT ────────────────────────────────────────────
         section("🌙  NIGHT")
-        self.night_mode = tk.StringVar(value=latest_config["night"]["mode"])
-        radio("Mode:", self.night_mode, ["off", "on", "auto"])
         self.night_start = tk.StringVar(value=str(latest_config["night"].get("start", 22)))
         entry("Start hour (0-23):", self.night_start)
         self.night_end = tk.StringVar(value=str(latest_config["night"].get("end", 7)))
@@ -494,8 +486,6 @@ class SettingsDialog(tk.Toplevel):
         section("📱  PHONE")
         self.phone_mode = tk.StringVar(value=latest_config["phone"].get("mode", "off"))
         radio("Mode:", self.phone_mode, ["off", "auto"])
-        self.test_delay = tk.StringVar(value=str(latest_config["phone"].get("test_delay", 0)))
-        entry("Test delay (s):", self.test_delay)
 
         btn = tk.Frame(self)
         btn.grid(row=row, column=0, columnspan=3, pady=16)
@@ -521,32 +511,54 @@ class SettingsDialog(tk.Toplevel):
                         "off_hold":  int(self.aggr_off.get()),
                     },
                 },
-                "alarm": {
-                    "mode":    self.alarm_mode.get(),
-                    "warning": float(self.alarm_warn.get()),
-                    "panic":   float(self.alarm_panic.get()),
-                    "kill":    float(self.alarm_kill.get()),
+                "temp": {
+                    "warning": float(self.temp_warn.get()),
+                    "panic":   float(self.temp_panic.get()),
+                    "kill":    float(self.temp_kill.get()),
                 },
                 "night": {
-                    "mode":     self.night_mode.get(),
                     "start":    int(self.night_start.get()),
                     "end":      int(self.night_end.get()),
                     "nightMax": int(self.night_max.get()),
                 },
                 "phone": {
-                    "mode":       self.phone_mode.get(),
-                    "test_delay": int(self.test_delay.get()),
+                    "mode": self.phone_mode.get(),
                 },
             }
         except ValueError as e:
             messagebox.showerror("Settings", f"Invalid value:\n{e}")
             return
 
-        if post_config(payload):
-            messagebox.showinfo("Settings", "Applied on ESP32")
-            self.destroy()
-        else:
-            messagebox.showerror("Settings", "Failed to apply — check ESP32 connection")
+        # Thread the POST to avoid UI freeze
+        threading.Thread(
+            target=self._apply_worker,
+            args=(payload,),
+            daemon=True
+        ).start()
+
+    def _apply_worker(self, payload):
+        try:
+            parts = []
+            _flatten_cfg("", payload, parts)
+            print(f"[CFG] applying: {', '.join(parts)}")
+
+            r = requests.post(f"{FANMATE_URL}/config", json=payload, timeout=10)
+
+            if r.status_code == 200:
+                print(f"[CFG] applied OK")
+                self.after(0, self._apply_success)
+            else:
+                print(f"[CFG] HTTP {r.status_code}: {r.text}")
+                self.after(0, lambda: messagebox.showerror(
+                    "Settings", f"HTTP {r.status_code}"))
+        except Exception as e:
+            print(f"[CFG] failed: {e}")
+            self.after(0, lambda: messagebox.showerror(
+                "Settings", f"Failed:\n{e}"))
+
+    def _apply_success(self):
+        messagebox.showinfo("Settings", "Applied on ESP32")
+        self.destroy()
 
 
 # ── App ──────────────────────────────────────────────────────
@@ -628,7 +640,7 @@ class App:
         sr.pack(fill="x", pady=10)
         self.phone_lbl = self._col(sr, "📱 PHONE", "--")
         self._divider(sr)
-        self.alert_lbl = self._col(sr, "🚨 ALERT", "--")
+        self.alert_lbl = self._col(sr, "📊 STATUS", "None")
 
         # Time
         self.time_card = Card(root, self)
@@ -910,7 +922,7 @@ class App:
         elif boost and connected:
             turbo_colors = ["#00ff00", "#ffff00", "#ff8800", "#ff0000"]
             self.status_label.config(
-                text="🏎️💨 TURBO 💨🏎️",
+                text="🏎️ Boosting",
                 font=("Helvetica Neue", 13, "bold"),
                 fg=turbo_colors[self.turbo_phase],
             )
@@ -958,16 +970,20 @@ class App:
                 fg=t["green"] if phone else t["muted"],
             )
 
-        # ── Alert ────────────────────────────────────────────
+        # ── Status ───────────────────────────────────────────
         alert = int(d.get("alert", 0))
+        boost_active = d.get("boost", 0) == 1
+
         if alert >= 3:
-            self.alert_lbl.config(text="KILL 💀", fg=t["red"])
+            self.alert_lbl.config(text="Kill 💀", fg=t["red"])
         elif alert == 2:
-            self.alert_lbl.config(text="OH SHIT 🚨", fg=t["red"])
+            self.alert_lbl.config(text="Oh Shit 🚨", fg=t["red"])
         elif alert == 1:
-            self.alert_lbl.config(text="WARN ⚠️", fg=t["orange"])
+            self.alert_lbl.config(text="Warn ⚠️", fg=t["orange"])
+        elif boost_active:
+            self.alert_lbl.config(text="🏎️ Boosting", fg=t["green"])
         else:
-            self.alert_lbl.config(text="OK ✅", fg=t["green"])
+            self.alert_lbl.config(text="None", fg=t["muted"])
 
         # ── Weather ──────────────────────────────────────────
         self.weather_temp_lbl.config(text=f"{weather['temp']:.1f}°")
