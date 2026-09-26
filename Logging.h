@@ -9,7 +9,6 @@ void   log_write_event(const char* event);
 void   log_write_reset_reason();
 
 size_t log_get_size();
-bool   log_is_full();
 void   log_check_full();
 void   log_clear();
 String log_time_string();

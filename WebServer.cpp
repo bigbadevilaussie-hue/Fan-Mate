@@ -150,8 +150,7 @@ static void handle_status() {
     json += "\"host_last_seen\":" + String(since_host / 1000) + ",";
     json += "\"sleep\":" + String(sys_state == STATE_LIGHT_SLEEP ? 1 : 0) + ",";
     json += "\"sleep_countdown\":0,";
-    json += "\"log_size\":" + String(log_get_size()) + ",";
-    json += "\"log_full\":" + String(log_is_full() ? 1 : 0);
+    json += "\"log_size\":" + String(log_get_size());
     json += "}";
 
     server.send(200, "application/json", json);
@@ -267,8 +266,6 @@ static void handle_log_info() {
     note_host();
     String json = "{";
     json += "\"size\":" + String(log_get_size()) + ",";
-    json += "\"max\":" + String(LOG_MAX_SIZE) + ",";
-    json += "\"full\":" + String(log_is_full() ? 1 : 0) + ",";
     json += "\"sealed_count\":" + String(log_sealed_count()) + ",";
     json += "\"sealed_bytes\":" + String(log_sealed_bytes()) + ",";
     json += "\"free_bytes\":" + String(LittleFS.totalBytes() - LittleFS.usedBytes()) + ",";

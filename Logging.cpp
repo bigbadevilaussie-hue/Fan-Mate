@@ -206,7 +206,6 @@ void log_init() {
 }
 
 void log_write(float temp, float net_kbps, int boost, int fan, int rpm) {
-    if (log_is_full()) return;
     if (log_rotation_paused()) return;
     File f = LittleFS.open(LOG_FILE, "a");
     if (!f) return;
@@ -218,6 +217,7 @@ void log_write(float temp, float net_kbps, int boost, int fan, int rpm) {
 }
 
 void log_write_event(const char* event) {
+    if (log_rotation_paused()) return;
     File f = LittleFS.open(LOG_FILE, "a");
     if (!f) return;
     String t = log_time_string();
@@ -253,8 +253,6 @@ size_t log_get_size() {
     f.close();
     return sz;
 }
-
-bool log_is_full() { return log_get_size() >= LOG_MAX_SIZE; }
 
 bool log_rotation_paused() {
     size_t free_bytes = LittleFS.totalBytes() - LittleFS.usedBytes();

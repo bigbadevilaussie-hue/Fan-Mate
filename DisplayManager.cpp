@@ -14,7 +14,7 @@ Adafruit_SSD1306_72x40 display(SDA_PIN, SCL_PIN);
 
 // ============================================================
 //  OLED driver — V3.21
-//  Bottom line: time (right-aligned) or "Logfile Full"
+//  Bottom line: time (right-aligned) or "Log Paused"
 // ============================================================
 
 void initDisplay() {
@@ -89,10 +89,10 @@ void updateDisplay(
     // ---- Bottom line ----
     display.setTextSize(1);
 
-    if (log_is_full()) {
-        // "Logfile Full" centred-ish at bottom
+    if (log_rotation_paused()) {
+        // "Log Paused" centred-ish at bottom
         display.setCursor(0, 33);
-        display.print(F("Logfile Full"));
+        display.print(F("Log Paused"));
     } else {
         // Time, right-aligned at bottom
         struct tm timeinfo;

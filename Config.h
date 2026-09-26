@@ -22,7 +22,7 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "3.70"
+#define FAN_MATE_VERSION "3.71"
 
 // ============================================================
 //  Pins
@@ -39,10 +39,6 @@ extern unsigned long phone_absent_since;
 // ============================================================
 //  Temperature thresholds (defaults - overridden by NVS)
 // ============================================================
-#define TEMP_ON       34.0
-#define TEMP_FULL     42.0
-#define TEMP_WARNING  45.0
-#define TEMP_PANIC    50.0
 
 // ============================================================
 //  Fan PWM
@@ -95,7 +91,6 @@ extern unsigned long phone_absent_since;
 // ============================================================
 //  Logging
 // ============================================================
-#define LOG_MAX_SIZE   (800 * 1024)
 #define LOG_TICK_MS    15000
 
 // ============================================================

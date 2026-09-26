@@ -20,7 +20,7 @@ import tkinter as tk
 from tkinter import messagebox
 import requests
 
-GUI_VERSION = "3.70"
+GUI_VERSION = "3.71"
 FANMATE_URL = "http://fan-mate.local"
 FANMATE_DIR = os.path.expanduser("~/Documents/Arduino/fanmate")
 BUILD_DIR   = os.path.join(FANMATE_DIR, "build", "esp32.esp32.esp32c3")
@@ -101,8 +101,18 @@ def get_status():
     with status_lock:
         return status_msg
 
-def read_firmware_version():
-    """V3.70: read firmware version actually running on device."""
+def read_target_version():
+    """Read firmware version from Config.h on disk (what will be flashed)."""
+    try:
+        with open(CONFIG_H) as f:
+            m = re.search(r'#define\s+FAN_MATE_VERSION\s+"([^"]+)"', f.read())
+            return m.group(1) if m else "?"
+    except Exception:
+        return "?"
+
+
+def read_device_version():
+    """Read firmware version actually running on device."""
     try:
         r = requests.get(f"{FANMATE_URL}/status", timeout=3)
         if r.status_code == 200:
@@ -142,6 +152,15 @@ def temp_emoji(t):
     if t < 42: return "🥵"
     if t < 48: return "🔥"
     return "💀"
+
+
+
+def phone_temp_emoji(t):
+    if t is None: return "\u2753"
+    if t < 30: return "\U0001F642"
+    if t < 33: return "\U0001F321\uFE0F"
+    if t < 36: return "\U0001F975"
+    return "\U0001F525"
 
 def fan_emoji(p):
     if p == 0:  return "💤"
@@ -450,97 +469,142 @@ class SettingsDialog(tk.Toplevel):
         self.app = app
         self.title("Fan-Mate Settings")
         self.resizable(False, False)
+        self.transient(parent)
         self.grab_set()
 
         fetch_config()
 
-        row = 0
-        pad = {"padx": 10, "pady": 4}
+        pad = 16
+        root = tk.Frame(self)
+        root.pack(fill="both", expand=True, padx=pad, pady=pad)
 
-        def section(label):
-            nonlocal row
-            tk.Label(self, text=label, font=("Helvetica", 11, "bold")).grid(
-                row=row, column=0, columnspan=3, sticky="w", pady=(12, 4), padx=10)
-            row += 1
+        self._row = 0
 
-        def radio(label, var, options):
-            nonlocal row
-            tk.Label(self, text=label).grid(row=row, column=0, sticky="w", **pad)
-            fr = tk.Frame(self)
-            fr.grid(row=row, column=1, columnspan=2, sticky="w")
-            for v in options:
-                tk.Radiobutton(fr, text=v.upper(), variable=var, value=v).pack(side="left")
-            row += 1
+        def section(emoji, label):
+            f = tk.Frame(root)
+            f.grid(row=self._row, column=0, columnspan=3, sticky="ew", pady=(14, 6))
+            tk.Label(f, text=f"{emoji}  {label}",
+                     font=("Helvetica Neue", 13, "bold"),
+                     anchor="w").pack(fill="x")
+            self._row += 1
 
-        def entry(label, var, width=8):
-            nonlocal row
-            tk.Label(self, text=label).grid(row=row, column=0, sticky="w", **pad)
-            tk.Entry(self, textvariable=var, width=width).grid(row=row, column=1, sticky="w")
-            row += 1
+        def field(label, var, width=8):
+            tk.Label(root, text=label,
+                     font=("Helvetica Neue", 11), anchor="w").grid(
+                row=self._row, column=0, sticky="w", pady=4)
+            tk.Entry(root, textvariable=var, width=width,
+                     font=("Helvetica Neue", 12), justify="right",
+                     relief="flat", highlightthickness=1).grid(
+                row=self._row, column=1, sticky="e", pady=4)
+            self._row += 1
 
-        # ── HEAT CONTROL ─────────────────────────────────────
-        section("🌡️  HEAT CONTROL")
+        def segmented(label, var, options):
+            tk.Label(root, text=label,
+                     font=("Helvetica Neue", 11), anchor="w").grid(
+                row=self._row, column=0, sticky="w", pady=6)
+            seg = tk.Frame(root)
+            seg.grid(row=self._row, column=1, sticky="e", pady=6)
+            for opt in options:
+                tk.Radiobutton(
+                    seg, text=opt.upper(), variable=var, value=opt,
+                    indicatoron=0, width=9,
+                    font=("Helvetica Neue", 10, "bold"),
+                    relief="flat", bd=0, highlightthickness=0,
+                ).pack(side="left", padx=1)
+            self._row += 1
+
+        section("\U0001F321\uFE0F", "HEAT CONTROL")
         self.temp_warn = tk.StringVar(value=str(latest_config["temp"].get("warning", 32.0)))
-        entry("Warning (°C):", self.temp_warn)
+        field("Warning (\u00B0C)", self.temp_warn)
         self.temp_panic = tk.StringVar(value=str(latest_config["temp"].get("panic", 34.0)))
-        entry("Panic (°C):", self.temp_panic)
+        field("Panic (\u00B0C)", self.temp_panic)
         self.temp_kill = tk.StringVar(value=str(latest_config["temp"].get("kill", 36.0)))
-        entry("Kill (°C):", self.temp_kill)
+        field("Kill (\u00B0C)", self.temp_kill)
 
-        # ── BOOST ────────────────────────────────────────────
-        section("⚡  BOOST")
+        section("\u26A1", "BOOST")
         mode_map = {0: "off", 1: "normal", 2: "aggressive"}
-        self.boost_mode = tk.StringVar(value=mode_map.get(latest_config["boost"].get("mode", 1), "normal"))
-        radio("Mode:", self.boost_mode, ["off", "normal", "aggressive"])
+        self.boost_mode = tk.StringVar(
+            value=mode_map.get(latest_config["boost"].get("mode", 1), "normal"))
+        segmented("Mode", self.boost_mode, ["off", "normal", "aggressive"])
 
         norm = latest_config["boost"].get("normal", {})
         aggr = latest_config["boost"].get("aggr", {})
 
-        self.norm_thr  = tk.StringVar(value=str(norm.get("threshold", 700)))
-        self.norm_on   = tk.StringVar(value=str(norm.get("on_hold", 4)))
-        self.norm_off  = tk.StringVar(value=str(norm.get("off_hold", 4)))
-        self.aggr_thr  = tk.StringVar(value=str(aggr.get("threshold", 400)))
-        self.aggr_on   = tk.StringVar(value=str(aggr.get("on_hold", 2)))
-        self.aggr_off  = tk.StringVar(value=str(aggr.get("off_hold", 8)))
+        self.norm_thr = tk.StringVar(value=str(norm.get("threshold", 700)))
+        self.norm_on  = tk.StringVar(value=str(norm.get("on_hold", 4)))
+        self.norm_off = tk.StringVar(value=str(norm.get("off_hold", 4)))
+        self.aggr_thr = tk.StringVar(value=str(aggr.get("threshold", 400)))
+        self.aggr_on  = tk.StringVar(value=str(aggr.get("on_hold", 2)))
+        self.aggr_off = tk.StringVar(value=str(aggr.get("off_hold", 8)))
 
-        tk.Label(self, text="Normal:", font=("Helvetica", 9, "bold")).grid(row=row, column=0, sticky="w", padx=10)
-        fr1 = tk.Frame(self); fr1.grid(row=row, column=1, columnspan=2, sticky="w")
-        tk.Label(fr1, text="Thr").pack(side="left")
-        tk.Entry(fr1, textvariable=self.norm_thr, width=6).pack(side="left", padx=2)
-        tk.Label(fr1, text="On").pack(side="left")
-        tk.Entry(fr1, textvariable=self.norm_on, width=3).pack(side="left", padx=2)
-        tk.Label(fr1, text="Off").pack(side="left")
-        tk.Entry(fr1, textvariable=self.norm_off, width=3).pack(side="left", padx=2)
-        row += 1
+        for name, thr_v, on_v, off_v in [
+            ("Normal",     self.norm_thr, self.norm_on, self.norm_off),
+            ("Aggressive", self.aggr_thr, self.aggr_on, self.aggr_off),
+        ]:
+            tk.Label(root, text=name, font=("Helvetica Neue", 11, "bold"),
+                     anchor="w").grid(row=self._row, column=0, sticky="w", pady=4)
+            fr = tk.Frame(root)
+            fr.grid(row=self._row, column=1, sticky="e", pady=4)
+            for lbl, var in (("Thr", thr_v), ("On", on_v), ("Off", off_v)):
+                tk.Label(fr, text=lbl, font=("Helvetica Neue", 10)).pack(side="left", padx=(6, 2))
+                tk.Entry(fr, textvariable=var, width=5,
+                         font=("Helvetica Neue", 12), justify="right",
+                         relief="flat", highlightthickness=1).pack(side="left")
+            self._row += 1
 
-        tk.Label(self, text="Aggressive:", font=("Helvetica", 9, "bold")).grid(row=row, column=0, sticky="w", padx=10)
-        fr2 = tk.Frame(self); fr2.grid(row=row, column=1, columnspan=2, sticky="w")
-        tk.Label(fr2, text="Thr").pack(side="left")
-        tk.Entry(fr2, textvariable=self.aggr_thr, width=6).pack(side="left", padx=2)
-        tk.Label(fr2, text="On").pack(side="left")
-        tk.Entry(fr2, textvariable=self.aggr_on, width=3).pack(side="left", padx=2)
-        tk.Label(fr2, text="Off").pack(side="left")
-        tk.Entry(fr2, textvariable=self.aggr_off, width=3).pack(side="left", padx=2)
-        row += 1
-
-        # ── NIGHT ────────────────────────────────────────────
-        section("🌙  NIGHT")
+        section("\U0001F319", "NIGHT")
         self.night_start = tk.StringVar(value=str(latest_config["night"].get("start", 22)))
-        entry("Start hour (0-23):", self.night_start)
+        field("Start hour (0-23)", self.night_start)
         self.night_end = tk.StringVar(value=str(latest_config["night"].get("end", 7)))
-        entry("End hour (0-23):", self.night_end)
+        field("End hour (0-23)", self.night_end)
         self.night_max = tk.StringVar(value=str(latest_config["night"].get("nightMax", 75)))
-        entry("Night max (%):", self.night_max)
+        field("Night max (%)", self.night_max)
 
-        # ── PHONE ────────────────────────────────────────────
-        section("📱  PHONE")
-        self.phone_mode = tk.StringVar(value=latest_config["phone"].get("mode", "off"))
-        radio("Mode:", self.phone_mode, ["off", "auto"])
+        section("\U0001F4F1", "PHONE")
+        self.phone_mode = tk.StringVar(
+            value=latest_config["phone"].get("mode", "off"))
+        segmented("Mode", self.phone_mode, ["off", "auto"])
 
-        btn = tk.Frame(self)
-        btn.grid(row=row, column=0, columnspan=3, pady=16)
-        tk.Button(btn, text="Apply", width=10, command=self.apply).pack(side="left", padx=4)
-        tk.Button(btn, text="Cancel", width=10, command=self.destroy).pack(side="left", padx=4)
+        btns = tk.Frame(root)
+        btns.grid(row=self._row, column=0, columnspan=3, pady=(18, 4))
+        tk.Button(btns, text="Cancel", width=12,
+                  font=("Helvetica Neue", 11),
+                  command=self.destroy).pack(side="left", padx=6)
+        tk.Button(btns, text="Apply", width=12,
+                  font=("Helvetica Neue", 11, "bold"),
+                  command=self.apply).pack(side="left", padx=6)
+
+        self._apply_theme()
+
+    def _apply_theme(self):
+        t = self.app.theme
+        self.configure(bg=t["bg"])
+        for w in self.winfo_children():
+            self._theme_recursive(w, t)
+
+    def _theme_recursive(self, w, t):
+        try:
+            cls = w.winfo_class()
+        except Exception:
+            return
+        if cls in ("Frame", "Toplevel"):
+            w.configure(bg=t["bg"])
+        elif cls == "Label":
+            w.configure(bg=t["bg"], fg=t["fg"])
+        elif cls == "Entry":
+            w.configure(bg=t["card"], fg=t["fg"], insertbackground=t["fg"],
+                        highlightbackground=t["card_border"],
+                        highlightcolor=t["accent"])
+        elif cls == "Radiobutton":
+            w.configure(bg=t["bg"], fg=t["fg"],
+                        selectcolor=t["accent"], activebackground=t["bg"],
+                        activeforeground=t["fg"])
+        elif cls == "Button":
+            w.configure(bg=t["card"], fg=t["fg"],
+                        activebackground=t["accent"], activeforeground=t["fg"],
+                        highlightbackground=t["card_border"])
+        for c in w.winfo_children():
+            self._theme_recursive(c, t)
 
     def apply(self):
         try:
@@ -579,7 +643,8 @@ class SettingsDialog(tk.Toplevel):
             messagebox.showerror("Settings", f"Invalid value:\n{e}")
             return
 
-        # Thread the POST to avoid UI freeze
+        self.destroy()
+
         threading.Thread(
             target=self._apply_worker,
             args=(payload,),
@@ -588,27 +653,13 @@ class SettingsDialog(tk.Toplevel):
 
     def _apply_worker(self, payload):
         try:
-            parts = []
-            _flatten_cfg("", payload, parts)
-            print(f"[CFG] applying: {', '.join(parts)}")
-
             r = requests.post(f"{FANMATE_URL}/config", json=payload, timeout=10)
-
-            if r.status_code == 200:
-                print(f"[CFG] applied OK")
-                self.after(0, self._apply_success)
-            else:
-                print(f"[CFG] HTTP {r.status_code}: {r.text}")
-                self.after(0, lambda: messagebox.showerror(
-                    "Settings", f"HTTP {r.status_code}"))
+            if r.status_code != 200:
+                msg = f"HTTP {r.status_code}"
+                self.app.root.after(0, lambda m=msg: messagebox.showerror("Settings", m))
         except Exception as e:
-            print(f"[CFG] failed: {e}")
-            self.after(0, lambda: messagebox.showerror(
-                "Settings", f"Failed:\n{e}"))
-
-    def _apply_success(self):
-        messagebox.showinfo("Settings", "Applied on ESP32")
-        self.destroy()
+            msg = str(e)
+            self.app.root.after(0, lambda m=msg: messagebox.showerror("Settings", f"Failed:\n{m}"))
 
 
 # ── App ──────────────────────────────────────────────────────
@@ -637,7 +688,7 @@ class App:
         am = tk.Menu(mb, tearoff=0)
         am.add_command(label="⚙️  Settings", command=self.menu_settings)
         am.add_command(label="🌐  Open Serial Page", command=self.open_serial_page)
-        am.add_command(label="🏠  Open Dashboard", command=self.open_dashboard)
+        am.add_command(label="📍  Open Dashboard", command=self.open_dashboard)
         am.add_separator()
         am.add_command(label="🎛️  Dyna Tune Turbo Boost", command=self.menu_dyna_tune)
         am.add_separator()
@@ -753,43 +804,6 @@ class App:
             "Minimum 3 days / 20 events needed for reliable suggestions."
         )
 
-    def sync_log(self):
-        try:
-            r = requests.get(f"{FANMATE_URL}/log.csv", timeout=10)
-            if r.status_code != 200:
-                messagebox.showerror("Sync Log", f"HTTP {r.status_code}")
-                return
-            os.makedirs(LOG_DIR, exist_ok=True)
-            ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-            src_ver = read_firmware_version() or "unknown"
-            path = os.path.join(LOG_DIR, f"log-v{src_ver}-{ts}.csv")
-            with open(path, "wb") as f:
-                f.write(r.content)
-            lines = r.content.count(b"\n")
-            size_kb = len(r.content) / 1024
-            messagebox.showinfo("Sync Log", f"Saved {lines} lines ({size_kb:.1f} KB)\n\n{path}")
-        except Exception as e:
-            messagebox.showerror("Sync Log", f"Failed:\n{e}")
-
-    def open_log_folder(self):
-        try:
-            os.makedirs(LOG_DIR, exist_ok=True)
-            os.system(f'open "{LOG_DIR}"')
-        except Exception as e:
-            messagebox.showerror("Log Folder", f"Failed:\n{e}")
-
-    def clear_log(self):
-        if not messagebox.askyesno("Clear Log", "Delete log on ESP32?\n\nDownload it first!"):
-            return
-        try:
-            r = requests.post(f"{FANMATE_URL}/log/clear", timeout=5)
-            if r.status_code == 200:
-                messagebox.showinfo("Clear Log", "Log cleared on device.")
-            else:
-                messagebox.showerror("Clear Log", f"HTTP {r.status_code}")
-        except Exception as e:
-            messagebox.showerror("Clear Log", f"Failed:\n{e}")
-
     def menu_ota(self):
         if not os.path.isfile(BUILD_BIN):
             messagebox.showerror(
@@ -799,7 +813,7 @@ class App:
             )
             return
 
-        src_ver = read_firmware_version() or "?"
+        src_ver = read_target_version()
         try:
             bin_mtime = os.path.getmtime(BUILD_BIN)
             cfg_mtime = os.path.getmtime(CONFIG_H)
@@ -810,7 +824,7 @@ class App:
 
         size = os.path.getsize(BUILD_BIN)
         md5 = compute_md5(BUILD_BIN) or "?"
-        dev_ver = latest.get("fv", "?")
+        dev_ver = read_device_version()
         built_str = (datetime.fromtimestamp(bin_mtime).strftime("%Y-%m-%d %H:%M")
                      if bin_mtime else "?")
         size_mb = size / (1024 * 1024)
@@ -995,7 +1009,7 @@ class App:
         if temp is None:
             self.temp_lbl.config(text="--.-°C  ❔", fg=t["muted"])
         else:
-            em = temp_emoji(temp)
+            em = phone_temp_emoji(temp)
             c = (t["green"] if temp < 25 else t["blue"] if temp < 35
                  else t["yellow"] if temp < 45 else t["red"])
             self.temp_lbl.config(text=f"{temp:.1f}°C  {em}", fg=c)
