@@ -5,37 +5,38 @@
 
 // ============================================================
 //  Fan-Mate runtime configuration
-//
-//  V2.24 — fan.mode removed. Auto Boost is the mode.
+//  V3.46 — new schema:
+//    temp  : warning/panic/kill (no mode, always on)
+//    boost : mode + normal/aggr profiles (nested)
+//    night : always on, start/end/nightMax
+//    phone : mode only (no test_delay)
 // ============================================================
 
-struct FanMateConfig {
-    // Fan
-    float   tempOn;         // °C
-    float   tempFull;       // °C
-    int     nightMax;       // % 0-100
+struct BoostProfile {
+    int threshold;   // KB/s
+    int on_hold;     // ticks over threshold to bump gear
+    int off_hold;    // unused now; kept for compat
+};
 
-    // Alarm
-    String  alarmMode;      // "off" / "on" / "auto"
-    float   alarmWarning;   // °C
-    float   alarmPanic;     // °C
+struct FanMateConfig {
+    // Heat control
+    float   tempWarning;
+    float   tempPanic;
+    float   tempKill;
+    float   tempHysteresis;
 
     // Night
-    String  nightMode;      // "off" / "on" / "auto"
-    int     nightStart;     // hour 0-23
-    int     nightEnd;       // hour 0-23
+    int     nightStart;
+    int     nightEnd;
+    int     nightMax;
 
     // Phone
     String  phoneMode;      // "off" / "auto"
-    int     phoneTestDelay; // seconds before sleep in auto mode
 
     // Boost
-    bool    boostEnabled;
-    int     boostThreshold; // KB/s
-    int     boostHold;      // ticks
-
-    // Bench
-    bool    benchMode;      // force phone = 1
+    int     boostMode;      // 0=off, 1=normal, 2=aggr
+    BoostProfile boostNormal;
+    BoostProfile boostAggr;
 };
 
 extern FanMateConfig config;

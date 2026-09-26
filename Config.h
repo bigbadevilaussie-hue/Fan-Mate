@@ -20,7 +20,7 @@ extern unsigned long phone_absent_since;
 
 #endif
 
-#define FAN_MATE_VERSION "3.45.2"
+#define FAN_MATE_VERSION "3.46"
 
 // ============================================================
 //  Pins

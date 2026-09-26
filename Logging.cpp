@@ -7,6 +7,8 @@
 #include <sys/time.h>
 #include <esp_system.h>
 
+extern float weather_get_temp();
+
 static unsigned long last_full_beep = 0;
 static bool          warned_full    = false;
 static const char* LOG_FILE = "/log.csv";
@@ -34,7 +36,7 @@ static void write_header_if_new() {
     if (LittleFS.exists(LOG_FILE)) return;
     File f = LittleFS.open(LOG_FILE, "w");
     if (!f) return;
-    f.println("timestamp,temp_c,net_kbps,boost,fan,rpm,event");
+    f.println("timestamp,temp_c,net_kbps,boost,fan,rpm,event,outdoor_c");
     f.close();
 }
 
@@ -54,8 +56,9 @@ void log_write(float temp, float net_kbps, int boost, int fan, int rpm) {
     File f = LittleFS.open(LOG_FILE, "a");
     if (!f) return;
     String t = log_time_string();
-    f.printf("%s,%.1f,%.1f,%d,%d,%d,\n",
-             t.c_str(), temp, net_kbps, boost, fan, rpm);
+    f.printf("%s,%.1f,%.1f,%d,%d,%d,,%.1f\n",
+             t.c_str(), temp, net_kbps, boost, fan, rpm,
+             weather_get_temp());
     f.close();
 }
 
@@ -64,7 +67,7 @@ void log_write_event(const char* event) {
     File f = LittleFS.open(LOG_FILE, "a");
     if (!f) return;
     String t = log_time_string();
-    f.printf("%s,%.1f,0.0,0,0,0,%s\n", t.c_str(), currentTemp, event);
+    f.printf("%s,%.1f,0.0,0,0,0,%s,\n", t.c_str(), currentTemp, event);
     f.close();
 }
 

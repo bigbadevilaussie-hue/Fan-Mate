@@ -17,4 +17,6 @@ void updateFanAndAlerts(
     bool &outPhonePresent
 );
 
+void silenceFanAndAlerts();
+
 #endif

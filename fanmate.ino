@@ -11,6 +11,7 @@
 #include "OpalClient.h"
 #include "AutoBoost.h"
 #include "Logging.h"
+#include "WeatherClient.h"
 
 #include <esp_arduino_version.h>
 
@@ -37,11 +38,6 @@ uint64_t      last_rx       = 0;
 unsigned long last_tick     = 0;
 
 // ── Sleep state machine ────────────────────────────────
-void silenceFanAndAlerts() {
-    ledcWrite(0, 0);
-    ledcWrite(BUZZER_CHANNEL, 0);
-}
-
 void enter_sleep() {
     Serial.println("[SLEEP] phone absent — entering sleep");
     sys_state = STATE_LIGHT_SLEEP;
@@ -117,6 +113,7 @@ void setup() {
     tzset();
 
     settings_load();
+    weather_init();
     initHardware();
 
     // ── DS18B20 warmup: wait for first valid reading ──
@@ -189,7 +186,7 @@ static void tick_15s() {
         log_write(
             currentTemp,
             kbps_smooth,
-            auto_boost_is_active() ? 1 : 0,
+            auto_boost_gear() > 0 ? 1 : 0,
             fanPct,
             fanRPM
         );
@@ -199,7 +196,7 @@ static void tick_15s() {
 
     log_print("[TICK] temp=%.1f fan=%d%% net=%.1f KB/s boost=%d rpm=%d\n",
                   currentTemp, fanPct, kbps_smooth,
-                  auto_boost_is_active() ? 1 : 0, fanRPM);
+                  auto_boost_gear() > 0 ? 1 : 0, fanRPM);
 }
 
 // ============================================================
@@ -213,6 +210,7 @@ void loop() {
     unsigned long now = millis();
 
     wifi_loop();
+    weather_loop();
     if (wifi_connected() && !server_ready) {
         server_setup();
         opal_init();
@@ -230,25 +228,15 @@ void loop() {
     bool phone_now;
     if (config.phoneMode == "off") {
         phone_now = true;                     // bypass
-    } else if (config.benchMode) {
-        phone_now = true;                     // force present
     } else {
         phone_now = phonePresent;             // real sensor
     }
 
     if (!phone_now && sys_state == STATE_ACTIVE) {
-        if (phone_absent_since == 0) {
-            phone_absent_since = now;
-            Serial.printf("[SLEEP] phone absent — delay %d s\n", config.phoneTestDelay);
-        }
-        unsigned long delay_ms = (unsigned long)config.phoneTestDelay * 1000UL;
-        if (now - phone_absent_since >= delay_ms) {
-            enter_sleep();
-        }
+        Serial.println("[SLEEP] phone absent — instant sleep");
+        enter_sleep();
     } else if (phone_now && sys_state == STATE_LIGHT_SLEEP) {
         exit_sleep();
-    } else if (phone_now) {
-        phone_absent_since = 0;
     }
 
     // ── Active-only work ────────────────────────────────────

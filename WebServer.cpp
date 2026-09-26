@@ -133,22 +133,23 @@ static void handle_status() {
     json += "\"rpm\":" + String(fanRPM) + ",";
     json += "\"phone\":" + String(phonePresent ? 1 : 0) + ",";
     json += "\"alert\":" + String(alertState) + ",";
-    json += "\"boost\":" + String(auto_boost_is_active() ? 1 : 0) + ",";
+    int boostGear = auto_boost_gear();
+    json += "\"boost\":" + String(boostGear > 0 ? 1 : 0) + ",";
+    json += "\"boost_lvl\":" + String(boostGear) + ",";
     json += "\"net_kbps\":" + String(lastNetKbps, 1) + ",";
+    int tempGear = 0;
+    if (currentTemp >= config.tempKill)      tempGear = 4;
+    else if (currentTemp >= config.tempPanic) tempGear = 3;
+    else if (currentTemp >= config.tempWarning) tempGear = 2;
+    else if (currentTemp >= config.tempWarning - config.tempHysteresis) tempGear = 1;
+    json += "\"temp_lvl\":" + String(tempGear) + ",";
     json += "\"opal\":" + String(opal_logged_in() ? 1 : 0) + ",";
     unsigned long since_host = (host_last_ms > 0) ? (millis() - host_last_ms) : 999999;
     int host_alive = (since_host < 60000) ? 1 : 0;
     json += "\"host\":" + String(host_alive) + ",";
     json += "\"host_last_seen\":" + String(since_host / 1000) + ",";
-    int sleep_countdown = 0;
-    if (sys_state == STATE_ACTIVE && phone_absent_since > 0) {
-        unsigned long elapsed = (millis() - phone_absent_since) / 1000;
-        int remaining = config.phoneTestDelay - (int)elapsed;
-        if (remaining < 0) remaining = 0;
-        sleep_countdown = remaining;
-    }
     json += "\"sleep\":" + String(sys_state == STATE_LIGHT_SLEEP ? 1 : 0) + ",";
-    json += "\"sleep_countdown\":" + String(sleep_countdown) + ",";
+    json += "\"sleep_countdown\":0,";
     json += "\"log_size\":" + String(log_get_size()) + ",";
     json += "\"log_full\":" + String(log_is_full() ? 1 : 0);
     json += "}";
@@ -158,39 +159,37 @@ static void handle_status() {
 
 // ------------------------------------------------------------
 static void handle_config_get() {
-    note_host();
     String json = "{";
 
-    json += "\"fan\":{";
-    json += "\"tempOn\":" + String(config.tempOn, 1) + ",";
-    json += "\"tempFull\":" + String(config.tempFull, 1) + ",";
-    json += "\"nightMax\":" + String(config.nightMax);
+    json += "\"temp\":{";
+    json += "\"warning\":" + String(config.tempWarning, 1) + ",";
+    json += "\"panic\":" + String(config.tempPanic, 1) + ",";
+    json += "\"kill\":" + String(config.tempKill, 1) + ",";
+    json += "\"hysteresis\":" + String(config.tempHysteresis, 1);
     json += "},";
 
-    json += "\"alarm\":{";
-    json += "\"mode\":\"" + config.alarmMode + "\",";
-    json += "\"warning\":" + String(config.alarmWarning, 1) + ",";
-    json += "\"panic\":" + String(config.alarmPanic, 1);
+    json += "\"boost\":{";
+    json += "\"mode\":" + String(config.boostMode) + ",";
+    json += "\"normal\":{";
+    json += "\"threshold\":" + String(config.boostNormal.threshold) + ",";
+    json += "\"on_hold\":" + String(config.boostNormal.on_hold) + ",";
+    json += "\"off_hold\":" + String(config.boostNormal.off_hold);
+    json += "},";
+    json += "\"aggr\":{";
+    json += "\"threshold\":" + String(config.boostAggr.threshold) + ",";
+    json += "\"on_hold\":" + String(config.boostAggr.on_hold) + ",";
+    json += "\"off_hold\":" + String(config.boostAggr.off_hold);
+    json += "}";
     json += "},";
 
     json += "\"night\":{";
-    json += "\"mode\":\"" + config.nightMode + "\",";
     json += "\"start\":" + String(config.nightStart) + ",";
-    json += "\"end\":" + String(config.nightEnd);
+    json += "\"end\":" + String(config.nightEnd) + ",";
+    json += "\"nightMax\":" + String(config.nightMax);
     json += "},";
 
     json += "\"phone\":{";
     json += "\"mode\":\"" + config.phoneMode + "\"";
-    json += "},";
-
-    json += "\"boost\":{";
-    json += "\"enabled\":" + String(config.boostEnabled ? 1 : 0) + ",";
-    json += "\"threshold\":" + String(config.boostThreshold) + ",";
-    json += "\"hold\":" + String(config.boostHold);
-    json += "},";
-
-    json += "\"bench\":{";
-    json += "\"mode\":" + String(config.benchMode ? 1 : 0);
     json += "}";
 
     json += "}";
