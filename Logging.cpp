@@ -146,7 +146,9 @@ void log_rotate_check() {
 
     if (now <= _live_file_start_epoch) return;
     if (now - _live_file_start_epoch > 24 * 3600UL) {
-        log_print("[LOG] time jump > 24h, refusing to seal\n");
+        log_print("[LOG] time jump > 24h — resetting start epoch\n");
+        _live_file_start_epoch = now;
+        save_start_epoch(now);
         return;
     }
 
@@ -168,19 +170,22 @@ void log_rotate_check() {
 void log_boot_recovery() {
     if (!LittleFS.exists(LOG_FILE)) return;
 
+    time_t now = time(nullptr);
+    bool time_ok = (now > 1700000000UL && now < 4102444800UL);
+
     size_t rows = log_count_live_rows();
-    if (rows < LOG_SEAL_MIN_ROWS) {
-        log_print("[LOG] boot: only %u rows, discarding\n", (unsigned)rows);
+    if (rows < LOG_SEAL_MIN_ROWS || !time_ok) {
+        log_print("[LOG] boot: %u rows, time_ok=%d — discarding\n",
+                  (unsigned)rows, time_ok ? 1 : 0);
         LittleFS.remove(LOG_FILE);
         clear_start_epoch();
         write_header_if_new();
-        _live_file_start_epoch = time(nullptr);
-        save_start_epoch(_live_file_start_epoch);
+        _live_file_start_epoch = time_ok ? now : 0;
+        if (time_ok) save_start_epoch(_live_file_start_epoch);
         return;
     }
 
     time_t stored = load_start_epoch();
-    time_t now = time(nullptr);
     time_t name_epoch = (stored > 0) ? stored : now;
 
     log_print("[LOG] boot: sealing %u rows\n", (unsigned)rows);

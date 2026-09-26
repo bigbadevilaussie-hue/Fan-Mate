@@ -1,6 +1,7 @@
 #include "AutoBoost.h"
 #include "Settings.h"
 #include "Config.h"
+#include "SerialBuffer.h"
 
 static int gear = 0;
 static int over_ticks  = 0;
@@ -28,7 +29,7 @@ void auto_boost_init() {
     gear = 0;
     over_ticks = 0;
     under_ticks = 0;
-    Serial.printf("[BOOST] init (mode=%d thr=%d on=%d off=%d)\n",
+    log_print("[BOOST] init (mode=%d thr=%d on=%d off=%d)\n",
                   config.boostMode, current_threshold(),
                   current_on_hold(), current_off_hold());
 }
@@ -53,7 +54,7 @@ void auto_boost_update(float net_kbps) {
         if (over_ticks >= on_hold && gear < 4) {
             gear++;
             over_ticks = 0;
-            Serial.printf("[BOOST] gear+ net=%.1f thr=%d gear=%d\n",
+            log_print("[BOOST] gear+ net=%.1f thr=%d gear=%d\n",
                           net_kbps, thr, gear);
         }
     } else if (net_kbps < low) {
@@ -62,7 +63,7 @@ void auto_boost_update(float net_kbps) {
         if (under_ticks >= off_hold && gear > 0) {
             gear--;
             under_ticks = 0;
-            Serial.printf("[BOOST] gear- net=%.1f thr=%d gear=%d\n",
+            log_print("[BOOST] gear- net=%.1f thr=%d gear=%d\n",
                           net_kbps, thr, gear);
         }
     } else {

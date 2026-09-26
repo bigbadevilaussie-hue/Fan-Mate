@@ -3,6 +3,7 @@
 #include "Settings.h"
 #include "AutoBoost.h"
 #include "Logging.h"
+#include "SerialBuffer.h"
 
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -69,7 +70,7 @@ void updatePhoneDetection() {
             lastState = present;
             lastChange = now;
             phonePresent = present;
-            Serial.printf("[PHONE] %s\n", present ? "detected" : "removed");
+            log_print("[PHONE] %s\n", present ? "detected" : "removed");
         }
     }
 }
@@ -153,10 +154,10 @@ void updateFanAndAlerts(
         beepActive = false;
         beepIndex = 0;
         ledcWrite(BUZZER_CHANNEL, 0);
-        if (alertLevel == 3)      Serial.println("[ALERT] KILL");
-        else if (alertLevel == 2) Serial.println("[ALERT] OH SHIT");
-        else if (alertLevel == 1) Serial.println("[ALERT] WARNING");
-        else                      Serial.println("[ALERT] normal");
+        if (alertLevel == 3)      log_print("[ALERT] KILL\n");
+        else if (alertLevel == 2) log_print("[ALERT] OH SHIT\n");
+        else if (alertLevel == 1) log_print("[ALERT] WARNING\n");
+        else                      log_print("[ALERT] normal\n");
         lastAlertStart = millis() - 120000;
     }
 
@@ -170,7 +171,7 @@ void updateFanAndAlerts(
     // ---- Beep on gear change (skip first tick after boot/wake) ----
     if (fanGear != lastFanGear) {
         if (lastFanGear >= 0) {
-            Serial.printf("[FAN] gear %d -> %d\n", lastFanGear, fanGear);
+            log_print("[FAN] gear %d -> %d\n", lastFanGear, fanGear);
             beep_once();
         }
         lastFanGear = fanGear;
@@ -205,7 +206,7 @@ void updateFanAndAlerts(
             fan_stall_since = millis();
         } else if (millis() - fan_stall_since > 5000 && !fan_stall_alarm) {
             fan_stall_alarm = true;
-            Serial.println("[FAN] STALL ALARM");
+            log_print("[FAN] STALL ALARM\n");
             log_write_event("FAN_STALL");
             ledcWrite(BUZZER_CHANNEL, BUZZER_LOUD);
             delay(200);
@@ -215,7 +216,7 @@ void updateFanAndAlerts(
         fan_stall_since = 0;
         if (fan_stall_alarm) {
             fan_stall_alarm = false;
-            Serial.println("[FAN] recovered");
+            log_print("[FAN] recovered\n");
             log_write_event("FAN_RECOVERED");
         }
     }
