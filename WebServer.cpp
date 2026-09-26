@@ -17,7 +17,7 @@
 
 // ============================================================
 //  Web Server — HTTP interface
-//  V3.20 — adds /time and /ota
+//  V3.72 — adds /log/list, /log/file, /log/ack, /log/nack, fan_stall
 // ============================================================
 
 static WebServer server(HTTP_PORT);
@@ -121,6 +121,7 @@ static void handle_status() {
     extern int   alertState;
     extern bool  phonePresent;
     extern float lastNetKbps;
+    extern bool  fan_stall_active();
 
     String json = "{";
     json += "\"fw\":\"" + String(FAN_MATE_VERSION) + "\",";
@@ -133,6 +134,7 @@ static void handle_status() {
     json += "\"rpm\":" + String(fanRPM) + ",";
     json += "\"phone\":" + String(phonePresent ? 1 : 0) + ",";
     json += "\"alert\":" + String(alertState) + ",";
+    json += "\"fan_stall\":" + String(fan_stall_active() ? 1 : 0) + ",";
     int boostGear = auto_boost_gear();
     json += "\"boost\":" + String(boostGear > 0 ? 1 : 0) + ",";
     json += "\"boost_lvl\":" + String(boostGear) + ",";

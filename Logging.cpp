@@ -122,7 +122,7 @@ static bool seal_live(time_t name_epoch) {
         return false;
     }
 
-    Serial.printf("[LOG] sealed: %s\n", sealed_path);
+    Serial.printf("[LOG] sealed %s\n", sealed_path);
 
     time_t now = time(nullptr);
     open_fresh_live(now);
@@ -264,7 +264,7 @@ void log_check_full() {
         if (warned_full) { warned_full = false; Serial.println("[LOG] resumed"); }
         return;
     }
-    if (!warned_full) { warned_full = true; Serial.println("[LOG] PAUSED"); }
+    if (!warned_full) { warned_full = true; Serial.println("[LOG] PAUSED - FS nearly full"); }
     unsigned long now = millis();
     if (now - last_full_beep >= 60000) {
         last_full_beep = now;
@@ -340,6 +340,6 @@ bool log_delete_sealed(const char* name) {
     else                snprintf(p, sizeof(p), "/%s", name);
     if (!LittleFS.exists(p)) return false;
     bool ok = LittleFS.remove(p);
-    if (ok) Serial.printf("[LOG] deleted: %s\n", p);
+    if (ok) Serial.printf("[LOG] uploaded %s\n", p);
     return ok;
 }

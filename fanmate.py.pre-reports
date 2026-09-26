@@ -1,10 +1,16 @@
 """
-FAN-MATE GUI V3.72
-Compatible with firmware: v3.72
+FAN-MATE GUI V3.43
+Compatible with firmware: v3.43
 - Full HTTP. No BLE. No local logging.
 - Telemetry polled from ESP32 /status every 10s.
 - Settings pushed to ESP32 /config.
-- Logs live on ESP32. GUI pulls sealed logs to ~/Documents/FanMate_logs/.
+- Logs live on ESP32. GUI can sync/clear/reboot.
+- Same layout as V3.00, plus:
+  - Boost section with Advanced (threshold/on/off)
+  - Alarm three levels (Warning / Oh Shit / Kill)
+  - Sleep countdown + sleeping state
+  - Opal offline indicator
+  - Dyna Tune menu (stub)
 """
 
 import zlib, json, threading, time, urllib.request, os, re
@@ -14,7 +20,7 @@ import tkinter as tk
 from tkinter import messagebox
 import requests
 
-GUI_VERSION = "3.72"
+GUI_VERSION = "3.71"
 FANMATE_URL = "http://fan-mate.local"
 FANMATE_DIR = os.path.expanduser("~/Documents/Arduino/fanmate")
 BUILD_DIR   = os.path.join(FANMATE_DIR, "build", "esp32.esp32.esp32c3")
@@ -23,7 +29,6 @@ CONFIG_H    = os.path.join(FANMATE_DIR, "Config.h")
 LOG_DIR     = os.path.expanduser("~/Documents/FanMate_logs")
 
 POLL_INTERVAL = 10.0
-DEBUG_GUI = False
 
 WEATHER_LAT = -27.28
 WEATHER_LON = 152.51
@@ -54,10 +59,10 @@ download_hist = deque([None] * HIST_LEN, maxlen=HIST_LEN)
 latest = {
     "temp": None, "fan": 0, "rpm": 0, "phone": 0, "alert": 0,
     "boost": 0, "fv": "?", "net_kbps": 0.0,
-    "sleep": 0, "sleep_countdown": 0, "opal": 1, "fan_stall": 0,
+    "sleep": 0, "sleep_countdown": 0, "opal": 1,
 }
 latest_config = {
-    "temp": {"warning": 32.0, "panic": 34.0, "kill": 36.0, "hysteresis": 1.0},
+    "temp": {"warning": 32.0, "panic": 34.0, "kill": 36.0},
     "boost": {
         "mode": 1,
         "normal": {"threshold": 700, "on_hold": 4, "off_hold": 4},
@@ -105,6 +110,7 @@ def read_target_version():
     except Exception:
         return "?"
 
+
 def read_device_version():
     """Read firmware version actually running on device."""
     try:
@@ -137,12 +143,24 @@ def time_emoji():
             "☀️" if h < 12 else "🌞" if h < 14 else "🌤️" if h < 17 else
             "🌇" if h < 19 else "🌆" if h < 21 else "🌙")
 
-def phone_temp_emoji(t):
+def temp_emoji(t):
     if t is None: return "❔"
-    if t < 30: return "🙂"
-    if t < 33: return "🌡️"
-    if t < 36: return "🥵"
-    return "🔥"
+    if t < 20: return "🥶"
+    if t < 25: return "❄️"
+    if t < 30: return "🌤️"
+    if t < 35: return "☀️"
+    if t < 42: return "🥵"
+    if t < 48: return "🔥"
+    return "💀"
+
+
+
+def phone_temp_emoji(t):
+    if t is None: return "\u2753"
+    if t < 30: return "\U0001F642"
+    if t < 33: return "\U0001F321\uFE0F"
+    if t < 36: return "\U0001F975"
+    return "\U0001F525"
 
 def fan_emoji(p):
     if p == 0:  return "💤"
@@ -173,30 +191,29 @@ def http_poll_loop():
         try:
             r = requests.get(f"{FANMATE_URL}/status", timeout=5)
             if r.status_code == 200:
+                raw = r.text
                 try:
                     d = r.json()
                 except Exception as e:
-                    if DEBUG_GUI:
-                        print(f"[POLL #{poll_count}] JSON FAIL: {e}")
+                    print(f"[POLL #{poll_count}] JSON PARSE FAIL: {e}")
+                    print(f"[POLL #{poll_count}] RAW: {raw[:300]}")
                     time.sleep(POLL_INTERVAL)
                     continue
 
-                if DEBUG_GUI:
-                    print(f"[POLL #{poll_count}] net={d.get('net_kbps')} "
-                          f"temp={d.get('temp')} fan={d.get('fan')} boost={d.get('boost')}")
-
-                latest["temp"]      = d.get("temp")
-                latest["fan"]       = d.get("fan", 0)
-                latest["rpm"]       = d.get("rpm", 0)
-                latest["phone"]     = d.get("phone", 0)
-                latest["alert"]     = d.get("alert", 0)
-                latest["boost"]     = d.get("boost", 0)
-                latest["fv"]        = d.get("fw", "?")
-                latest["net_kbps"]  = float(d.get("net_kbps", 0.0))
-                latest["sleep"]     = d.get("sleep", 0)
+                print(f"[POLL #{poll_count}] keys={sorted(d.keys())}")
+                print(f"[POLL #{poll_count}] net_kbps={d.get('net_kbps','MISSING')} "
+                      f"temp={d.get('temp')} fan={d.get('fan')} boost={d.get('boost')}")
+                latest["temp"]     = d.get("temp")
+                latest["fan"]      = d.get("fan", 0)
+                latest["rpm"]      = d.get("rpm", 0)
+                latest["phone"]    = d.get("phone", 0)
+                latest["alert"]    = d.get("alert", 0)
+                latest["boost"]    = d.get("boost", 0)
+                latest["fv"]       = d.get("fw", "?")
+                latest["net_kbps"] = float(d.get("net_kbps", 0.0))
+                latest["sleep"]    = d.get("sleep", 0)
                 latest["sleep_countdown"] = d.get("sleep_countdown", 0)
-                latest["opal"]      = d.get("opal", 1)
-                latest["fan_stall"] = d.get("fan_stall", 0)
+                latest["opal"]     = d.get("opal", 1)
 
                 if latest["temp"] is not None:
                     temp_hist.append(float(latest["temp"]))
@@ -211,20 +228,25 @@ def http_poll_loop():
 
                 set_status("connected")
             else:
+                if connected:
+                    print(f"[HTTP] bad status {r.status_code}")
                 connected = False
                 set_status(f"HTTP {r.status_code}")
         except Exception as e:
+            if connected:
+                print(f"[HTTP] {e}")
             connected = False
             set_status("disconnected")
             latest["boost"] = 0
             latest["sleep"] = 0
             latest["sleep_countdown"] = 0
-            latest["fan_stall"] = 0
         time.sleep(POLL_INTERVAL)
 
 
+
+
 def log_sync_loop():
-    """Pull sealed logs from ESP32."""
+    """V3.70: pull sealed logs from ESP32."""
     os.makedirs(LOG_DIR, exist_ok=True)
     while True:
         try:
@@ -266,10 +288,8 @@ def log_sync_loop():
                                   json={"name": fname}, timeout=5)
                     print(f"[LOG] synced {fname} ({len(fr.content)} bytes)")
         except Exception as e:
-            if DEBUG_GUI:
-                print(f"[LOG] sync error: {e}")
+            print(f"[LOG] sync error: {e}")
         time.sleep(30)
-
 
 def sync_time_once():
     global time_synced
@@ -283,8 +303,7 @@ def sync_time_once():
             time_synced = True
             print("[TIME] synced to ESP32")
     except Exception as e:
-        if DEBUG_GUI:
-            print(f"[TIME] failed: {e}")
+        print(f"[TIME] failed: {e}")
 
 
 def fetch_config():
@@ -301,9 +320,31 @@ def fetch_config():
             latest_config["temp"] = {"warning": 32.0, "panic": 34.0, "kill": 36.0}
         return latest_config
     except Exception as e:
-        if DEBUG_GUI:
-            print(f"[CFG] fetch failed: {e}")
+        print(f"[CFG] fetch failed: {e}")
         return None
+
+
+def _flatten_cfg(prefix, d, out):
+    for k, v in d.items():
+        key = f"{prefix}.{k}" if prefix else k
+        if isinstance(v, dict):
+            _flatten_cfg(key, v, out)
+        else:
+            out.append(f"{key}={v}")
+
+
+def post_config(payload):
+    try:
+        r = requests.post(f"{FANMATE_URL}/config", json=payload, timeout=5)
+        if r.status_code == 200:
+            parts = []
+            _flatten_cfg("", payload, parts)
+            print(f"[CFG] applied: {', '.join(parts)}")
+            return True
+        print(f"[CFG] HTTP {r.status_code}: {r.text}")
+    except Exception as e:
+        print(f"[CFG] post failed: {e}")
+    return False
 
 
 # ── Weather ──────────────────────────────────────────────────
@@ -332,8 +373,7 @@ def fetch_weather():
         )
         weather["updated"] = time.time()
     except Exception as e:
-        if DEBUG_GUI:
-            print(f"[WEATHER] {e}")
+        print(f"[WEATHER] {e}")
 
 
 def weather_thread_loop():
@@ -464,25 +504,24 @@ class SettingsDialog(tk.Toplevel):
                 row=self._row, column=0, sticky="w", pady=6)
             seg = tk.Frame(root)
             seg.grid(row=self._row, column=1, sticky="e", pady=6)
-            label_map = {"off": "OFF", "normal": "NORMAL", "aggressive": "BEAST"}
             for opt in options:
                 tk.Radiobutton(
-                    seg, text=label_map.get(opt, opt.upper()), variable=var, value=opt,
-                    indicatoron=0, width=10,
+                    seg, text=opt.upper(), variable=var, value=opt,
+                    indicatoron=0, width=9,
                     font=("Helvetica Neue", 10, "bold"),
                     relief="flat", bd=0, highlightthickness=0,
                 ).pack(side="left", padx=1)
             self._row += 1
 
-        section("🌡️", "HEAT CONTROL")
+        section("\U0001F321\uFE0F", "HEAT CONTROL")
         self.temp_warn = tk.StringVar(value=str(latest_config["temp"].get("warning", 32.0)))
-        field("Warning (°C)", self.temp_warn)
+        field("Warning (\u00B0C)", self.temp_warn)
         self.temp_panic = tk.StringVar(value=str(latest_config["temp"].get("panic", 34.0)))
-        field("Panic (°C)", self.temp_panic)
+        field("Panic (\u00B0C)", self.temp_panic)
         self.temp_kill = tk.StringVar(value=str(latest_config["temp"].get("kill", 36.0)))
-        field("Kill (°C)", self.temp_kill)
+        field("Kill (\u00B0C)", self.temp_kill)
 
-        section("⚡", "BOOST")
+        section("\u26A1", "BOOST")
         mode_map = {0: "off", 1: "normal", 2: "aggressive"}
         self.boost_mode = tk.StringVar(
             value=mode_map.get(latest_config["boost"].get("mode", 1), "normal"))
@@ -513,7 +552,7 @@ class SettingsDialog(tk.Toplevel):
                          relief="flat", highlightthickness=1).pack(side="left")
             self._row += 1
 
-        section("🌙", "NIGHT")
+        section("\U0001F319", "NIGHT")
         self.night_start = tk.StringVar(value=str(latest_config["night"].get("start", 22)))
         field("Start hour (0-23)", self.night_start)
         self.night_end = tk.StringVar(value=str(latest_config["night"].get("end", 7)))
@@ -521,7 +560,7 @@ class SettingsDialog(tk.Toplevel):
         self.night_max = tk.StringVar(value=str(latest_config["night"].get("nightMax", 75)))
         field("Night max (%)", self.night_max)
 
-        section("📱", "PHONE")
+        section("\U0001F4F1", "PHONE")
         self.phone_mode = tk.StringVar(
             value=latest_config["phone"].get("mode", "off"))
         segmented("Mode", self.phone_mode, ["off", "auto"])
@@ -623,535 +662,6 @@ class SettingsDialog(tk.Toplevel):
             self.app.root.after(0, lambda m=msg: messagebox.showerror("Settings", f"Failed:\n{m}"))
 
 
-class ReportPlot(tk.Canvas):
-    """Simple line plot with a title."""
-
-    def __init__(self, parent, app, w, h, y_min, y_max, color_key):
-        super().__init__(parent, width=w, height=h, highlightthickness=1, bd=0)
-        self.app = app
-        self.w, self.h = w, h
-        self.y_min, self.y_max = y_min, y_max
-        self.color_key = color_key
-        self.pad_l, self.pad_r, self.pad_t, self.pad_b = 46, 10, 20, 14
-        self.series = []
-        self.label = ""
-
-    def set_series(self, rows, key, label):
-        self.series = [r.get(key) for r in rows]
-        self.label = label
-        self.redraw()
-
-    def redraw(self):
-        t = self.app.theme
-        self.delete("all")
-        self.configure(bg=t["card"],
-                       highlightbackground=t["card_border"])
-        if not self.series:
-            return
-
-        pw = self.w - self.pad_l - self.pad_r
-        ph = self.h - self.pad_t - self.pad_b
-        lo, hi = self.y_min, self.y_max
-        rng = (hi - lo) or 1
-        n = len(self.series)
-
-        for i in range(4):
-            v = hi - (i / 3) * rng
-            y = self.pad_t + (i / 3) * ph
-            self.create_line(self.pad_l, y, self.w - self.pad_r, y, fill=t["grid"])
-            self.create_text(self.pad_l - 4, y, text=f"{v:.0f}",
-                             fill=t["muted"], font=("Helvetica Neue", 9), anchor="e")
-
-        self.create_text(self.pad_l, 8, text=self.label,
-                         fill=t["muted"], font=("Helvetica Neue", 10, "bold"), anchor="w")
-
-        pts = []
-        for i, v in enumerate(self.series):
-            if v is None:
-                continue
-            x = self.pad_l + (i / max(1, n - 1)) * pw
-            y = self.pad_t + ph - ((v - lo) / rng) * ph
-            pts.extend([x, y])
-        if len(pts) >= 4:
-            self.create_line(*pts, fill=t[self.color_key], width=2,
-                             capstyle=tk.ROUND, joinstyle=tk.ROUND)
-
-
-class Report2H(tk.Toplevel):
-    """Two-hour report: last two sealed logs, plots + exec summary."""
-
-    def __init__(self, parent, app):
-        super().__init__(parent)
-        self.app = app
-        self.title("Fan-Mate Report — Last 2 Hours")
-        self.resizable(False, False)
-        self.transient(parent)
-
-        files = self._find_recent_files(2)
-        if not files:
-            tk.Label(self, text="No log files found in\n" + LOG_DIR,
-                     font=("Helvetica Neue", 13), padx=30, pady=30).pack()
-            tk.Button(self, text="Close", command=self.destroy).pack(pady=(0, 20))
-            self._apply_theme()
-            return
-
-        rows = []
-        for path in files:
-            rows.extend(self._parse(path))
-
-        summary = self._summarise(rows, files)
-        self._build_ui(rows, summary)
-        self._apply_theme()
-
-    def _find_recent_files(self, n):
-        import glob
-        pattern = os.path.join(LOG_DIR, "log-*.csv")
-        files = [p for p in glob.glob(pattern) if not p.endswith(".part")]
-        files.sort()
-        return files[-n:]
-
-    def _parse(self, path):
-        out = []
-        try:
-            with open(path) as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith("timestamp"):
-                        continue
-                    parts = line.split(",")
-                    if len(parts) < 6:
-                        continue
-                    try:
-                        ts = datetime.strptime(parts[0], "%Y-%m-%d %H:%M:%S")
-                    except Exception:
-                        continue
-                    try:
-                        temp = float(parts[1])
-                        net  = float(parts[2])
-                        boost = int(parts[3])
-                        fan  = int(parts[4])
-                        rpm  = int(parts[5])
-                    except Exception:
-                        continue
-                    out.append({
-                        "t": ts, "temp": temp, "net": net,
-                        "boost": boost, "fan": fan, "rpm": rpm,
-                    })
-        except Exception as e:
-            print(f"[REPORT] parse {path}: {e}")
-        return out
-
-    def _summarise(self, rows, files):
-        if not rows:
-            return {}
-        temps = [r["temp"] for r in rows if r["temp"] > 0]
-        nets  = [r["net"] for r in rows]
-        fans  = [r["fan"] for r in rows]
-        rpms  = [r["rpm"] for r in rows if r["rpm"] > 0]
-        boosts = [r["boost"] for r in rows]
-
-        start = rows[0]["t"]
-        end = rows[-1]["t"]
-        span_min = (end - start).total_seconds() / 60.0
-        expected = int(round(span_min * 60 / 15))
-        missing = max(0, expected - len(rows))
-
-        gear0 = sum(1 for b in boosts if b == 0)
-        gear12 = sum(1 for b in boosts if 1 <= b <= 2)
-        gear34 = sum(1 for b in boosts if 3 <= b <= 4)
-        fan_on = sum(1 for f in fans if f > 0)
-
-        return {
-            "start": start, "end": end,
-            "span_min": span_min,
-            "rows": len(rows),
-            "missing": missing,
-            "files": [os.path.basename(p) for p in files],
-            "temp_first": temps[0] if temps else 0,
-            "temp_last":  temps[-1] if temps else 0,
-            "temp_min":   min(temps) if temps else 0,
-            "temp_max":   max(temps) if temps else 0,
-            "temp_avg":   sum(temps)/len(temps) if temps else 0,
-            "net_peak":   max(nets) if nets else 0,
-            "net_avg":    sum(nets)/len(nets) if nets else 0,
-            "fan_peak":   max(fans) if fans else 0,
-            "rpm_peak":   max(rpms) if rpms else 0,
-            "fan_on_pct": 100*fan_on/len(fans) if fans else 0,
-            "gear0_pct":  100*gear0/len(boosts) if boosts else 0,
-            "gear12_pct": 100*gear12/len(boosts) if boosts else 0,
-            "gear34_pct": 100*gear34/len(boosts) if boosts else 0,
-        }
-
-    def _build_ui(self, rows, s):
-        pad = 16
-        wrap = tk.Frame(self)
-        wrap.pack(fill="both", expand=True, padx=pad, pady=pad)
-
-        tk.Label(wrap, text=f"Last 2 Hours  ·  {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')}",
-                 font=("Helvetica Neue", 15, "bold")).pack(anchor="w")
-        tk.Label(wrap, text="  ·  ".join(s["files"]),
-                 font=("Helvetica Neue", 10)).pack(anchor="w", pady=(0, 10))
-
-        plot_w, plot_h = 620, 110
-        self.net_plot = ReportPlot(wrap, self.app, plot_w, plot_h,
-                                   y_min=0, y_max=max(2048, s["net_peak"]*1.1),
-                                   color_key="blue")
-        self.net_plot.pack(pady=(0, 6))
-        self.net_plot.set_series(rows, "net", "NETWORK (KB/s)")
-
-        self.fan_plot = ReportPlot(wrap, self.app, plot_w, plot_h,
-                                   y_min=0, y_max=100,
-                                   color_key="green")
-        self.fan_plot.pack(pady=(0, 6))
-        self.fan_plot.set_series(rows, "fan", "FAN (%)")
-
-        self.temp_plot = ReportPlot(wrap, self.app, plot_w, plot_h,
-                                    y_min=15, y_max=45,
-                                    color_key="orange")
-        self.temp_plot.pack(pady=(0, 12))
-        self.temp_plot.set_series(rows, "temp", "TEMP (°C)")
-
-        summary = tk.Frame(wrap)
-        summary.pack(fill="x")
-
-        def col(label, value):
-            c = tk.Frame(summary)
-            c.pack(side="left", expand=True, fill="x", padx=6)
-            tk.Label(c, text=label, font=("Helvetica Neue", 9, "bold"),
-                     anchor="w").pack(fill="x")
-            tk.Label(c, text=value, font=("Helvetica Neue", 13, "bold"),
-                     anchor="w").pack(fill="x")
-
-        col("TEMP START",  f"{s['temp_first']:.1f}°C")
-        col("TEMP END",    f"{s['temp_last']:.1f}°C")
-        col("TEMP MIN",    f"{s['temp_min']:.1f}°C")
-        col("TEMP MAX",    f"{s['temp_max']:.1f}°C")
-        col("TEMP AVG",    f"{s['temp_avg']:.1f}°C")
-
-        summary2 = tk.Frame(wrap)
-        summary2.pack(fill="x", pady=(10, 0))
-
-        def col2(label, value):
-            c = tk.Frame(summary2)
-            c.pack(side="left", expand=True, fill="x", padx=6)
-            tk.Label(c, text=label, font=("Helvetica Neue", 9, "bold"),
-                     anchor="w").pack(fill="x")
-            tk.Label(c, text=value, font=("Helvetica Neue", 13, "bold"),
-                     anchor="w").pack(fill="x")
-
-        col2("NET PEAK",   f"{s['net_peak']:.0f} KB/s")
-        col2("NET AVG",    f"{s['net_avg']:.0f} KB/s")
-        col2("FAN PEAK",   f"{s['fan_peak']}%")
-        col2("RPM PEAK",   f"{s['rpm_peak']}")
-        col2("FAN ON",     f"{s['fan_on_pct']:.0f}%")
-
-        foot = tk.Frame(wrap)
-        foot.pack(fill="x", pady=(16, 0))
-        tk.Label(foot,
-                 text=(f"rows: {s['rows']}  ·  missing: {s['missing']}  ·  "
-                       f"span: {s['span_min']:.0f} min  ·  "
-                       f"gear 0: {s['gear0_pct']:.0f}%  "
-                       f"1-2: {s['gear12_pct']:.0f}%  "
-                       f"3-4: {s['gear34_pct']:.0f}%"),
-                 font=("Helvetica Neue", 10)).pack(anchor="w")
-
-        tk.Button(wrap, text="Close", width=12,
-                  font=("Helvetica Neue", 11),
-                  command=self.destroy).pack(pady=(14, 0))
-
-    def _apply_theme(self):
-        t = self.app.theme
-        self.configure(bg=t["bg"])
-        self._theme_recursive(self, t)
-
-    def _theme_recursive(self, w, t):
-        try:
-            cls = w.winfo_class()
-        except Exception:
-            return
-        if cls in ("Frame", "Toplevel"):
-            w.configure(bg=t["bg"])
-        elif cls == "Label":
-            w.configure(bg=t["bg"], fg=t["fg"])
-        elif cls == "Button":
-            w.configure(bg=t["card"], fg=t["fg"],
-                        activebackground=t["accent"], activeforeground=t["fg"])
-        for c in w.winfo_children():
-            self._theme_recursive(c, t)
-
-
-class DynaTune(tk.Toplevel):
-    """Health check for fan + turbo performance. Reads ALL log files."""
-
-    def __init__(self, parent, app):
-        super().__init__(parent)
-        self.app = app
-        self.title("Dyna Tune — Health Check")
-        self.resizable(False, False)
-        self.transient(parent)
-
-        self._rows = []
-        self._files = []
-        self._score_colors = []
-        self._load_all()
-
-        if not self._rows:
-            tk.Label(self, text="No log files found in\n" + LOG_DIR,
-                     font=("Helvetica Neue", 13), padx=30, pady=30).pack()
-            tk.Button(self, text="Close", command=self.destroy).pack(pady=(0, 20))
-            self._apply_theme()
-            return
-
-        self._build_ui()
-        self._apply_theme()
-
-    def _load_all(self):
-        import glob
-        pattern = os.path.join(LOG_DIR, "log-*.csv")
-        files = [p for p in glob.glob(pattern) if not p.endswith(".part")]
-        files.sort()
-        self._files = files
-        for path in files:
-            self._rows.extend(self._parse(path))
-        self._rows.sort(key=lambda r: r["t"])
-
-    def _parse(self, path):
-        out = []
-        try:
-            with open(path) as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith("timestamp"):
-                        continue
-                    parts = line.split(",")
-                    if len(parts) < 6:
-                        continue
-                    try:
-                        ts = datetime.strptime(parts[0], "%Y-%m-%d %H:%M:%S")
-                    except Exception:
-                        continue
-                    try:
-                        temp = float(parts[1])
-                        net  = float(parts[2])
-                        boost = int(parts[3])
-                        fan  = int(parts[4])
-                        rpm  = int(parts[5])
-                    except Exception:
-                        continue
-                    out.append({
-                        "t": ts, "temp": temp, "net": net,
-                        "boost": boost, "fan": fan, "rpm": rpm,
-                    })
-        except Exception as e:
-            print(f"[DYNA] parse {path}: {e}")
-        return out
-
-    def _score_fan(self):
-        rows = self._rows
-        issues = []
-        score = 10
-
-        fan_on = [r for r in rows if r["fan"] > 0]
-        if not fan_on:
-            return 10, ["No fan activity in window — nothing to grade"]
-
-        stall_frames = [r for r in rows if r["fan"] > 0 and r["rpm"] == 0]
-        if stall_frames:
-            score -= min(8, 5 + len(stall_frames) // 10)
-            issues.append(f"{len(stall_frames)} frames at fan>0 with rpm=0 — possible stall")
-
-        full_fan = [r for r in rows if r["fan"] >= 95]
-        if full_fan:
-            peak = max(r["rpm"] for r in full_fan)
-            if peak < 2000:
-                score -= 4
-                issues.append(f"Peak RPM {peak} at 100% fan — very low")
-            elif peak < 3500:
-                score -= 2
-                issues.append(f"Peak RPM {peak} at 100% fan — a bit low")
-
-        if max(r["fan"] for r in rows) < 100 and max(r["net"] for r in rows) > 2000:
-            score -= 1
-            issues.append("Fan never reached 100% despite heavy traffic")
-
-        pairs = [(r["fan"], r["rpm"]) for r in rows if r["rpm"] > 0]
-        if len(pairs) > 20:
-            xs = [p[0] for p in pairs]
-            ys = [p[1] for p in pairs]
-            mx = sum(xs)/len(xs); my = sum(ys)/len(ys)
-            num = sum((x-mx)*(y-my) for x,y in pairs)
-            dx = (sum((x-mx)**2 for x in xs))**0.5
-            dy = (sum((y-my)**2 for y in ys))**0.5
-            r = num / (dx*dy) if dx*dy > 0 else 0
-            if r < 0.3:
-                score -= 2
-                issues.append(f"Fan% and RPM weakly correlated (r={r:.2f})")
-            elif r < 0.6:
-                score -= 1
-                issues.append(f"Fan% and RPM loosely correlated (r={r:.2f})")
-
-        return max(0, min(10, score)), issues
-
-    def _score_turbo(self):
-        rows = self._rows
-        issues = []
-        score = 10
-
-        boost_frames = [r for r in rows if r["boost"] > 0]
-        max_net = max((r["net"] for r in rows), default=0)
-
-        if not boost_frames:
-            if max_net > 700:
-                score = 0
-                issues.append(f"Traffic peaked at {max_net:.0f} KB/s but boost never fired")
-            else:
-                issues.append("No load in window — boost untested")
-            return score, issues
-
-        gears = [r["boost"] for r in boost_frames]
-        max_gear = max(gears)
-        peak_net = max(r["net"] for r in rows)
-        if max_gear == 1:
-            if peak_net > 2000:
-                score -= 3
-                issues.append(f"Boost only reached gear 1 despite peak {peak_net:.0f} KB/s")
-            elif peak_net > 1000:
-                score -= 1
-                issues.append(f"Boost only reached gear 1 (peak {peak_net:.0f} KB/s — moderate load)")
-
-        changes = 0
-        prev = None
-        prev_t = None
-        for r in rows:
-            if prev is not None and r["boost"] != prev:
-                if prev_t is not None and (r["t"] - prev_t).total_seconds() < 20:
-                    changes += 1
-                prev = r["boost"]
-                prev_t = r["t"]
-            elif prev is None:
-                prev = r["boost"]
-                prev_t = r["t"]
-        if changes > 10:
-            score -= 4
-            issues.append(f"{changes} rapid gear changes — possible chatter")
-        elif changes > 5:
-            score -= 2
-            issues.append(f"{changes} gear changes close together — mild chatter")
-
-        stuck = 0
-        prev = None
-        for r in rows:
-            if prev and prev["boost"] >= 3 and r["net"] < 200:
-                stuck += 1
-            prev = r
-        if stuck > 20:
-            score -= 2
-            issues.append(f"Gear stayed ≥3 for {stuck} frames after traffic dropped")
-
-        return max(0, min(10, score)), issues
-
-    def _build_ui(self):
-        pad = 16
-        wrap = tk.Frame(self)
-        wrap.pack(fill="both", expand=True, padx=pad, pady=pad)
-
-        span = (self._rows[-1]["t"] - self._rows[0]["t"]).total_seconds() / 60.0
-        tk.Label(wrap, text="🩺  Dyna Tune Health Check",
-                 font=("Helvetica Neue", 15, "bold")).pack(anchor="w")
-        tk.Label(wrap,
-                 text=f"{len(self._files)} files  ·  {len(self._rows)} rows  ·  span {span:.0f} min",
-                 font=("Helvetica Neue", 10)).pack(anchor="w", pady=(0, 12))
-
-        fan_score, fan_issues = self._score_fan()
-        turbo_score, turbo_issues = self._score_turbo()
-
-        self._section(wrap, "🌀 FAN", fan_score, fan_issues)
-        self._section(wrap, "🔥 TURBO", turbo_score, turbo_issues)
-
-        total = fan_score + turbo_score
-        verdict = "HEALTHY" if total >= 18 else "NEEDS ATTENTION" if total >= 12 else "PROBLEM"
-        color_key = "green" if total >= 18 else "orange" if total >= 12 else "red"
-
-        tk.Frame(wrap, height=1).pack(fill="x", pady=8)
-
-        self.total_lbl = tk.Label(wrap,
-                                  text=f"🩺  OVERALL: {total}/20  ·  {verdict}",
-                                  font=("Helvetica Neue", 14, "bold"))
-        self.total_lbl.pack(anchor="w")
-        self._total_color = color_key
-
-        tk.Button(wrap, text="Refresh", width=12,
-                  font=("Helvetica Neue", 11),
-                  command=self._refresh).pack(pady=(14, 0))
-        tk.Button(wrap, text="Close", width=12,
-                  font=("Helvetica Neue", 11),
-                  command=self.destroy).pack(pady=(6, 0))
-
-    def _section(self, parent, title, score, issues):
-        fr = tk.Frame(parent)
-        fr.pack(fill="x", pady=(8, 4))
-
-        score_color = "green" if score >= 9 else "yellow" if score >= 6 else "red"
-
-        head = tk.Frame(fr)
-        head.pack(fill="x")
-        tk.Label(head, text=title, font=("Helvetica Neue", 13, "bold"),
-                 anchor="w").pack(side="left")
-        sl = tk.Label(head, text=f"{score}/10",
-                      font=("Helvetica Neue", 13, "bold"), anchor="e")
-        sl.pack(side="right")
-        self._score_colors.append((sl, score_color))
-
-        if not issues:
-            tk.Label(fr, text="   ✅ No issues detected",
-                     font=("Helvetica Neue", 11), anchor="w").pack(fill="x")
-            return
-
-        for issue in issues:
-            tk.Label(fr, text="   💡 " + issue,
-                     font=("Helvetica Neue", 11), anchor="w",
-                     wraplength=560, justify="left").pack(fill="x")
-
-    def _refresh(self):
-        for w in self.winfo_children():
-            w.destroy()
-        self._rows = []
-        self._files = []
-        self._score_colors = []
-        self._load_all()
-        if not self._rows:
-            tk.Label(self, text="No log files found.",
-                     font=("Helvetica Neue", 13), padx=30, pady=30).pack()
-            tk.Button(self, text="Close", command=self.destroy).pack(pady=(0, 20))
-        else:
-            self._build_ui()
-        self._apply_theme()
-
-    def _apply_theme(self):
-        t = self.app.theme
-        self.configure(bg=t["bg"])
-        self._theme_recursive(self, t)
-        for lbl, ck in self._score_colors:
-            lbl.configure(bg=t["bg"], fg=t[ck])
-        if hasattr(self, "total_lbl") and hasattr(self, "_total_color"):
-            self.total_lbl.configure(bg=t["bg"], fg=t[self._total_color])
-
-    def _theme_recursive(self, w, t):
-        try:
-            cls = w.winfo_class()
-        except Exception:
-            return
-        if cls in ("Frame", "Toplevel"):
-            w.configure(bg=t["bg"])
-        elif cls == "Label":
-            w.configure(bg=t["bg"], fg=t["fg"])
-        elif cls == "Button":
-            w.configure(bg=t["card"], fg=t["fg"],
-                        activebackground=t["accent"], activeforeground=t["fg"])
-        for c in w.winfo_children():
-            self._theme_recursive(c, t)
-
-
 # ── App ──────────────────────────────────────────────────────
 
 class App:
@@ -1160,16 +670,16 @@ class App:
         root.title(f"🌀 Fan-Mate v{GUI_VERSION}")
         root.resizable(False, False)
 
+        # Window icon
         try:
             icon_path = os.path.join(FANMATE_DIR, "fanmate.png")
             if os.path.exists(icon_path):
                 _icon = tk.PhotoImage(file=icon_path)
                 root.iconphoto(True, _icon)
                 root._icon_ref = _icon
-                print("[ICON] loaded")
+                print(f"[ICON] loaded")
         except Exception as e:
             print(f"[ICON] {e}")
-
         self.theme = current_theme()
         self.is_day = is_daytime()
         self.turbo_phase = 0
@@ -1179,12 +689,6 @@ class App:
         am.add_command(label="⚙️  Settings", command=self.menu_settings)
         am.add_command(label="🌐  Open Serial Page", command=self.open_serial_page)
         am.add_command(label="📍  Open Dashboard", command=self.open_dashboard)
-        am.add_separator()
-        reports = tk.Menu(am, tearoff=0)
-        reports.add_command(label="Last 2 Hours", command=self.menu_report_2h)
-        reports.add_command(label="Daily",        command=self.menu_report_daily)
-        reports.add_command(label="Weekly",       command=self.menu_report_weekly)
-        am.add_cascade(label="📊  Reports", menu=reports)
         am.add_separator()
         am.add_command(label="🎛️  Dyna Tune Turbo Boost", command=self.menu_dyna_tune)
         am.add_separator()
@@ -1201,6 +705,7 @@ class App:
         self.status_label = tk.Label(root, text="connecting…", font=("Helvetica Neue", 10, "italic"))
         self.status_label.pack(pady=(0, 8))
 
+        # Weather
         self.weather_card = Card(root, self)
         self.weather_card.pack(fill="x", padx=18, pady=(0, 8))
         self.weather_title = tk.Label(self.weather_card, text="📍 Atkinsons Dam", font=("Helvetica Neue", 11, "bold"))
@@ -1212,6 +717,7 @@ class App:
         self.weather_range_lbl = tk.Label(self.weather_card, text="", font=FONT_TINY)
         self.weather_range_lbl.pack(pady=(0, 10))
 
+        # Phone temp
         self.temp_card = Card(root, self)
         self.temp_card.pack(fill="x", padx=18, pady=8)
         self.temp_title = tk.Label(self.temp_card, text="🌡️ PHONE TEMPERATURE", font=FONT_LABEL)
@@ -1219,6 +725,7 @@ class App:
         self.temp_lbl = tk.Label(self.temp_card, text="--.-°C", font=FONT_BIG)
         self.temp_lbl.pack(pady=(0, 10))
 
+        # Fan / RPM
         self.fan_card = Card(root, self)
         self.fan_card.pack(fill="x", padx=18, pady=8)
         fr = tk.Frame(self.fan_card)
@@ -1227,6 +734,7 @@ class App:
         self._divider(fr)
         self.rpm_lbl = self._col(fr, "⚙️ RPM", "--")
 
+        # Phone / Alert
         self.status_card = Card(root, self)
         self.status_card.pack(fill="x", padx=18, pady=8)
         sr = tk.Frame(self.status_card)
@@ -1235,11 +743,13 @@ class App:
         self._divider(sr)
         self.alert_lbl = self._col(sr, "📊 STATUS", "None")
 
+        # Time
         self.time_card = Card(root, self)
         self.time_card.pack(fill="x", padx=18, pady=8)
         self.time_lbl = tk.Label(self.time_card, text="--:--", font=("Helvetica Neue", 14, "bold"))
         self.time_lbl.pack(pady=10)
 
+        # Network rate
         self.data_card = Card(root, self)
         self.data_card.pack(fill="x", padx=18, pady=8)
         self.data_title = tk.Label(self.data_card, text="📥 NETWORK RATE (ESP32)", font=FONT_LABEL)
@@ -1249,6 +759,7 @@ class App:
         self.data_graph = Graph(self.data_card, self, y_min=0, y_max=2048, w=380, h=100)
         self.data_graph.pack(padx=6, pady=(0, 8))
 
+        # Temp graph
         self.graph_card = Card(root, self)
         self.graph_card.pack(fill="x", padx=18, pady=8)
         self.graph_title = tk.Label(self.graph_card, text="📈 TEMPERATURE HISTORY", font=FONT_LABEL)
@@ -1272,6 +783,8 @@ class App:
         self.theme_check()
         self.tick()
 
+    # ── Menu actions ─────────────────────────────────────────
+
     def menu_settings(self):
         SettingsDialog(self.root, self)
 
@@ -1283,17 +796,13 @@ class App:
         import webbrowser
         webbrowser.open(f"{FANMATE_URL}/")
 
-    def menu_report_2h(self):
-        Report2H(self.root, self)
-
-    def menu_report_daily(self):
-        messagebox.showinfo("Daily Report", "Coming soon.")
-
-    def menu_report_weekly(self):
-        messagebox.showinfo("Weekly Report", "Coming soon.")
-
     def menu_dyna_tune(self):
-        DynaTune(self.root, self)
+        messagebox.showinfo(
+            "🎛️ Dyna Tune Turbo Boost",
+            "Analyzes all logs in ~/Documents/FanMate_logs/\n\n"
+            "Coming soon.\n\n"
+            "Minimum 3 days / 20 events needed for reliable suggestions."
+        )
 
     def menu_ota(self):
         if not os.path.isfile(BUILD_BIN):
@@ -1345,6 +854,7 @@ class App:
         print(f"[OTA] version: {src_ver}")
         print(f"[OTA] size:    {os.path.getsize(BUILD_BIN):,} bytes")
 
+        # Archive .bin
         try:
             import shutil
             fw_dir = os.path.join(LOG_DIR, "firmware")
@@ -1367,7 +877,10 @@ class App:
             dt = time.time() - t0
             print(f"[OTA] HTTP {r.status_code} ({dt:.1f}s)")
 
-            if r.status_code != 200:
+            if r.status_code == 200:
+                self.root.after(0, lambda: messagebox.showinfo(
+                    "OTA", "Firmware sent. Device rebooting."))
+            else:
                 self.root.after(0, lambda: messagebox.showerror(
                     "OTA", f"Failed: HTTP {r.status_code}"))
         except Exception as e:
@@ -1377,6 +890,8 @@ class App:
 
         print("[OTA] done")
         print("=" * 50)
+
+    # ── Helpers ──────────────────────────────────────────────
 
     def _col(self, parent, label, value):
         c = tk.Frame(parent)
@@ -1438,10 +953,13 @@ class App:
             self.apply_theme()
         self.root.after(60_000, self.theme_check)
 
+    # ── Main tick ────────────────────────────────────────────
+
     def tick(self):
         t = self.theme
         d = latest
 
+        # ── Status line priority ─────────────────────────────
         self.turbo_phase = (self.turbo_phase + 1) % 4
         sleep = d.get("sleep", 0)
         countdown = d.get("sleep_countdown", 0)
@@ -1469,7 +987,7 @@ class App:
         elif boost and connected:
             turbo_colors = ["#00ff00", "#ffff00", "#ff8800", "#ff0000"]
             self.status_label.config(
-                text="🏎️ TURBO",
+                text="🏎️ Boosting",
                 font=("Helvetica Neue", 13, "bold"),
                 fg=turbo_colors[self.turbo_phase],
             )
@@ -1486,6 +1004,7 @@ class App:
                 fg=t["muted"],
             )
 
+        # ── Temperature ──────────────────────────────────────
         temp = d.get("temp")
         if temp is None:
             self.temp_lbl.config(text="--.-°C  ❔", fg=t["muted"])
@@ -1495,6 +1014,7 @@ class App:
                  else t["yellow"] if temp < 45 else t["red"])
             self.temp_lbl.config(text=f"{temp:.1f}°C  {em}", fg=c)
 
+        # ── Fan / RPM ────────────────────────────────────────
         fan_pct = int(d.get("fan", 0))
         fe = fan_emoji(fan_pct)
         self.fan_lbl.config(
@@ -1504,6 +1024,7 @@ class App:
         rpm = int(d.get("rpm", 0))
         self.rpm_lbl.config(text=f"{rpm}", fg=t["green"] if rpm > 0 else t["muted"])
 
+        # ── Phone ────────────────────────────────────────────
         phone_mode = latest_config.get("phone", {}).get("mode", "off")
         if phone_mode == "off":
             self.phone_lbl.config(text="BENCH 🧪", fg=t["muted"])
@@ -1514,13 +1035,11 @@ class App:
                 fg=t["green"] if phone else t["muted"],
             )
 
+        # ── Status ───────────────────────────────────────────
         alert = int(d.get("alert", 0))
-        stall = d.get("fan_stall", 0)
         boost_active = d.get("boost", 0) == 1
 
-        if stall:
-            self.alert_lbl.config(text="FAN STALL 🚨", fg=t["red"])
-        elif alert >= 3:
+        if alert >= 3:
             self.alert_lbl.config(text="Kill 💀", fg=t["red"])
         elif alert == 2:
             self.alert_lbl.config(text="Oh Shit 🚨", fg=t["red"])
@@ -1531,23 +1050,29 @@ class App:
         else:
             self.alert_lbl.config(text="None", fg=t["muted"])
 
+        # ── Weather ──────────────────────────────────────────
         self.weather_temp_lbl.config(text=f"{weather['temp']:.1f}°")
         self.weather_desc_lbl.config(text=weather["desc"])
         self.weather_range_lbl.config(
             text=f"⬆️ {weather['high']:.0f}°   ⬇️ {weather['low']:.0f}°"
         )
 
+        # ── Time ─────────────────────────────────────────────
         self.time_lbl.config(text=f"{local_time_str()}  {time_emoji()}")
 
+        # ── Network rate ─────────────────────────────────────
         rate_kbps = float(d.get("net_kbps", 0.0))
         if rate_kbps >= 1024:
             self.rate_lbl.config(text=f"{rate_kbps/1024:.2f} MB/s")
         else:
             self.rate_lbl.config(text=f"{rate_kbps:.1f} KB/s")
 
-        self.temp_graph.trigger = latest_config.get("temp", {}).get("warning", None)
+        # ── Graphs ───────────────────────────────────────────
+        # Temp graph — red line at alarmWarning
+        self.temp_graph.trigger = latest_config.get("alarm", {}).get("warning", None)
         self.temp_graph.set_data(temp_hist)
 
+        # Network graph — red line at current boost threshold
         boost_mode = latest_config.get("boost", {}).get("mode", 1)
         if boost_mode == 1:
             thr = latest_config.get("boost", {}).get("normal", {}).get("threshold")

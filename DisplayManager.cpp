@@ -3,6 +3,7 @@
 #include "Settings.h"
 #include "Logging.h"
 #include "WiFiManager.h"
+#include "FanController.h"
 
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -13,8 +14,8 @@
 Adafruit_SSD1306_72x40 display(SDA_PIN, SCL_PIN);
 
 // ============================================================
-//  OLED driver — V3.21
-//  Bottom line: time (right-aligned) or "Log Paused"
+//  OLED driver — V3.72
+//  Bottom line priority: FAN STALL > Log Paused > time
 // ============================================================
 
 void initDisplay() {
@@ -89,12 +90,13 @@ void updateDisplay(
     // ---- Bottom line ----
     display.setTextSize(1);
 
-    if (log_rotation_paused()) {
-        // "Log Paused" centred-ish at bottom
+    if (fan_stall_active()) {
+        display.setCursor(0, 33);
+        display.print(F("FAN STALL"));
+    } else if (log_rotation_paused()) {
         display.setCursor(0, 33);
         display.print(F("Log Paused"));
     } else {
-        // Time, right-aligned at bottom
         struct tm timeinfo;
         if (getLocalTime(&timeinfo, 10)) {
             char timeBuf[6];

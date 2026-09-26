@@ -60,7 +60,6 @@ static void start_ntp() {
     ntp_started = true;
 }
 
-
 bool ntp_synced() { return _ntp_synced_flag; }
 
 void ntp_loop() {
@@ -77,6 +76,11 @@ void wifi_loop() {
     if (!wifi_inited) return;
 
     wl_status_t status = WiFi.status();
+
+    // If WiFi drops, require fresh NTP sync on reconnect
+    if (status != WL_CONNECTED) {
+        _ntp_synced_flag = false;
+    }
 
     if (status == WL_CONNECTED) {
         if (wifi_connected_at == 0) {

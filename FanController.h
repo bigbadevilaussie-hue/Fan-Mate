@@ -19,4 +19,7 @@ void updateFanAndAlerts(
 
 void silenceFanAndAlerts();
 
+// Stall detection — true when fan commanded on but tach reads zero
+bool fan_stall_active();
+
 #endif

@@ -2,6 +2,7 @@
 #include "Config.h"
 #include "Settings.h"
 #include "AutoBoost.h"
+#include "Logging.h"
 
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -30,6 +31,10 @@ static float         lastGoodTemp          = 25.0f;
 // Gear state
 static int lastFanGear  = -1;
 static int lastTempGear = -1;
+
+// Stall detection
+static unsigned long fan_stall_since = 0;
+static bool          fan_stall_alarm = false;
 
 // ------------------------------------------------------------
 void readDS18B20(float &currentTemp) {
@@ -71,10 +76,6 @@ void updatePhoneDetection() {
 
 // ------------------------------------------------------------
 //  Temp gear: 0-4 based on warning/panic/kill
-//     gear 0: temp < warning - hysteresis
-//     gear 1-2: at warning (ramp from 25-50)
-//     gear 3: at panic
-//     gear 4: at kill
 // ------------------------------------------------------------
 static int compute_temp_gear(float t) {
     if (t >= config.tempKill)      return 4;
@@ -85,7 +86,7 @@ static int compute_temp_gear(float t) {
 }
 
 // ------------------------------------------------------------
-//  Beep on gear change
+//  Single beep (used for gear changes)
 // ------------------------------------------------------------
 static void beep_once() {
     ledcWrite(BUZZER_CHANNEL, 200);
@@ -94,38 +95,48 @@ static void beep_once() {
 }
 
 // ------------------------------------------------------------
+//  Multi-beep sequence for alerts.
+//  beepMs = on duration, gapMs = off duration between beeps.
+//  intervalMs = time between full sequences.
+// ------------------------------------------------------------
 static void runBeepSequence(int beeps, int beepMs, int gapMs,
                             int duty, int intervalMs) {
     unsigned long now = millis();
+
+    // idle — waiting for next sequence
     if (!beepActive && beepIndex == 0) {
         if (now - lastAlertStart >= (unsigned long)intervalMs) {
             lastAlertStart = now;
-            beepIndex = 0;
             beepActive = true;
             beepTimer = now;
             ledcWrite(BUZZER_CHANNEL, duty);
-            Serial.printf("[BEEP] start %d\n", beeps);
         }
         return;
     }
-    if (!beepActive) return;
-    if (beepActive && now - beepTimer >= (unsigned long)beepMs) {
-        ledcWrite(BUZZER_CHANNEL, 0);
-        beepActive = false;
-        beepTimer = now;
-    } else if (!beepActive && now - beepTimer >= (unsigned long)gapMs) {
-        beepIndex++;
-        if (beepIndex >= beeps) {
-            beepIndex = 0;
+
+    if (beepActive) {
+        if (now - beepTimer >= (unsigned long)beepMs) {
+            ledcWrite(BUZZER_CHANNEL, 0);
             beepActive = false;
-            lastAlertStart = now;
-        } else {
-            ledcWrite(BUZZER_CHANNEL, duty);
-            beepActive = true;
             beepTimer = now;
+        }
+    } else {
+        if (now - beepTimer >= (unsigned long)gapMs) {
+            beepIndex++;
+            if (beepIndex >= beeps) {
+                beepIndex = 0;
+                // stays idle until interval expires
+            } else {
+                ledcWrite(BUZZER_CHANNEL, duty);
+                beepActive = true;
+                beepTimer = now;
+            }
         }
     }
 }
+
+// ------------------------------------------------------------
+bool fan_stall_active() { return fan_stall_alarm; }
 
 // ------------------------------------------------------------
 void updateFanAndAlerts(
@@ -135,7 +146,7 @@ void updateFanAndAlerts(
     int &outAlert,
     bool &outPhonePresent
 ) {
-    // Alert level (buzzer)
+    // ---- Alert level (temperature) ----
     int newLevel = 0;
     if      (currentTemp >= config.tempKill)    newLevel = 3;
     else if (currentTemp >= config.tempPanic)   newLevel = 2;
@@ -155,31 +166,31 @@ void updateFanAndAlerts(
 
     bool effectivePhone = (config.phoneMode == "off") ? true : phonePresent;
 
-    // --- Fan gear = max(temp gear, boost gear) ---
+    // ---- Fan gear = max(temp gear, boost gear) ----
     int tempGear  = compute_temp_gear(currentTemp);
     int boostGear = auto_boost_gear();
     int fanGear   = (tempGear > boostGear) ? tempGear : boostGear;
 
-    // Beep on gear change
+    // ---- Beep on gear change ----
     if (fanGear != lastFanGear) {
         Serial.printf("[FAN] gear %d -> %d\n", lastFanGear, fanGear);
         lastFanGear = fanGear;
         beep_once();
     }
 
-    // Fan PWM: gear × 25% (or minimum spin-up)
+    // ---- Fan PWM ----
     int newPwm = 0;
     if (fanGear > 0) {
         newPwm = map(fanGear * 25, 1, 100, PWM_MIN, 255);
     }
 
-    // Night cap
+    // ---- Night cap ----
     if (settings_is_night()) {
         int cap = (config.nightMax * 255) / 100;
         if (newPwm > cap) newPwm = cap;
     }
 
-    // Phone gate
+    // ---- Phone gate ----
     if (config.phoneMode == "auto" && !effectivePhone) {
         newPwm = 0;
     }
@@ -188,8 +199,33 @@ void updateFanAndAlerts(
     fanPctLocal = map(fanPWM, 0, 255, 0, 100);
     ledcWrite(0, fanPWM);
 
-    // Alarm output
-    if (alertLevel == 3) {
+    // ---- Fan stall detection ----
+    // Fan commanded on (>=25%) but tach reads zero for >5s
+    if (fanPctLocal >= 25 && fanRPMLocal == 0) {
+        if (fan_stall_since == 0) {
+            fan_stall_since = millis();
+        } else if (millis() - fan_stall_since > 5000 && !fan_stall_alarm) {
+            fan_stall_alarm = true;
+            Serial.println("[FAN] STALL ALARM");
+            log_write_event("FAN_STALL");
+            ledcWrite(BUZZER_CHANNEL, BUZZER_LOUD);
+            delay(200);
+            ledcWrite(BUZZER_CHANNEL, 0);
+        }
+    } else {
+        fan_stall_since = 0;
+        if (fan_stall_alarm) {
+            fan_stall_alarm = false;
+            Serial.println("[FAN] recovered");
+            log_write_event("FAN_RECOVERED");
+        }
+    }
+
+    // ---- Alarm output ----
+    if (fan_stall_alarm) {
+        // stall alarm overrides temp beeps
+        runBeepSequence(5, 120, 120, BUZZER_LOUD, 15000);
+    } else if (alertLevel == 3) {
         runBeepSequence(10, 100, 50, BUZZER_LOUD, 30000);
     } else if (alertLevel == 2) {
         runBeepSequence(PANIC_BEEPS, PANIC_BEEP_MS, PANIC_GAP_MS,
@@ -218,6 +254,8 @@ void silenceFanAndAlerts() {
     beepActive = false;
     beepIndex = 0;
     lastFanGear = -1;
+    fan_stall_since = 0;
+    fan_stall_alarm = false;
 }
 
 static void IRAM_ATTR onTach() {

@@ -1,4 +1,4 @@
-// FAN-MATE V3.21 — HTTP Edition
+// FAN-MATE V3.72 — HTTP Edition
 // WiFi only. No BLE. OTA over HTTP.
 // Requires Arduino ESP32 core 2.x (2.0.17)
 
@@ -198,9 +198,11 @@ static void tick_15s() {
     log_rotate_check();
     log_check_full();
 
+#if DEBUG_VERBOSE
     log_print("[TICK] temp=%.1f fan=%d%% net=%.1f KB/s boost=%d rpm=%d\n",
                   currentTemp, fanPct, kbps_smooth,
                   auto_boost_gear() > 0 ? 1 : 0, fanRPM);
+#endif
 }
 
 // ============================================================
@@ -214,6 +216,7 @@ void loop() {
     unsigned long now = millis();
 
     wifi_loop();
+    ntp_loop();
     weather_loop();
     if (wifi_connected() && !server_ready) {
         server_setup();
@@ -270,6 +273,7 @@ void loop() {
         }
     }
 
+#if DEBUG_VERBOSE
     if (now - lastStatus >= 10000) {
         lastStatus = now;
         char stbuf[160];
@@ -287,4 +291,5 @@ void loop() {
         }
         log_print("%s", stbuf);
     }
+#endif
 }
