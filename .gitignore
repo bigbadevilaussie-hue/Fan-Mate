@@ -26,3 +26,6 @@ build/
 # Backups
 *.bak
 *.py.bak
+fanmate.py.before-*
+fanmate.py.pre-*
+fanmate/*_legacy.py
