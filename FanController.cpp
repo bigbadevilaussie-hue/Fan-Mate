@@ -4,6 +4,7 @@
 #include "AutoBoost.h"
 #include "Logging.h"
 #include "SerialBuffer.h"
+#include "OpalClient.h"          // ← added
 
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -165,10 +166,17 @@ void updateFanAndAlerts(
         beepActive = false;
         beepIndex = 0;
         ledcWrite(BUZZER_CHANNEL, 0);
-        if (alertLevel == 3)      log_print("[ALERT] KILL\n");
+
+        if (alertLevel == 3) {
+            log_print("[ALERT] KILL\n");
+            log_write_event("KILL");
+            bool ok = opal_set_repeater(false);          // ← the missing call
+            log_print("[OPAL] auto-kill: %s\n", ok ? "OK" : "FAILED");
+        }
         else if (alertLevel == 2) log_print("[ALERT] OH SHIT\n");
         else if (alertLevel == 1) log_print("[ALERT] WARNING\n");
         else                      log_print("[ALERT] normal\n");
+
         lastAlertStart = millis() - 120000;
     }
 
@@ -211,7 +219,6 @@ void updateFanAndAlerts(
 
 #if FAN_STALL_ENABLED
     // ---- Fan stall detection ----
-    // Fan commanded on (>=25%) but tach reads zero for >5s
     if (fanPctLocal >= 25 && fanRPMLocal == 0) {
         if (fan_stall_since == 0) {
             fan_stall_since = millis();
