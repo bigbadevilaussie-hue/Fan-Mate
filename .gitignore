@@ -30,3 +30,7 @@ fanmate.py.before-*
 fanmate.py.pre-*
 fanmate/*_legacy.py
 HANDOFF.md
+fanmate-v2.*.py
+fanmate-v3.0*.py
+fanmate.py.before-*
+PROJECT.md
