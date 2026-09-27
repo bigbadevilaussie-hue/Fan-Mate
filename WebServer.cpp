@@ -17,11 +17,6 @@
 #include <time.h>
 #include <sys/time.h>
 
-// ============================================================
-//  Web Server — HTTP interface
-//  V3.73
-// ============================================================
-
 static WebServer server(HTTP_PORT);
 
 extern volatile bool otaInProgress;
@@ -29,8 +24,6 @@ static bool otaStarted = false;
 static unsigned long host_last_ms = 0;
 
 static void note_host() { host_last_ms = millis(); }
-
-// ------------------------------------------------------------
 
 static void handle_serial_page() {
     String html = R"rawliteral(
@@ -60,20 +53,6 @@ window.onload = refresh;
 </head><body>
 <div class="top"><h1>Fan-Mate Serial</h1><a href="/">dashboard</a></div>
 <div id="log">loading...</div>
-<button onclick="triggerKill()" style="background-color: #8b0000; color: white; padding: 10px 15px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 10px;">🚨 KILL: Cut Repeater</button>
-<script>
-function triggerKill() {
-    if (confirm("CRITICAL: Shut down repeater immediately to cool the phone?")) {
-        fetch('/repeater/off', { method: 'POST' })
-            .then(res => {
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                return res.json();
-            })
-            .then(data => alert(data.status === 'success' ? 'Repeater killed.' : 'Failed to kill repeater.'))
-            .catch(err => alert('Error: ' + err.message));
-    }
-}
-</script>
 </body></html>
 )rawliteral";
     server.send(200, "text/html", html);
@@ -88,7 +67,6 @@ static void handle_root() {
     server.send_P(200, "text/html", INDEX_HTML);
 }
 
-// ------------------------------------------------------------
 static void handle_status() {
     note_host();
     extern float currentTemp;
@@ -164,7 +142,6 @@ static void handle_status() {
     server.send(200, "application/json", json);
 }
 
-// ------------------------------------------------------------
 static void handle_config_get() {
     String json = "{";
 
@@ -203,7 +180,6 @@ static void handle_config_get() {
     server.send(200, "application/json", json);
 }
 
-// ------------------------------------------------------------
 static void handle_config_post() {
     note_host();
     if (!server.hasArg("plain")) {
@@ -218,7 +194,6 @@ static void handle_config_post() {
     server.send(200, "text/plain", "OK");
 }
 
-// ------------------------------------------------------------
 static void handle_time_post() {
     note_host();
     if (!server.hasArg("plain")) {
@@ -251,7 +226,6 @@ static void handle_time_post() {
     server.send(200, "text/plain", "OK");
 }
 
-// ------------------------------------------------------------
 static void handle_log_download() {
     note_host();
     if (!LittleFS.exists("/log.csv")) {
@@ -269,7 +243,6 @@ static void handle_log_download() {
     f.close();
 }
 
-// ------------------------------------------------------------
 static void handle_log_info() {
     note_host();
     String json = "{";
@@ -282,14 +255,12 @@ static void handle_log_info() {
     server.send(200, "application/json", json);
 }
 
-// ------------------------------------------------------------
 static void handle_log_clear() {
     note_host();
     log_clear();
     server.send(200, "text/plain", "cleared");
 }
 
-// ------------------------------------------------------------
 static void handle_ota_upload() {
     HTTPUpload& upload = server.upload();
 
@@ -333,7 +304,6 @@ static void handle_ota_done() {
     }
 }
 
-// ------------------------------------------------------------
 static void handle_reboot() {
     note_host();
     log_write_event("REBOOT");
@@ -341,8 +311,6 @@ static void handle_reboot() {
     delay(500);
     ESP.restart();
 }
-
-// ------------------------------------------------------------
 
 extern size_t log_list_sealed(char names[][48], size_t max);
 extern bool   log_delete_sealed(const char* name);
@@ -460,11 +428,6 @@ void server_setup() {
 
     server.onNotFound([]() {
         server.send(404, "text/plain", "404");
-    });
-
-    server.on("/repeater/off", HTTP_POST, []() {
-        bool ok = opal_set_repeater(false);
-        server.send(ok ? 200 : 500, "application/json", ok ? "{\"status\":\"success\"}" : "{\"error\":\"failed\"}");
     });
 
     server.begin();

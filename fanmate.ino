@@ -1,7 +1,3 @@
-// FAN-MATE V3.84 — HTTP Edition
-// WiFi only. No BLE. OTA over HTTP.
-// Requires Arduino ESP32 core 2.x (2.0.17)
-
 #include "Config.h"
 #include "Settings.h"
 #include "FanController.h"
@@ -22,9 +18,6 @@ extern void ntp_loop();
 #error "Fan-Mate requires Arduino ESP32 core 2.x (2.0.17)"
 #endif
 
-// ============================================================
-//  Global state — visible to WebServer.cpp via extern
-// ============================================================
 float currentTemp  = 0.0;
 int   fanPct       = 0;
 int   fanRPM       = 0;
@@ -40,13 +33,11 @@ bool          have_baseline = false;
 uint64_t      last_rx       = 0;
 unsigned long last_tick     = 0;
 
-// ── History ring buffers for web page ──
 #define WEB_HIST_LEN 60
 float webTempHist[WEB_HIST_LEN] = {0};
 float webNetHist[WEB_HIST_LEN]  = {0};
 int   webHistIdx = 0;
 
-// ── Sleep state machine ────────────────────────────────
 void enter_sleep() {
     log_print("[SLEEP] phone absent — entering sleep\n");
     sys_state = STATE_LIGHT_SLEEP;
@@ -75,9 +66,6 @@ void exit_sleep() {
     log_print("[SLEEP] awake\n");
 }
 
-// ============================================================
-//  Setup
-// ============================================================
 void setup() {
     Serial.begin(115200);
     delay(500);
@@ -124,28 +112,8 @@ void setup() {
     wifi_setup();
 
     log_print("[BOOT] Fan-Mate V%s ready\n", FAN_MATE_VERSION);
-
-    // TEMPORARY TEST -- remove once confirmed
-    {
-        unsigned long _t0 = millis();
-        while (!wifi_connected() && millis() - _t0 < 20000) delay(500);
-        log_print("[TEST] wifi state=%d after %lums\n",
-                  wifi_connected() ? 1 : 0, millis() - _t0);
-        delay(2000);
-    }
-    log_print("[TEST] repeater OFF\n");
-    bool _ok1 = opal_set_repeater(false);
-    log_print("[TEST] off result=%d\n", _ok1);
-    delay(5000);
-    log_print("[TEST] repeater ON\n");
-    bool _ok2 = opal_set_repeater(true);
-    log_print("[TEST] on result=%d\n", _ok2);
-    log_print("[TEST] done\n");
 }
 
-// ============================================================
-//  15-second tick
-// ============================================================
 float lastNetKbps = 0.0;
 
 static void tick_15s() {
@@ -200,9 +168,6 @@ static void tick_15s() {
 #endif
 }
 
-// ============================================================
-//  Loop
-// ============================================================
 void loop() {
     static unsigned long lastOLED     = 0;
     static bool          server_ready = false;

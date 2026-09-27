@@ -237,7 +237,7 @@ void updateFanAndAlerts(
     if (fan_stall_alarm) {
         runBeepSequence(5, 120, 120, BUZZER_LOUD, 15000);
     } else if (alertLevel == 3) {
-        runBeepSequence(10, 100, 50, BUZZER_LOUD, 30000);
+        runBeepSequence(3, 120, 100, BUZZER_LOUD, 30000); // Kill Mode: Beep beep beep every 30s
     } else if (alertLevel == 2) {
         runBeepSequence(PANIC_BEEPS, PANIC_BEEP_MS, PANIC_GAP_MS,
                         BUZZER_LOUD, PANIC_INTERVAL_MS);

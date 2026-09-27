@@ -1,7 +1,3 @@
-// FAN-MATE V3.73 - HTTP Edition
-// WiFi only. No BLE. OTA over HTTP.
-// Requires Arduino ESP32 core 2.x (2.0.17)
-
 #ifndef CONFIG_H
 #define CONFIG_H
 
@@ -12,9 +8,6 @@
     #include "secrets.example.h"
 #endif
 
-// ============================================================
-//  Sleep state
-// ============================================================
 enum SystemState {
     STATE_ACTIVE      = 0,
     STATE_LIGHT_SLEEP = 1,
@@ -22,18 +15,12 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "3.88"
+#define FAN_MATE_VERSION "3.91"
 
-// -- Buzzer quiet hours --
 #define QUIET_START_HOUR 22
 #define QUIET_END_HOUR   7
-
-// 0 = quiet serial, 1 = verbose
 #define DEBUG_VERBOSE 0
 
-// ============================================================
-//  Pins
-// ============================================================
 #define SDA_PIN          5
 #define SCL_PIN          6
 #define FAN_PWM_PIN      7
@@ -43,29 +30,17 @@ extern unsigned long phone_absent_since;
 #define DS18B20_PIN      4
 #define PHONE_SENSE_PIN  1
 
-// ============================================================
-//  Temperature thresholds (defaults - overridden by NVS)
-// ============================================================
 #define TEMP_ON       34.0
 #define TEMP_FULL     42.0
 #define TEMP_WARNING  45.0
 #define TEMP_PANIC    50.0
 
-// ============================================================
-//  Fan PWM
-// ============================================================
 #define PWM_FREQ      25000
 #define PWM_RES       8
 #define PWM_MIN       40
 
-// ============================================================
-//  Fan stall alarm
-// ============================================================
-#define FAN_STALL_ENABLED 1   // 0 while bench-testing without fan
+#define FAN_STALL_ENABLED 1
 
-// ============================================================
-//  Buzzer
-// ============================================================
 #define BUZZER_CHANNEL 1
 #define BUZZER_FREQ    2000
 #define BUZZER_RES     8
@@ -83,32 +58,19 @@ extern unsigned long phone_absent_since;
 #define PANIC_GAP_MS      200
 #define PANIC_INTERVAL_MS 120000
 
-// ============================================================
-//  WiFi + HTTP
-// ============================================================
 #define HTTP_PORT                80
 #define WIFI_CONNECT_TIMEOUT_MS  15000
 #define WIFI_RETRY_INTERVAL_MS   30000
 
-// ============================================================
-//  Opal router API
-// ============================================================
-#define SERIAL_BUF_LINES      50
+#define SERIAL_BUF_LINES        50
 #define OPAL_POLL_INTERVAL_MS   15000
 #define OPAL_LOGIN_REFRESH_MS   3000000
 
-// ============================================================
-//  Auto Boost
-// ============================================================
 #define BOOST_DEFAULT_THRESHOLD_KBPS  300
 #define BOOST_DEFAULT_HOLD_SEC        4
 #define BOOST_DEFAULT_ENABLED         1
 
-// ============================================================
-//  Logging
-// ============================================================
 #define LOG_TICK_MS    15000
-
 #define LOG_SEAL_MIN_ROWS        10
 #define LOG_PAUSE_FREE_BYTES     (100 * 1024)
 #define LOG_FILENAME_PREFIX      "log-"

@@ -48,11 +48,7 @@ void drawSplashScreen() {
 }
 
 // ------------------------------------------------------------
-//  Main screen
-//
-//   25.4 C
-//   ████████░░░░░░░░  ← fan bar
-//                  12:35   ← time (right-aligned)
+//  Main screen with Kill Mode check
 // ------------------------------------------------------------
 void updateDisplay(
     float temp,
@@ -63,6 +59,22 @@ void updateDisplay(
 ) {
     display.clearDisplay();
     display.setTextColor(SSD1306_WHITE);
+
+    // ---- Kill Mode Override (alertState == 3) ----
+    if (alertState == 3) {
+        display.setTextSize(1);
+        display.setCursor(0, 0);
+        display.print(F("KILL MODE"));
+        
+        display.setCursor(0, 12);
+        display.print(F("ACTIVATED!"));
+
+        display.setCursor(0, 28);
+        display.print(F("Repeater Off"));
+        
+        display.display();
+        return; // Halt normal screen painting when in kill mode
+    }
 
     // ---- Temperature (size 2, top-left) ----
     display.setTextSize(2);
@@ -102,7 +114,6 @@ void updateDisplay(
             char timeBuf[6];
             snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d",
                      timeinfo.tm_hour, timeinfo.tm_min);
-            // Each char is 6px at size 1, 5 chars = 30px, right edge at x=72
             display.setCursor(42, 33);
             display.print(timeBuf);
         }

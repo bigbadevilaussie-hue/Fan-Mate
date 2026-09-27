@@ -3,10 +3,6 @@
 
 #include <Arduino.h>
 
-// ============================================================
-//  Opal router client
-// ============================================================
-
 void opal_init();
 bool opal_poll(uint64_t &rx_total);
 bool opal_set_repeater(bool enable);
