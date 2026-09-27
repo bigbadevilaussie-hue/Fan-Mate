@@ -4,7 +4,7 @@
 #include "AutoBoost.h"
 #include "Logging.h"
 #include "SerialBuffer.h"
-#include "OpalClient.h"          // ← added
+#include "OpalClient.h"
 
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -88,7 +88,7 @@ static int compute_temp_gear(float t) {
 }
 
 // ------------------------------------------------------------
-//  Single beep (used for gear changes)
+//  Quiet hours
 // ------------------------------------------------------------
 static bool quiet_hours() {
     struct tm ti;
@@ -100,6 +100,9 @@ static bool quiet_hours() {
     return h >= QUIET_START_HOUR || h < QUIET_END_HOUR;
 }
 
+// ------------------------------------------------------------
+//  Single beep (used for gear changes)
+// ------------------------------------------------------------
 static void beep_once() {
     if (quiet_hours()) return;
     ledcWrite(BUZZER_CHANNEL, 200);
@@ -108,38 +111,44 @@ static void beep_once() {
 }
 
 // ------------------------------------------------------------
-//  Multi-beep sequence for alerts.
+//  Multi-beep sequence
 // ------------------------------------------------------------
 static void runBeepSequence(int beeps, int beepMs, int gapMs,
-                            int duty, int intervalMs) {
+                            int duty, int intervalMs)
+{
     unsigned long now = millis();
 
+    // Time for a new sequence?
     if (!beepActive && beepIndex == 0) {
         if (now - lastAlertStart >= (unsigned long)intervalMs) {
             lastAlertStart = now;
-            beepActive = true;
-            beepTimer = now;
+            beepActive     = true;
+            beepTimer      = now;
+            beepIndex      = 0;
             ledcWrite(BUZZER_CHANNEL, duty);
         }
         return;
     }
 
+    // Currently beeping
     if (beepActive) {
         if (now - beepTimer >= (unsigned long)beepMs) {
             ledcWrite(BUZZER_CHANNEL, 0);
             beepActive = false;
-            beepTimer = now;
-        }
-    } else {
-        if (now - beepTimer >= (unsigned long)gapMs) {
+            beepTimer  = now;
             beepIndex++;
-            if (beepIndex >= beeps) {
-                beepIndex = 0;
-            } else {
-                ledcWrite(BUZZER_CHANNEL, duty);
-                beepActive = true;
-                beepTimer = now;
-            }
+        }
+        return;
+    }
+
+    // Gap between beeps
+    if (now - beepTimer >= (unsigned long)gapMs) {
+        if (beepIndex >= beeps) {
+            beepIndex = 0;
+        } else {
+            ledcWrite(BUZZER_CHANNEL, duty);
+            beepActive = true;
+            beepTimer  = now;
         }
     }
 }
@@ -164,20 +173,20 @@ void updateFanAndAlerts(
     if (newLevel != alertLevel) {
         alertLevel = newLevel;
         beepActive = false;
-        beepIndex = 0;
+        beepIndex  = 0;
         ledcWrite(BUZZER_CHANNEL, 0);
 
         if (alertLevel == 3) {
             log_print("[ALERT] KILL\n");
             log_write_event("KILL");
-            bool ok = opal_set_repeater(false);          // ← the missing call
+            bool ok = opal_set_repeater(false);
             log_print("[OPAL] auto-kill: %s\n", ok ? "OK" : "FAILED");
         }
         else if (alertLevel == 2) log_print("[ALERT] OH SHIT\n");
         else if (alertLevel == 1) log_print("[ALERT] WARNING\n");
         else                      log_print("[ALERT] normal\n");
 
-        lastAlertStart = millis() - 120000;
+        lastAlertStart = millis() - 120000;   // force first sequence soon
     }
 
     bool effectivePhone = (config.phoneMode == "off") ? true : phonePresent;
@@ -242,9 +251,12 @@ void updateFanAndAlerts(
 
     // ---- Alarm output ----
     if (fan_stall_alarm) {
-        runBeepSequence(5, 120, 120, BUZZER_LOUD, 15000);
+        // stall: 5 medium beeps every 15s
+        runBeepSequence(5, 120, 120, BUZZER_MEDIUM, 15000);
     } else if (alertLevel == 3) {
-        runBeepSequence(3, 120, 100, BUZZER_LOUD, 30000); // Kill Mode: Beep beep beep every 30s
+        // KILL: same pattern as panic, just fires at higher temp
+        runBeepSequence(PANIC_BEEPS, PANIC_BEEP_MS, PANIC_GAP_MS,
+                        BUZZER_LOUD, PANIC_INTERVAL_MS);
     } else if (alertLevel == 2) {
         runBeepSequence(PANIC_BEEPS, PANIC_BEEP_MS, PANIC_GAP_MS,
                         BUZZER_LOUD, PANIC_INTERVAL_MS);
