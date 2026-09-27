@@ -22,7 +22,11 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "3.80"
+#define FAN_MATE_VERSION "3.81"
+
+// -- Buzzer quiet hours --
+#define QUIET_START_HOUR 22
+#define QUIET_END_HOUR   7
 
 // 0 = quiet serial, 1 = verbose
 #define DEBUG_VERBOSE 0
@@ -57,7 +61,7 @@ extern unsigned long phone_absent_since;
 // ============================================================
 //  Fan stall alarm
 // ============================================================
-#define FAN_STALL_ENABLED 0   // 0 while bench-testing without fan
+#define FAN_STALL_ENABLED 1   // 0 while bench-testing without fan
 
 // ============================================================
 //  Buzzer

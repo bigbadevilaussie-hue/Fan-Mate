@@ -89,7 +89,18 @@ static int compute_temp_gear(float t) {
 // ------------------------------------------------------------
 //  Single beep (used for gear changes)
 // ------------------------------------------------------------
+static bool quiet_hours() {
+    struct tm ti;
+    if (!getLocalTime(&ti, 10)) return false;
+    int h = ti.tm_hour;
+    if (QUIET_START_HOUR < QUIET_END_HOUR) {
+        return h >= QUIET_START_HOUR && h < QUIET_END_HOUR;
+    }
+    return h >= QUIET_START_HOUR || h < QUIET_END_HOUR;
+}
+
 static void beep_once() {
+    if (quiet_hours()) return;
     ledcWrite(BUZZER_CHANNEL, 200);
     delay(80);
     ledcWrite(BUZZER_CHANNEL, 0);
@@ -230,7 +241,7 @@ void updateFanAndAlerts(
     } else if (alertLevel == 2) {
         runBeepSequence(PANIC_BEEPS, PANIC_BEEP_MS, PANIC_GAP_MS,
                         BUZZER_LOUD, PANIC_INTERVAL_MS);
-    } else if (alertLevel == 1) {
+    } else if (alertLevel == 1 && !quiet_hours()) {
         runBeepSequence(WARNING_BEEPS, WARNING_BEEP_MS, WARNING_GAP_MS,
                         BUZZER_QUIET, WARNING_INTERVAL_MS);
     } else {

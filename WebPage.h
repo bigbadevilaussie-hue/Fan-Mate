@@ -106,7 +106,7 @@ html, body {
 canvas {
   display: block;
   width: 100%;
-  height: 90px;
+  height: 110px;
 }
 .footer {
   text-align: center;
@@ -219,24 +219,31 @@ function tempColor(t) {
   return 'red';
 }
 
-function drawGraph(canvasId, data, yMin, yMax, lineColor, fillColor, threshold) {
+function drawGraph(canvasId, data, yMin, yMax, lineColor, fillColor, threshold, xLabels) {
   const c = document.getElementById(canvasId);
   const ctx = c.getContext('2d');
   const W = c.width, H = c.height;
-  const padL = 10, padR = 10, padT = 10, padB = 10;
+  const padL = 60, padR = 34, padT = 14, padB = 20;
   const pw = W - padL - padR;
   const ph = H - padT - padB;
 
   ctx.clearRect(0, 0, W, H);
+  ctx.font = '20px -apple-system, sans-serif';
+  ctx.fillStyle = '#7a8194';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'right';
 
   ctx.strokeStyle = '#e6e9f0';
   ctx.lineWidth = 1;
   for (let i = 0; i < 4; i++) {
-    const y = padT + (i / 3) * ph;
+    const frac = i / 3;
+    const y = padT + frac * ph;
+    const v = yMax - frac * (yMax - yMin);
     ctx.beginPath();
     ctx.moveTo(padL, y);
     ctx.lineTo(W - padR, y);
     ctx.stroke();
+    ctx.fillText(Math.round(v), padL - 6, y);
   }
 
   if (threshold !== null && threshold >= yMin && threshold <= yMax) {
@@ -248,6 +255,11 @@ function drawGraph(canvasId, data, yMin, yMax, lineColor, fillColor, threshold) 
     ctx.lineTo(W - padR, ty);
     ctx.stroke();
     ctx.setLineDash([]);
+    ctx.fillStyle = '#d20f39';
+    ctx.textAlign = 'left';
+    ctx.fillText(Math.round(threshold), W - padR + 3, ty);
+    ctx.fillStyle = '#7a8194';
+    ctx.textAlign = 'right';
   }
 
   const pts = [];
@@ -259,26 +271,34 @@ function drawGraph(canvasId, data, yMin, yMax, lineColor, fillColor, threshold) 
     const y = padT + ph - ((v - yMin) / (yMax - yMin)) * ph;
     pts.push([x, y]);
   }
-  if (pts.length < 2) return;
+  if (pts.length >= 2) {
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], padT + ph);
+    for (const p of pts) ctx.lineTo(p[0], p[1]);
+    ctx.lineTo(pts[pts.length - 1][0], padT + ph);
+    ctx.closePath();
+    ctx.fillStyle = fillColor;
+    ctx.fill();
 
-  ctx.beginPath();
-  ctx.moveTo(pts[0][0], padT + ph);
-  for (const p of pts) ctx.lineTo(p[0], p[1]);
-  ctx.lineTo(pts[pts.length - 1][0], padT + ph);
-  ctx.closePath();
-  ctx.fillStyle = fillColor;
-  ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 3;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.stroke();
+  }
 
-  ctx.beginPath();
-  ctx.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-  ctx.strokeStyle = lineColor;
-  ctx.lineWidth = 3;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  ctx.stroke();
+  ctx.fillStyle = '#7a8194';
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  ctx.fillText(xLabels[0], padL, H - padB + 4);
+  ctx.textAlign = 'center';
+  ctx.fillText(xLabels[1], padL + pw / 2, H - padB + 4);
+  ctx.textAlign = 'right';
+  ctx.fillText(xLabels[2], W - padR, H - padB + 4);
 }
-
 function render(data) {
   const el = id => document.getElementById(id);
 
@@ -344,8 +364,8 @@ function render(data) {
   if (data.temp_warning) tempWarning = data.temp_warning;
   if (data.boost_threshold) threshold = data.boost_threshold;
 
-  drawGraph('net-graph', netHist, 0, 2048, '#1e66f5', '#cfe0ff', threshold);
-  drawGraph('temp-graph', tempHist, 15, 45, '#1e66f5', '#cfe0ff', tempWarning);
+  drawGraph('net-graph', netHist, 0, 2048, '#1e66f5', '#cfe0ff', threshold, ['-15m', '-7m', 'now']);
+  drawGraph('temp-graph', tempHist, 15, 45, '#1e66f5', '#cfe0ff', tempWarning, ['-15m', '-7m', 'now']);
 
   el('fw').textContent = 'v' + (data.fw || '?');
 }
