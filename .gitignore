@@ -29,3 +29,4 @@ build/
 fanmate.py.before-*
 fanmate.py.pre-*
 fanmate/*_legacy.py
+HANDOFF.md
