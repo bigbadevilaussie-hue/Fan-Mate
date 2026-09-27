@@ -1,4 +1,4 @@
-// FAN-MATE V3.73 - HTTP Edition
+// FAN-MATE V3.80 — HTTP Edition
 // WiFi only. No BLE. OTA over HTTP.
 // Requires Arduino ESP32 core 2.x (2.0.17)
 
@@ -22,6 +22,9 @@ extern void ntp_loop();
 #error "Fan-Mate requires Arduino ESP32 core 2.x (2.0.17)"
 #endif
 
+// ============================================================
+//  Global state — visible to WebServer.cpp via extern
+// ============================================================
 float currentTemp  = 0.0;
 int   fanPct       = 0;
 int   fanRPM       = 0;
@@ -36,6 +39,12 @@ static unsigned long sleep_start_ms = 0;
 bool          have_baseline = false;
 uint64_t      last_rx       = 0;
 unsigned long last_tick     = 0;
+
+// ── History ring buffers for web page ──
+#define WEB_HIST_LEN 60
+float webTempHist[WEB_HIST_LEN] = {0};
+float webNetHist[WEB_HIST_LEN]  = {0};
+int   webHistIdx = 0;
 
 // ── Sleep state machine ────────────────────────────────
 void enter_sleep() {
@@ -151,6 +160,10 @@ static void tick_15s() {
     if (peak_hist[2] > kbps_smooth) kbps_smooth = peak_hist[2];
 
     lastNetKbps = kbps_smooth;
+
+    webTempHist[webHistIdx] = currentTemp;
+    webNetHist[webHistIdx]  = kbps_smooth;
+    webHistIdx = (webHistIdx + 1) % WEB_HIST_LEN;
 
     auto_boost_update(kbps_smooth);
 

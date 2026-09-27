@@ -6,6 +6,7 @@
 #include "OpalClient.h"
 #include "AutoBoost.h"
 #include "Config.h"
+#include "WebPage.h"
 #include "SerialBuffer.h"
 
 #include <WebServer.h>
@@ -70,45 +71,7 @@ static void handle_serial_raw() {
 
 static void handle_root() {
     note_host();
-    extern float currentTemp;
-    extern int   fanPct;
-    extern int   fanRPM;
-    extern int   alertState;
-    extern bool  phonePresent;
-
-    String html = R"rawliteral(
-<!DOCTYPE html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Fan-Mate</title>
-<style>
-body{font-family:-apple-system,sans-serif;background:#181825;color:#cdd6f4;margin:0;padding:20px}
-h1{color:#89b4fa}.c{background:#232334;padding:14px;margin:10px 0;border-radius:8px}
-.l{color:#9399b2;font-size:11px;text-transform:uppercase}.v{font-size:22px;font-weight:bold}
-a{color:#89b4fa}
-</style></head><body>
-<h1>🌀 Fan-Mate V{{VERSION}}</h1>
-<div class="c"><div class="l">WiFi</div><div class="v">{{SSID}} {{IP}}</div>
-<div class="l">RSSI</div><div class="v">{{RSSI}} dBm</div></div>
-<div class="c"><div class="l">Temp</div><div class="v">{{TEMP}} °C</div>
-<div class="l">Fan</div><div class="v">{{FAN}} %</div>
-<div class="l">RPM</div><div class="v">{{RPM}}</div></div>
-<div class="c"><div class="l">Phone</div><div class="v">{{PHONE}}</div>
-<div class="l">Alert</div><div class="v">{{ALERT}}</div></div>
-<div class="c"><a href="/status">status</a> | <a href="/serial">serial</a> | <a href="/log.csv">log.csv</a> | <a href="/reboot">reboot</a></div>
-</body></html>
-)rawliteral";
-
-    html.replace("{{SSID}}",  wifi_ssid_connected());
-    html.replace("{{IP}}",    wifi_ip());
-    html.replace("{{RSSI}}",  String(wifi_rssi()));
-    html.replace("{{TEMP}}",  String(currentTemp, 1));
-    html.replace("{{FAN}}",   String(fanPct));
-    html.replace("{{RPM}}",   String(fanRPM));
-    html.replace("{{PHONE}}", phonePresent ? "YES" : "NO");
-    html.replace("{{ALERT}}", String(alertState));
-    html.replace("{{VERSION}}", FAN_MATE_VERSION);
-
-    server.send(200, "text/html", html);
+    server.send_P(200, "text/html", INDEX_HTML);
 }
 
 // ------------------------------------------------------------
@@ -151,7 +114,37 @@ static void handle_status() {
     json += "\"host_last_seen\":" + String(since_host / 1000) + ",";
     json += "\"sleep\":" + String(sys_state == STATE_LIGHT_SLEEP ? 1 : 0) + ",";
     json += "\"sleep_countdown\":0,";
-    json += "\"log_size\":" + String(log_get_size());
+    json += "\"log_size\":" + String(log_get_size()) + ",";
+
+    extern float weather_get_temp();
+    json += "\"outdoor_c\":" + String(weather_get_temp(), 1) + ",";
+
+    extern float webTempHist[];
+    extern float webNetHist[];
+    extern int   webHistIdx;
+
+    json += "\"temp_hist\":[";
+    for (int i = 0; i < 60; i++) {
+        int idx = (webHistIdx + i) % 60;
+        if (i > 0) json += ",";
+        json += String(webTempHist[idx], 1);
+    }
+    json += "],";
+
+    json += "\"net_hist\":[";
+    for (int i = 0; i < 60; i++) {
+        int idx = (webHistIdx + i) % 60;
+        if (i > 0) json += ",";
+        json += String(webNetHist[idx], 1);
+    }
+    json += "],";
+
+    json += "\"temp_warning\":" + String(config.tempWarning, 1) + ",";
+    int boostThr = 700;
+    if (config.boostMode == 1) boostThr = config.boostNormal.threshold;
+    else if (config.boostMode == 2) boostThr = config.boostAggr.threshold;
+    json += "\"boost_threshold\":" + String(boostThr);
+
     json += "}";
 
     server.send(200, "application/json", json);
