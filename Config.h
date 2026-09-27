@@ -22,7 +22,7 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "3.81"
+#define FAN_MATE_VERSION "3.88"
 
 // -- Buzzer quiet hours --
 #define QUIET_START_HOUR 22

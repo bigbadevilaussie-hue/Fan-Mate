@@ -1,4 +1,4 @@
-// FAN-MATE V3.80 — HTTP Edition
+// FAN-MATE V3.84 — HTTP Edition
 // WiFi only. No BLE. OTA over HTTP.
 // Requires Arduino ESP32 core 2.x (2.0.17)
 
@@ -124,6 +124,23 @@ void setup() {
     wifi_setup();
 
     log_print("[BOOT] Fan-Mate V%s ready\n", FAN_MATE_VERSION);
+
+    // TEMPORARY TEST -- remove once confirmed
+    {
+        unsigned long _t0 = millis();
+        while (!wifi_connected() && millis() - _t0 < 20000) delay(500);
+        log_print("[TEST] wifi state=%d after %lums\n",
+                  wifi_connected() ? 1 : 0, millis() - _t0);
+        delay(2000);
+    }
+    log_print("[TEST] repeater OFF\n");
+    bool _ok1 = opal_set_repeater(false);
+    log_print("[TEST] off result=%d\n", _ok1);
+    delay(5000);
+    log_print("[TEST] repeater ON\n");
+    bool _ok2 = opal_set_repeater(true);
+    log_print("[TEST] on result=%d\n", _ok2);
+    log_print("[TEST] done\n");
 }
 
 // ============================================================

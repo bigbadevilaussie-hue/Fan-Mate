@@ -1,5 +1,6 @@
 #include "OpalClient.h"
 #include "Config.h"
+#include "SerialBuffer.h"
 
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -7,8 +8,7 @@
 #include <mbedtls/sha256.h>
 
 // ============================================================
-//  Opal router client — implementation
-//  V3.21 — LED on during request
+//  Opal router client
 // ============================================================
 
 static String   opal_sid           = "";
@@ -31,17 +31,15 @@ static String sha256_hex(const String &input) {
 }
 
 // ------------------------------------------------------------
-//  HTTP POST to /rpc — LED on during request
-// ------------------------------------------------------------
 static bool rpc_call(const String &json_body, String &response) {
-    digitalWrite(LED_PIN, LOW);   // LED ON
+    digitalWrite(LED_PIN, LOW);
 
     HTTPClient http;
     String url = String("http://") + OPAL_IP + "/rpc";
 
     if (!http.begin(url)) {
-        Serial.println("[OPAL] http.begin failed");
-        digitalWrite(LED_PIN, HIGH);   // LED OFF
+        log_print("[OPAL] http.begin failed\n");
+        digitalWrite(LED_PIN, HIGH);
         return false;
     }
     http.setTimeout(3000);
@@ -49,22 +47,22 @@ static bool rpc_call(const String &json_body, String &response) {
 
     int code = http.POST(json_body);
     if (code != 200) {
-        Serial.printf("[OPAL] HTTP %d\n", code);
+        log_print("[OPAL] HTTP %d\n", code);
         http.end();
-        digitalWrite(LED_PIN, HIGH);   // LED OFF
+        digitalWrite(LED_PIN, HIGH);
         return false;
     }
 
     response = http.getString();
     http.end();
 
-    digitalWrite(LED_PIN, HIGH);   // LED OFF
+    digitalWrite(LED_PIN, HIGH);
     return true;
 }
 
 // ------------------------------------------------------------
 static bool opal_login() {
-    Serial.println("[OPAL] logging in...");
+    log_print("[OPAL] logging in...\n");
 
     String challenge_body =
         "{\"jsonrpc\":\"2.0\",\"method\":\"challenge\","
@@ -72,14 +70,14 @@ static bool opal_login() {
 
     String challenge_resp;
     if (!rpc_call(challenge_body, challenge_resp)) {
-        Serial.println("[OPAL] challenge failed");
+        log_print("[OPAL] challenge failed\n");
         return false;
     }
 
     StaticJsonDocument<512> doc;
     DeserializationError err = deserializeJson(doc, challenge_resp);
     if (err) {
-        Serial.printf("[OPAL] challenge JSON: %s\n", err.c_str());
+        log_print("[OPAL] challenge JSON: %s\n", err.c_str());
         return false;
     }
 
@@ -88,11 +86,11 @@ static bool opal_login() {
     int alg           = doc["result"]["alg"] | 5;
 
     if (!salt || !nonce) {
-        Serial.println("[OPAL] no salt/nonce in challenge");
+        log_print("[OPAL] no salt/nonce in challenge\n");
         return false;
     }
 
-    Serial.printf("[OPAL] salt=%s alg=%d\n", salt, alg);
+    log_print("[OPAL] salt=%s alg=%d\n", salt, alg);
 
     extern const char* OPAL_CRYPT_HASH;
 
@@ -106,27 +104,27 @@ static bool opal_login() {
 
     String login_resp;
     if (!rpc_call(login_body, login_resp)) {
-        Serial.println("[OPAL] login HTTP failed");
+        log_print("[OPAL] login HTTP failed\n");
         return false;
     }
 
     StaticJsonDocument<512> login_doc;
     err = deserializeJson(login_doc, login_resp);
     if (err) {
-        Serial.printf("[OPAL] login JSON: %s\n", err.c_str());
+        log_print("[OPAL] login JSON: %s\n", err.c_str());
         return false;
     }
 
     const char* sid = login_doc["result"]["sid"];
     if (!sid) {
-        Serial.println("[OPAL] no sid in login response");
+        log_print("[OPAL] no sid in login response\n");
         return false;
     }
 
     opal_sid      = String(sid);
     opal_sid_time = millis();
 
-    Serial.printf("[OPAL] login OK, sid=%s...\n", opal_sid.substring(0, 16).c_str());
+    log_print("[OPAL] login OK\n");
     return true;
 }
 
@@ -137,7 +135,7 @@ void opal_init() {
     opal_have_baseline = false;
 
     if (!opal_login()) {
-        Serial.println("[OPAL] init: login failed, will retry in poll");
+        log_print("[OPAL] init: login failed, will retry in poll\n");
     }
 }
 
@@ -155,7 +153,7 @@ bool opal_poll(uint64_t &rx_total) {
     }
 
     if (millis() - opal_sid_time > OPAL_LOGIN_REFRESH_MS) {
-        Serial.println("[OPAL] SID refresh");
+        log_print("[OPAL] SID refresh\n");
         if (!opal_login()) {
             return false;
         }
@@ -174,19 +172,19 @@ bool opal_poll(uint64_t &rx_total) {
     StaticJsonDocument<8192> doc;
     DeserializationError err = deserializeJson(doc, resp);
     if (err) {
-        Serial.printf("[OPAL] poll JSON: %s\n", err.c_str());
+        log_print("[OPAL] poll JSON: %s\n", err.c_str());
         return false;
     }
 
     if (doc.containsKey("error")) {
-        Serial.println("[OPAL] poll denied, forcing relogin");
+        log_print("[OPAL] poll denied, forcing relogin\n");
         opal_sid = "";
         return false;
     }
 
     JsonArray clients = doc["result"]["clients"];
     if (clients.isNull()) {
-        Serial.println("[OPAL] no clients array");
+        log_print("[OPAL] no clients array\n");
         return false;
     }
 
@@ -203,6 +201,63 @@ bool opal_poll(uint64_t &rx_total) {
     return true;
 }
 
+// ------------------------------------------------------------
+//  Enable or disable the Wi-Fi repeater via JSON-RPC (Firmware v4.x compatible)
+// ------------------------------------------------------------
+bool opal_set_repeater(bool enable) {
+    // Bypasses opal_paused check so emergency kill works even during sleep mode
+
+    if (WiFi.status() != WL_CONNECTED) {
+        log_print("[OPAL] repeater: WiFi not connected\n");
+        return false;
+    }
+
+    // Try up to 2 times to handle expired sessions gracefully
+    for (int attempt = 0; attempt < 2; attempt++) {
+        if (opal_sid.length() == 0 || millis() - opal_sid_time > OPAL_LOGIN_REFRESH_MS) {
+            if (!opal_login()) {
+                log_print("[OPAL] repeater: login failed\n");
+                return false;
+            }
+        }
+
+        // Use "disconnect" for turning off, or "get_channel_prompt"/"scan" depending on enable state.
+        // For emergency kill (enable = false), we use "disconnect".
+        String action = enable ? "scan" : "disconnect";
+        String body = String("{\"jsonrpc\":\"2.0\",\"method\":\"call\",\"params\":[\"") +
+                      opal_sid + "\",\"repeater\",\"" + action + "\",{}],\"id\":4}";
+
+        log_print("[OPAL] repeater POST: %s\n", body.c_str());
+
+        String resp;
+        if (!rpc_call(body, resp)) {
+            log_print("[OPAL] repeater: rpc_call failed\n");
+            return false;
+        }
+
+        log_print("[OPAL] repeater response: %s\n", resp.c_str());
+
+        StaticJsonDocument<512> doc;
+        DeserializationError err = deserializeJson(doc, resp);
+        if (err) {
+            log_print("[OPAL] repeater JSON: %s\n", err.c_str());
+            return false;
+        }
+
+        if (doc.containsKey("error")) {
+            log_print("[OPAL] repeater command denied, forcing relogin\n");
+            opal_sid = "";
+            continue;
+        }
+
+        log_print("[OPAL] Repeater %s successfully\n", enable ? "STARTED" : "STOPPED");
+        return true;
+    }
+
+    return false;
+}
+
+// ------------------------------------------------------------
 void opal_force_relogin() {
     opal_sid = "";
 }
@@ -213,13 +268,13 @@ bool opal_logged_in() {
 
 void opal_pause() {
     opal_paused = true;
-    Serial.println("[OPAL] paused");
+    log_print("[OPAL] paused\n");
 }
 
 void opal_resume() {
     opal_paused = false;
     opal_sid = "";
-    Serial.println("[OPAL] resumed");
+    log_print("[OPAL] resumed\n");
 }
 
 bool opal_is_paused() {

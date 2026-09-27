@@ -60,6 +60,20 @@ window.onload = refresh;
 </head><body>
 <div class="top"><h1>Fan-Mate Serial</h1><a href="/">dashboard</a></div>
 <div id="log">loading...</div>
+<button onclick="triggerKill()" style="background-color: #8b0000; color: white; padding: 10px 15px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 10px;">🚨 KILL: Cut Repeater</button>
+<script>
+function triggerKill() {
+    if (confirm("CRITICAL: Shut down repeater immediately to cool the phone?")) {
+        fetch('/repeater/off', { method: 'POST' })
+            .then(res => {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.json();
+            })
+            .then(data => alert(data.status === 'success' ? 'Repeater killed.' : 'Failed to kill repeater.'))
+            .catch(err => alert('Error: ' + err.message));
+    }
+}
+</script>
 </body></html>
 )rawliteral";
     server.send(200, "text/html", html);
@@ -446,6 +460,11 @@ void server_setup() {
 
     server.onNotFound([]() {
         server.send(404, "text/plain", "404");
+    });
+
+    server.on("/repeater/off", HTTP_POST, []() {
+        bool ok = opal_set_repeater(false);
+        server.send(ok ? 200 : 500, "application/json", ok ? "{\"status\":\"success\"}" : "{\"error\":\"failed\"}");
     });
 
     server.begin();
