@@ -11,5 +11,6 @@ bool opal_logged_in();
 void opal_pause();
 void opal_resume();
 bool opal_is_paused();
+bool opal_ok_recently();   // true if poll succeeded in last ~45s
 
 #endif

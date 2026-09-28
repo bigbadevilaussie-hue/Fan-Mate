@@ -24,6 +24,9 @@ static unsigned long last_full_beep = 0;
 static bool          warned_full    = false;
 static const char* LOG_FILE = LOG_FILE_LIVE;
 
+// Forward declarations
+static void _invalidate_free_bytes_cache();
+
 static time_t _live_file_start_epoch = 0;
 
 String log_time_string() {
@@ -234,6 +237,7 @@ void log_write(float temp, float net_kbps, int boost, int fan, int rpm) {
                  weather_get_temp(), rt);
     }
     f.close();
+    _invalidate_free_bytes_cache();
 }
 
 static void sanitize_event(char* dst, size_t n, const char* src) {
@@ -248,6 +252,8 @@ extern float lastNetKbps;
 extern int   fanPct;
 extern int   fanRPM;
 
+extern bool opal_ok_recently();   // from OpalClient
+
 void log_write_event(const char* event) {
     if (log_rotation_paused()) return;
     File f = LittleFS.open(LOG_FILE, "a");
@@ -256,20 +262,38 @@ void log_write_event(const char* event) {
     char safe[64];
     sanitize_event(safe, sizeof(safe), event);
     float rt = room_get_temp();
+    bool net_ok = opal_ok_recently();
     if (rt < -90.0f) {
-        f.printf("%s,%.1f,%.1f,%d,%d,%d,%s,%.1f,\n",
-                 t.c_str(), currentTemp, lastNetKbps,
-                 auto_boost_gear() > 0 ? 1 : 0,
-                 fanPct, fanRPM,
-                 safe, weather_get_temp());
+        if (net_ok) {
+            f.printf("%s,%.1f,%.1f,%d,%d,%d,%s,%.1f,\n",
+                     t.c_str(), currentTemp, lastNetKbps,
+                     auto_boost_gear() > 0 ? 1 : 0,
+                     fanPct, fanRPM,
+                     safe, weather_get_temp());
+        } else {
+            f.printf("%s,%.1f,,%d,%d,%d,%s,%.1f,\n",
+                     t.c_str(), currentTemp,
+                     auto_boost_gear() > 0 ? 1 : 0,
+                     fanPct, fanRPM,
+                     safe, weather_get_temp());
+        }
     } else {
-        f.printf("%s,%.1f,%.1f,%d,%d,%d,%s,%.1f,%.1f\n",
-                 t.c_str(), currentTemp, lastNetKbps,
-                 auto_boost_gear() > 0 ? 1 : 0,
-                 fanPct, fanRPM,
-                 safe, weather_get_temp(), rt);
+        if (net_ok) {
+            f.printf("%s,%.1f,%.1f,%d,%d,%d,%s,%.1f,%.1f\n",
+                     t.c_str(), currentTemp, lastNetKbps,
+                     auto_boost_gear() > 0 ? 1 : 0,
+                     fanPct, fanRPM,
+                     safe, weather_get_temp(), rt);
+        } else {
+            f.printf("%s,%.1f,,%d,%d,%d,%s,%.1f,%.1f\n",
+                     t.c_str(), currentTemp,
+                     auto_boost_gear() > 0 ? 1 : 0,
+                     fanPct, fanRPM,
+                     safe, weather_get_temp(), rt);
+        }
     }
     f.close();
+    _invalidate_free_bytes_cache();
 }
 
 void log_write_reset_reason() {
@@ -315,14 +339,33 @@ static bool log_evict_oldest() {
     return ok;
 }
 
+// Cached free bytes — refreshed once per tick, not on every call
+static size_t _cached_free_bytes  = 0;
+static unsigned long _cached_at_ms = 0;
+static const unsigned long FREE_BYTES_TTL_MS = 14000;   // just under tick_15s
+
+static size_t _get_free_bytes() {
+    unsigned long now = millis();
+    if (now - _cached_at_ms > FREE_BYTES_TTL_MS || _cached_at_ms == 0) {
+        _cached_free_bytes = LittleFS.totalBytes() - LittleFS.usedBytes();
+        _cached_at_ms = now;
+    }
+    return _cached_free_bytes;
+}
+
+static void _invalidate_free_bytes_cache() {
+    _cached_at_ms = 0;
+}
+
 bool log_rotation_paused() {
-    size_t free_bytes = LittleFS.totalBytes() - LittleFS.usedBytes();
+    size_t free_bytes = _get_free_bytes();
     if (free_bytes >= LOG_PAUSE_FREE_BYTES) return false;
 
     // Try to evict oldest sealed file to reclaim space
     while (free_bytes < LOG_PAUSE_FREE_BYTES) {
         if (!log_evict_oldest()) break;
-        free_bytes = LittleFS.totalBytes() - LittleFS.usedBytes();
+        _invalidate_free_bytes_cache();
+        free_bytes = _get_free_bytes();
     }
     return free_bytes < LOG_PAUSE_FREE_BYTES;
 }

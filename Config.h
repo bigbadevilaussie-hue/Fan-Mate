@@ -15,7 +15,7 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "4.01"
+#define FAN_MATE_VERSION "4.02"
 
 #define QUIET_START_HOUR 22
 #define QUIET_END_HOUR   7
@@ -71,7 +71,7 @@ extern unsigned long phone_absent_since;
 #define BOOST_DEFAULT_ENABLED         1
 
 #define LOG_TICK_MS    15000
-#define LOG_SEAL_MIN_ROWS        10
+#define LOG_SEAL_MIN_ROWS        3
 #define LOG_PAUSE_FREE_BYTES     (100 * 1024)
 #define LOG_FILENAME_PREFIX      "log-"
 #define LOG_HEADER               "timestamp,temp_c,net_kbps,boost,fan,rpm,event,outdoor_c,room_c"

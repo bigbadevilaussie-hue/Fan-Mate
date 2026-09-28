@@ -14,6 +14,7 @@ static bool     opal_paused        = false;
 static uint32_t opal_sid_time      = 0;
 static uint64_t opal_last_rx       = 0;
 static bool     opal_have_baseline = false;
+static unsigned long opal_last_ok_ms = 0;
 
 #define OPAL_LOGIN_REFRESH_MS 240000UL
 
@@ -199,7 +200,13 @@ bool opal_poll(uint64_t &rx_total) {
     }
 
     rx_total = total;
+    opal_last_ok_ms = millis();
     return true;
+}
+
+bool opal_ok_recently() {
+    if (opal_last_ok_ms == 0) return false;
+    return (millis() - opal_last_ok_ms) < 45000;   // 3 ticks * 15s
 }
 
 // ------------------------------------------------------------
