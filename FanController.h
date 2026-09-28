@@ -22,6 +22,11 @@ void silenceFanAndAlerts();
 // Stall detection — true when fan commanded on but tach reads zero
 bool fan_stall_active();
 
+void beep_once_update();
+
+extern unsigned long phone_absent_since;
+extern unsigned long phone_present_since;
+
 
 // Kill mode state (v4.00)
 // 0 = AUTO (armed)

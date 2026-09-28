@@ -38,6 +38,10 @@ static int lastTempGear = -1;
 static unsigned long fan_stall_since = 0;
 static bool          fan_stall_alarm = false;
 
+// Phone presence timestamps (v4.06)
+unsigned long phone_absent_since  = 0;
+unsigned long phone_present_since = 0;
+
 // Kill mode (v4.00)
 enum KillState { KILL_AUTO = 0, KILL_ACTIVE = 1, KILL_OFF = 2 };
 static KillState killState = KILL_AUTO;
@@ -50,6 +54,7 @@ static volatile bool kill_auto_requested  = false;
 static void kill_state_machine(float currentTemp);
 static void runBeepSequence(int beeps, int beepMs, int gapMs, int intervalMs);
 static void beep_once();
+void beep_once_update();
 static bool quiet_hours();
 
 // ------------------------------------------------------------
@@ -78,13 +83,35 @@ void readDS18B20(float &currentTemp) {
 void updatePhoneDetection() {
     static bool lastState = false;
     static unsigned long lastChange = 0;
+    static bool initialized = false;
     bool present = (digitalRead(PHONE_SENSE_PIN) == LOW);
+
+    if (!initialized) {
+        initialized = true;
+        lastState = present;
+        phonePresent = present;
+        if (present) {
+            phone_present_since = millis();
+        } else {
+            phone_absent_since = millis();
+        }
+        log_print("[PHONE] initial: %s\n", present ? "present" : "absent");
+        return;
+    }
+
     if (present != lastState) {
         unsigned long now = millis();
         if (now - lastChange > 500) {
             lastState = present;
             lastChange = now;
             phonePresent = present;
+            if (present) {
+                phone_present_since = now;
+                phone_absent_since  = 0;
+            } else {
+                phone_absent_since  = now;
+                phone_present_since = 0;
+            }
             log_print("[PHONE] %s\n", present ? "detected" : "removed");
         }
     }
@@ -111,11 +138,22 @@ static bool quiet_hours() {
 }
 
 // ------------------------------------------------------------
+static bool          short_beep_active = false;
+static unsigned long short_beep_timer  = 0;
+
 static void beep_once() {
     if (quiet_hours()) return;
+    if (short_beep_active) return;
     tone(BUZZER_PIN, BUZZER_TONE_HZ);
-    delay(80);
-    noTone(BUZZER_PIN);
+    short_beep_active = true;
+    short_beep_timer  = millis();
+}
+
+void beep_once_update() {
+    if (short_beep_active && millis() - short_beep_timer >= 80) {
+        noTone(BUZZER_PIN);
+        short_beep_active = false;
+    }
 }
 
 // ------------------------------------------------------------

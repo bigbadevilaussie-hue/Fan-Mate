@@ -27,7 +27,6 @@ bool  phonePresent = false;
 volatile bool otaInProgress = false;
 
 SystemState   sys_state = STATE_ACTIVE;
-unsigned long phone_absent_since = 0;
 static unsigned long sleep_start_ms = 0;
 bool          have_baseline = false;
 uint64_t      last_rx       = 0;
@@ -40,22 +39,21 @@ int   webHistIdx = 0;
 
 void enter_sleep() {
     log_print("[SLEEP] phone absent — entering sleep\n");
+    log_write_event("SLEEP");
+    log_flush_seal();
     sys_state = STATE_LIGHT_SLEEP;
     sleep_start_ms = millis();
-    phone_absent_since = 0;
     silenceFanAndAlerts();
     auto_boost_release();
     opal_pause();
-    log_write_event("SLEEP");
     clearDisplay();
     digitalWrite(LED_PIN, LOW);
     log_print("[SLEEP] entered\n");
 }
 
 void exit_sleep() {
-    log_print("[SLEEP] phone detected — waking\n");
     sys_state = STATE_ACTIVE;
-    phone_absent_since = 0;
+    log_resume();
     log_write_event("WAKE");
     have_baseline = false;
     last_rx = 0;
@@ -204,18 +202,26 @@ void loop() {
     updatePhoneDetection();
     updateTach();
 
-    bool phone_now;
-    if (config.phoneMode == "off") {
-        phone_now = true;
-    } else {
-        phone_now = phonePresent;
+    bool phone_now = (config.phoneMode == "off") ? true : phonePresent;
+
+    if (sys_state == STATE_ACTIVE) {
+        if (config.phoneMode != "off" &&
+            !phone_now &&
+            phone_absent_since > 0 &&
+            now - phone_absent_since >= PHONE_SLEEP_DELAY_MS) {
+            enter_sleep();
+        }
+    } else if (sys_state == STATE_LIGHT_SLEEP) {
+        if (config.phoneMode == "off") {
+            exit_sleep();
+        } else if (phone_now &&
+                   phone_present_since > 0 &&
+                   now - phone_present_since >= PHONE_WAKE_DELAY_MS) {
+            exit_sleep();
+        }
     }
 
-    if (!phone_now && sys_state == STATE_ACTIVE) {
-        enter_sleep();
-    } else if (phone_now && sys_state == STATE_LIGHT_SLEEP) {
-        exit_sleep();
-    }
+    beep_once_update();
 
     if (sys_state == STATE_ACTIVE) {
         updateFanAndAlerts(currentTemp, fanPct, fanRPM, alertState, phonePresent);

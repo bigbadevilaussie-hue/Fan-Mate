@@ -15,7 +15,7 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "4.05"
+#define FAN_MATE_VERSION "4.08"
 
 #define QUIET_START_HOUR 22
 #define QUIET_END_HOUR   7
@@ -64,6 +64,8 @@ extern unsigned long phone_absent_since;
 
 #define SERIAL_BUF_LINES        50
 #define OPAL_POLL_INTERVAL_MS   15000
+#define PHONE_SLEEP_DELAY_MS    30000UL
+#define PHONE_WAKE_DELAY_MS      5000UL
 #define OPAL_LOGIN_REFRESH_MS   3000000
 
 #define BOOST_DEFAULT_THRESHOLD_KBPS  300

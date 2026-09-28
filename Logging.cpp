@@ -28,6 +28,7 @@ static const char* LOG_FILE = LOG_FILE_LIVE;
 static void _invalidate_free_bytes_cache();
 
 static time_t _live_file_start_epoch = 0;
+static bool _logging_paused = false;
 
 String log_time_string() {
     setenv("TZ", "AEST-10", 1);
@@ -221,7 +222,26 @@ void log_init() {
     }
 }
 
+void log_flush_seal() {
+    if (!LittleFS.exists(LOG_FILE)) {
+        _logging_paused = true;
+        return;
+    }
+    time_t now = time(nullptr);
+    seal_live(now);
+    _logging_paused = true;
+    log_print("[LOG] paused for sleep\n");
+}
+
+void log_resume() {
+    _logging_paused = false;
+    time_t now = time(nullptr);
+    open_fresh_live(now);
+    log_print("[LOG] resumed\n");
+}
+
 void log_write(float temp, float net_kbps, int boost, int fan, int rpm) {
+    if (_logging_paused) return;
     if (log_rotation_paused()) return;
     File f = LittleFS.open(LOG_FILE, "a");
     if (!f) return;
@@ -255,6 +275,7 @@ extern int   fanRPM;
 extern bool opal_ok_recently();   // from OpalClient
 
 void log_write_event(const char* event) {
+    if (_logging_paused) return;
     if (log_rotation_paused()) return;
     File f = LittleFS.open(LOG_FILE, "a");
     if (!f) return;
