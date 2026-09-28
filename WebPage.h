@@ -115,12 +115,51 @@ canvas {
   margin-top: 20px;
 }
 .disconnected { opacity: 0.45; }
+
+.kill-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: bold;
+  transition: background 0.3s, color 0.3s;
+}
+.kill-auto   { background: #d4f4dd; color: #1e6b35; border: 1px solid #50e890; }
+.kill-active { background: #ffd9de; color: #7a0a1f; border: 1px solid #ff304f;
+               animation: pulse 1s ease-in-out infinite; }
+.kill-off    { background: #ffe8cc; color: #6b3a00; border: 1px solid #ff8a30; }
+
+.kill-banner button {
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: none;
+  font-weight: bold;
+  font-size: 12px;
+  cursor: pointer;
+  background: #ffffff;
+  color: inherit;
+  font-family: inherit;
+}
+.kill-banner button:hover { opacity: 0.85; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.65; }
+}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="title">🌀 Fan-Mate</div>
   <div class="status" id="status">connecting…</div>
+
+  <div class="kill-banner kill-auto" id="kill-banner">
+    <span id="kill-label">KILL MODE: AUTO</span>
+    <button id="kill-btn" onclick="toggleKill()">DISABLE</button>
+  </div>
 
   <div class="card">
     <div class="lbl">📍 Atkinsons Dam</div>
@@ -368,6 +407,10 @@ function render(data) {
   drawGraph('temp-graph', tempHist, 15, 45, '#1e66f5', '#cfe0ff', tempWarning, ['-15m', '-7m', 'now']);
 
   el('fw').textContent = 'v' + (data.fw || '?');
+
+  if (data.kill_mode !== undefined) {
+    renderKillBanner(data.kill_mode);
+  }
 }
 
 async function tick() {
@@ -381,6 +424,38 @@ async function tick() {
   } catch (e) {
     document.getElementById('status').textContent = 'disconnected';
     if (everConnected) document.querySelector('.wrap').classList.add('disconnected');
+  }
+}
+
+async function toggleKill() {
+  const mode = window._killMode || 0;
+  const url = (mode === 2) ? '/kill/auto' : '/kill/clear';
+  try {
+    await fetch(url, { method: 'POST' });
+    window._killMode = (url === '/kill/auto') ? 0 : 2;
+    setTimeout(tick, 300);
+  } catch (e) {}
+}
+
+function renderKillBanner(mode) {
+  const banner = document.getElementById('kill-banner');
+  const label  = document.getElementById('kill-label');
+  const btn    = document.getElementById('kill-btn');
+  if (!banner) return;
+  window._killMode = mode;
+  banner.className = 'kill-banner';
+  if (mode === 0) {
+    banner.classList.add('kill-auto');
+    label.textContent = 'KILL MODE: AUTO';
+    btn.textContent = 'DISABLE';
+  } else if (mode === 1) {
+    banner.classList.add('kill-active');
+    label.textContent = '⚠ KILL MODE ACTIVE';
+    btn.textContent = 'SILENCE';
+  } else {
+    banner.classList.add('kill-off');
+    label.textContent = 'KILL MODE: OFF';
+    btn.textContent = 'ARM';
   }
 }
 
