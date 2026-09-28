@@ -275,7 +275,7 @@ void updateFanAndAlerts(
 
     fanPWM = newPwm;
     fanPctLocal = map(fanPWM, 0, 255, 0, 100);
-    ledcWrite(0, fanPWM);
+    ledcWrite(2, fanPWM);
 
 #if FAN_STALL_ENABLED
     if (fanPctLocal >= 25 && fanRPMLocal == 0) {
@@ -320,7 +320,7 @@ void updateFanAndAlerts(
 
 // ------------------------------------------------------------
 void silenceFanAndAlerts() {
-    ledcWrite(0, 0);
+    ledcWrite(2, 0);
     noTone(BUZZER_PIN);
     fanPWM = 0;
     fanPctLocal = 0;
@@ -351,9 +351,9 @@ void initHardware() {
     ds18b20.setWaitForConversion(false);
     pinMode(PHONE_SENSE_PIN, INPUT_PULLUP);
 
-    ledcSetup(0, PWM_FREQ, PWM_RES);
-    ledcAttachPin(FAN_PWM_PIN, 0);
-    ledcWrite(0, 0);
+    ledcSetup(2, PWM_FREQ, PWM_RES);
+    ledcAttachPin(FAN_PWM_PIN, 2);
+    ledcWrite(2, 0);
 
     pinMode(BUZZER_PIN, OUTPUT);
     digitalWrite(BUZZER_PIN, LOW);

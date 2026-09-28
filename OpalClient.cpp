@@ -11,7 +11,7 @@
 // ============================================================
 static String   opal_sid           = "";
 static bool     opal_paused        = false;
-static uint32_t opal_sid_time      = 0;
+static volatile unsigned long opal_sid_time = 0;
 static uint64_t opal_last_rx       = 0;
 static bool     opal_have_baseline = false;
 static unsigned long opal_last_ok_ms = 0;
@@ -124,6 +124,8 @@ static bool opal_login() {
 
     opal_sid      = String(sid);
     opal_sid_time = millis();
+    log_print("[OPAL] SID set t=%lu len=%u\n",
+              (unsigned long)opal_sid_time, opal_sid.length());
 
     log_print("[OPAL] login OK\n");
     return true;
@@ -133,6 +135,10 @@ static bool opal_login() {
 static bool opal_ensure_login() {
     bool sid_empty = (opal_sid.length() == 0);
     bool sid_expired = (millis() - opal_sid_time > OPAL_LOGIN_REFRESH_MS);
+    log_print("[OPAL] check t=%lu now=%lu diff=%lu\n",
+              (unsigned long)opal_sid_time,
+              (unsigned long)millis(),
+              (unsigned long)(millis() - opal_sid_time));
     if (sid_empty || sid_expired) {
         log_print("[OPAL] relogin (empty=%d expired=%d age=%lus)\n",
                   sid_empty ? 1 : 0, sid_expired ? 1 : 0,
