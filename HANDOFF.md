@@ -360,3 +360,30 @@ device unreachable
 Just do the work.
 
 ---
+
+---
+
+## PENDING: room_c in reports
+
+Firmware v3.95 writes `room_c` as column 9 in `/log.csv`.
+- Empty value until NTC is wired (3-4 days)
+- `LOG_HEADER` = `timestamp,temp_c,net_kbps,boost,fan,rpm,event,outdoor_c,room_c`
+- Stub: `room_get_temp()` in `Logging.cpp` returns `-99.0f`
+
+**Tk GUI `fanmate/reports.py` `_parse()` does NOT yet read `room_c`.**
+- Currently reads indices 0-5 only
+- Old 8-column files still parse fine
+- New 9-column files parse fine, but `room_c` is ignored
+- **Decision: do NOT fix Tk GUI parser. Put room_c support into the new QML GUI report/log handler instead.**
+
+**When NTC arrives:**
+1. Wire MF52AT 10k B=3950 to GPIO 0 (voltage divider with 10k)
+2. Replace `room_get_temp()` stub in `Logging.cpp` with real Steinhart-Hart read
+3. No schema change, no version bump needed
+4. Verify `/log.csv` row has a real value in the 9th field
+
+**Future QML GUI report parser must:**
+- Read column 9 (`room_c`)
+- Skip empty values (no data)
+- Skip `-99` values (sentinel, if we ever use it)
+- Handle both 8-column (pre-v3.95) and 9-column files
