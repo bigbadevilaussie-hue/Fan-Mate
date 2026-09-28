@@ -360,12 +360,3 @@ device unreachable
 Just do the work.
 
 ---
-
-## NOTES FOR THE AI
-
-- **Do not reference the time of day.** Nick finds it annoying.
-- **Do not suggest Nick should sleep, rest, or take a break.** He decides when to stop.
-- **Do not comment on how long the session has been running.**
-- **Do not open with pleasantries about mornings, evenings, or late nights.**
-
-Just do the work.
