@@ -67,15 +67,26 @@ class Report2H(tk.Toplevel):
                         continue
                     try:
                         temp = float(parts[1])
-                        net  = float(parts[2])
-                        boost = int(parts[3])
-                        fan  = int(parts[4])
-                        rpm  = int(parts[5])
                     except Exception:
                         continue
+                    net = None
+                    if len(parts) > 2 and parts[2].strip():
+                        try: net = float(parts[2])
+                        except: pass
+                    try:
+                        boost = int(parts[3]) if parts[3].strip() else 0
+                        fan   = int(parts[4]) if parts[4].strip() else 0
+                        rpm   = int(parts[5]) if parts[5].strip() else 0
+                    except Exception:
+                        continue
+                    room = None
+                    if len(parts) > 8 and parts[8].strip():
+                        try: room = float(parts[8])
+                        except: pass
                     out.append({
                         "t": ts, "temp": temp, "net": net,
                         "boost": boost, "fan": fan, "rpm": rpm,
+                        "room": room,
                     })
         except Exception as e:
             print(f"[REPORT] parse {path}: {e}")
@@ -85,7 +96,7 @@ class Report2H(tk.Toplevel):
         if not rows:
             return {}
         temps = [r["temp"] for r in rows if r["temp"] > 0]
-        nets  = [r["net"] for r in rows]
+        nets  = [r["net"] for r in rows if r["net"] is not None]
         fans  = [r["fan"] for r in rows]
         rpms  = [r["rpm"] for r in rows if r["rpm"] > 0]
         boosts = [r["boost"] for r in rows]
@@ -132,7 +143,7 @@ class Report2H(tk.Toplevel):
 
         tk.Label(wrap, text=f"{self._HEADER}  ·  {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')}",
                  font=("Helvetica Neue", 15, "bold")).pack(anchor="w")
-        tk.Label(wrap, text="  ·  ".join(s["files"]),
+        tk.Label(wrap, text=f"{len(s['files'])} file(s)",
                  font=("Helvetica Neue", 10)).pack(anchor="w", pady=(0, 10))
 
         plot_w, plot_h = 620, 120

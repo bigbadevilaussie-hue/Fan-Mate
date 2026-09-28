@@ -86,7 +86,6 @@ def sync_time_once():
 
 
 def fetch_config():
-    global latest_config
     try:
         r = requests.get(f"{FANMATE_URL}/config", timeout=10)
         if r.status_code != 200:

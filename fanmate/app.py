@@ -82,7 +82,7 @@ class App:
         mb.add_cascade(label="🌀 Fan-Mate", menu=am)
         root.config(menu=mb)
 
-        self.title_lbl = tk.Label(root, text="🌀 Fan-Mate", font=FONT_TITLE)
+        self.title_lbl = tk.Label(root, text="Fan-Mate", font=FONT_TITLE)
         self.title_lbl.pack(pady=(16, 2))
         self.status_label = tk.Label(root, text="connecting…", font=("Helvetica Neue", 10, "italic"))
         self.status_label.pack(pady=(0, 8))
@@ -258,8 +258,9 @@ class App:
                     "OTA", f"Failed: HTTP {r.status_code}"))
         except Exception as e:
             print(f"[OTA] EXCEPTION: {e}")
-            self.root.after(0, lambda: messagebox.showerror(
-                "OTA", f"Failed:\n{e}"))
+            err = str(e)
+            self.root.after(0, lambda m=err: messagebox.showerror(
+                "OTA", f"Failed:\n{m}"))
 
         print("[OTA] done")
         print("=" * 50)
