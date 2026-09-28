@@ -34,3 +34,4 @@ fanmate-v2.*.py
 fanmate-v3.0*.py
 fanmate.py.before-*
 PROJECT.md
+.DS_Store
