@@ -122,18 +122,19 @@ static void tick_15s() {
     uint64_t rx_now = 0;
     bool opal_ok = opal_poll(rx_now);
 
-    if (!opal_ok) {
-        return;
-    }
-
     float kbps = 0.0f;
-    if (have_baseline && rx_now >= last_rx) {
-        uint64_t delta = rx_now - last_rx;
-        kbps = (delta / 15.0f) / 1024.0f;
+    if (opal_ok) {
+        if (have_baseline && rx_now >= last_rx) {
+            uint64_t delta = rx_now - last_rx;
+            kbps = (delta / 15.0f) / 1024.0f;
+        } else {
+            have_baseline = true;
+        }
+        last_rx = rx_now;
     } else {
-        have_baseline = true;
+        // Router unreachable — keep last known rate, skip boost update
+        kbps = lastNetKbps;
     }
-    last_rx = rx_now;
 
     static float peak_hist[3] = {0, 0, 0};
     static int   peak_idx = 0;
@@ -150,7 +151,7 @@ static void tick_15s() {
     webNetHist[webHistIdx]  = kbps_smooth;
     webHistIdx = (webHistIdx + 1) % WEB_HIST_LEN;
 
-    auto_boost_update(kbps_smooth);
+    if (opal_ok) auto_boost_update(kbps_smooth);
 
     if (currentTemp > 0.0) {
         log_write(currentTemp, kbps_smooth,

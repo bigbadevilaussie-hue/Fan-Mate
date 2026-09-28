@@ -3,6 +3,7 @@
 #include "DisplayManager.h"
 #include "WiFiManager.h"
 #include "SerialBuffer.h"
+#include "AutoBoost.h"
 
 #include <LittleFS.h>
 #include <Preferences.h>
@@ -11,6 +12,12 @@
 #include <esp_system.h>
 
 extern float weather_get_temp();
+
+// TODO(NTC): wire MF52AT 10k B=3950 to GPIO 0, replace this stub
+// Returns -99 to signal "no sensor"; log_write writes empty field
+static float room_get_temp() {
+    return -99.0f;
+}
 extern float currentTemp;
 
 static unsigned long last_full_beep = 0;
@@ -41,7 +48,7 @@ static void write_header_if_new() {
     if (LittleFS.exists(LOG_FILE)) return;
     File f = LittleFS.open(LOG_FILE, "w");
     if (!f) return;
-    f.println("timestamp,temp_c,net_kbps,boost,fan,rpm,event,outdoor_c");
+    f.println(LOG_HEADER);
     f.close();
 }
 
@@ -98,7 +105,7 @@ static bool build_sealed_name(time_t name_epoch, char* out, size_t n) {
 static void open_fresh_live(time_t start_epoch) {
     File f = LittleFS.open(LOG_FILE, "w");
     if (!f) return;
-    f.println("timestamp,temp_c,net_kbps,boost,fan,rpm,event,outdoor_c");
+    f.println(LOG_HEADER);
     f.close();
     _live_file_start_epoch = start_epoch;
     save_start_epoch(start_epoch);
@@ -216,19 +223,52 @@ void log_write(float temp, float net_kbps, int boost, int fan, int rpm) {
     File f = LittleFS.open(LOG_FILE, "a");
     if (!f) return;
     String t = log_time_string();
-    f.printf("%s,%.1f,%.1f,%d,%d,%d,,%.1f\n",
-             t.c_str(), temp, net_kbps, boost, fan, rpm,
-             weather_get_temp());
+    float rt = room_get_temp();
+    if (rt < -90.0f) {
+        f.printf("%s,%.1f,%.1f,%d,%d,%d,,%.1f,\n",
+                 t.c_str(), temp, net_kbps, boost, fan, rpm,
+                 weather_get_temp());
+    } else {
+        f.printf("%s,%.1f,%.1f,%d,%d,%d,,%.1f,%.1f\n",
+                 t.c_str(), temp, net_kbps, boost, fan, rpm,
+                 weather_get_temp(), rt);
+    }
     f.close();
 }
+
+static void sanitize_event(char* dst, size_t n, const char* src) {
+    size_t j = 0;
+    for (size_t i = 0; src[i] && j + 1 < n; i++) {
+        dst[j++] = (src[i] == ',') ? ';' : src[i];
+    }
+    dst[j] = 0;
+}
+
+extern float lastNetKbps;
+extern int   fanPct;
+extern int   fanRPM;
 
 void log_write_event(const char* event) {
     if (log_rotation_paused()) return;
     File f = LittleFS.open(LOG_FILE, "a");
     if (!f) return;
     String t = log_time_string();
-    f.printf("%s,%.1f,0.0,0,0,0,%s,%.1f\n",
-             t.c_str(), currentTemp, event, weather_get_temp());
+    char safe[64];
+    sanitize_event(safe, sizeof(safe), event);
+    float rt = room_get_temp();
+    if (rt < -90.0f) {
+        f.printf("%s,%.1f,%.1f,%d,%d,%d,%s,%.1f,\n",
+                 t.c_str(), currentTemp, lastNetKbps,
+                 auto_boost_gear() > 0 ? 1 : 0,
+                 fanPct, fanRPM,
+                 safe, weather_get_temp());
+    } else {
+        f.printf("%s,%.1f,%.1f,%d,%d,%d,%s,%.1f,%.1f\n",
+                 t.c_str(), currentTemp, lastNetKbps,
+                 auto_boost_gear() > 0 ? 1 : 0,
+                 fanPct, fanRPM,
+                 safe, weather_get_temp(), rt);
+    }
     f.close();
 }
 
@@ -260,8 +300,30 @@ size_t log_get_size() {
     return sz;
 }
 
+static bool log_evict_oldest() {
+    char names[LOG_MAX_SEALED][48];
+    size_t n = log_list_sealed(names, LOG_MAX_SEALED);
+    if (n <= LOG_KEEP_MIN) {
+        log_print("[LOG] evict: only %u sealed, keeping all\n", (unsigned)n);
+        return false;
+    }
+    // names are sorted by filesystem iteration; delete first (oldest)
+    char p[80];
+    snprintf(p, sizeof(p), "/%s", names[0]);
+    bool ok = LittleFS.remove(p);
+    log_print("[LOG] evict: removed %s (%s)\n", p, ok ? "OK" : "FAIL");
+    return ok;
+}
+
 bool log_rotation_paused() {
     size_t free_bytes = LittleFS.totalBytes() - LittleFS.usedBytes();
+    if (free_bytes >= LOG_PAUSE_FREE_BYTES) return false;
+
+    // Try to evict oldest sealed file to reclaim space
+    while (free_bytes < LOG_PAUSE_FREE_BYTES) {
+        if (!log_evict_oldest()) break;
+        free_bytes = LittleFS.totalBytes() - LittleFS.usedBytes();
+    }
     return free_bytes < LOG_PAUSE_FREE_BYTES;
 }
 
@@ -347,6 +409,6 @@ bool log_delete_sealed(const char* name) {
     else                snprintf(p, sizeof(p), "/%s", name);
     if (!LittleFS.exists(p)) return false;
     bool ok = LittleFS.remove(p);
-    if (ok) log_print("[LOG] uploaded %s\n", p);
+    if (ok) log_print("[LOG] deleted %s\n", p);
     return ok;
 }
