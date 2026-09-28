@@ -22,4 +22,13 @@ void silenceFanAndAlerts();
 // Stall detection — true when fan commanded on but tach reads zero
 bool fan_stall_active();
 
+
+// Kill mode state (v4.00)
+// 0 = AUTO (armed)
+// 1 = ACTIVE (fired)
+// 2 = OFF (user silenced)
+int  kill_get_state();
+void kill_request_clear();
+void kill_request_auto();
+
 #endif

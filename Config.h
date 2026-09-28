@@ -15,7 +15,7 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "3.95"
+#define FAN_MATE_VERSION "4.00"
 
 #define QUIET_START_HOUR 22
 #define QUIET_END_HOUR   7
@@ -26,6 +26,7 @@ extern unsigned long phone_absent_since;
 #define FAN_PWM_PIN      7
 #define LED_PIN          8
 #define BUZZER_PIN       10
+#define BUZZER_TONE_HZ   2000
 #define TACH_PIN         3
 #define DS18B20_PIN      4
 #define PHONE_SENSE_PIN  1
@@ -41,12 +42,6 @@ extern unsigned long phone_absent_since;
 
 #define FAN_STALL_ENABLED 1
 
-#define BUZZER_CHANNEL 1
-#define BUZZER_FREQ    2000
-#define BUZZER_RES     8
-#define BUZZER_QUIET   64
-#define BUZZER_MEDIUM  128
-#define BUZZER_LOUD    255
 
 #define WARNING_BEEPS       2
 #define WARNING_BEEP_MS     150
@@ -57,6 +52,11 @@ extern unsigned long phone_absent_since;
 #define PANIC_BEEP_MS     200
 #define PANIC_GAP_MS      200
 #define PANIC_INTERVAL_MS 120000
+
+#define KILL_BEEPS       3
+#define KILL_BEEP_MS     200
+#define KILL_GAP_MS      200
+#define KILL_INTERVAL_MS 30000
 
 #define HTTP_PORT                80
 #define WIFI_CONNECT_TIMEOUT_MS  15000

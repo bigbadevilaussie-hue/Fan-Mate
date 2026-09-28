@@ -336,13 +336,13 @@ void log_check_full() {
     unsigned long now = millis();
     if (now - last_full_beep >= 60000) {
         last_full_beep = now;
-        ledcWrite(BUZZER_CHANNEL, BUZZER_MEDIUM);
+        tone(BUZZER_PIN, BUZZER_TONE_HZ);
         delay(100);
-        ledcWrite(BUZZER_CHANNEL, 0);
+        noTone(BUZZER_PIN);
         delay(100);
-        ledcWrite(BUZZER_CHANNEL, BUZZER_MEDIUM);
+        tone(BUZZER_PIN, BUZZER_TONE_HZ);
         delay(100);
-        ledcWrite(BUZZER_CHANNEL, 0);
+        noTone(BUZZER_PIN);
     }
 }
 

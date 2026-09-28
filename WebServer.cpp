@@ -17,6 +17,10 @@
 #include <time.h>
 #include <sys/time.h>
 
+extern int  kill_get_state();
+extern void kill_request_clear();
+extern void kill_request_auto();
+
 static WebServer server(HTTP_PORT);
 
 extern volatile bool otaInProgress;
@@ -131,6 +135,7 @@ static void handle_status() {
     }
     json += "],";
 
+    json += "\"kill_mode\":" + String(kill_get_state()) + ",";
     json += "\"temp_warning\":" + String(config.tempWarning, 1) + ",";
     json += "\"temp_panic\":" + String(config.tempPanic, 1) + ",";
     json += "\"temp_kill\":" + String(config.tempKill, 1) + ",";
@@ -405,6 +410,18 @@ static void handle_log_nack() {
     server.send(200, "text/plain", "OK");
 }
 
+static void handle_kill_clear() {
+    note_host();
+    kill_request_clear();
+    server.send(200, "text/plain", "OK");
+}
+
+static void handle_kill_auto() {
+    note_host();
+    kill_request_auto();
+    server.send(200, "text/plain", "OK");
+}
+
 void server_setup() {
     if (!wifi_connected()) {
         Serial.println("[HTTP] WiFi not connected — server not started");
@@ -425,6 +442,8 @@ void server_setup() {
     server.on("/log/nack",   HTTP_POST, handle_log_nack);
     server.on("/serial",     HTTP_GET,  handle_serial_page);
     server.on("/serial-raw", HTTP_GET,  handle_serial_raw);
+    server.on("/kill/clear",  HTTP_POST, handle_kill_clear);
+    server.on("/kill/auto",   HTTP_POST, handle_kill_auto);
     server.on("/reboot",     HTTP_GET,  handle_reboot);
     server.on("/ota",        HTTP_POST, handle_ota_done, handle_ota_upload);
 
