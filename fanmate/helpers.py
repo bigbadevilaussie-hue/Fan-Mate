@@ -67,7 +67,7 @@ def phone_temp_emoji(t):
     if t < 36: return "🥵"
     return "🔥"
 def fan_emoji(p):
-    if p == 0:  return "💤"
+    if p == 0:  return "⭕"
     if p < 30:  return "🍃"
     if p < 70:  return "💨"
     return "🌪️"
