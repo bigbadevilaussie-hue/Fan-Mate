@@ -428,13 +428,13 @@ size_t log_list_sealed(char names[][48], size_t max) {
 }
 
 size_t log_sealed_count() {
-    char buf[32][48];
-    return log_list_sealed(buf, 32);
+    char buf[LOG_MAX_SEALED][48];
+    return log_list_sealed(buf, LOG_MAX_SEALED);
 }
 
 size_t log_sealed_bytes() {
-    char names[32][48];
-    size_t n = log_list_sealed(names, 32);
+    char names[LOG_MAX_SEALED][48];
+    size_t n = log_list_sealed(names, LOG_MAX_SEALED);
     size_t total = 0;
     for (size_t i = 0; i < n; i++) {
         char p[80];

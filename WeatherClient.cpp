@@ -31,11 +31,9 @@ void weather_loop() {
     if (lastFetch > 0 && now - lastFetch < REFRESH_MS) return;
     if (WiFi.status() != WL_CONNECTED) return;
 
-    lastFetch = now;
-
     HTTPClient http;
     http.begin(URL);
-    http.setTimeout(8000);
+    http.setTimeout(3000);
     int code = http.GET();
 
     if (code == 200) {
@@ -48,6 +46,7 @@ void weather_loop() {
                 weatherPrefs.begin("weather", false);
                 weatherPrefs.putFloat("temp", t);
                 weatherPrefs.end();
+                lastFetch = now;      // only on success
                 Serial.printf("[WEATHER] %.1f C\n", t);
             }
         }

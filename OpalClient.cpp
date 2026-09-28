@@ -131,7 +131,12 @@ static bool opal_login() {
 
 // ------------------------------------------------------------
 static bool opal_ensure_login() {
-    if (opal_sid.length() == 0 || millis() - opal_sid_time > OPAL_LOGIN_REFRESH_MS) {
+    bool sid_empty = (opal_sid.length() == 0);
+    bool sid_expired = (millis() - opal_sid_time > OPAL_LOGIN_REFRESH_MS);
+    if (sid_empty || sid_expired) {
+        log_print("[OPAL] relogin (empty=%d expired=%d age=%lus)\n",
+                  sid_empty ? 1 : 0, sid_expired ? 1 : 0,
+                  (unsigned long)((millis() - opal_sid_time) / 1000UL));
         if (!opal_login()) {
             return false;
         }
@@ -168,6 +173,7 @@ bool opal_poll(uint64_t &rx_total) {
 
     String resp;
     if (!rpc_call(body, resp)) {
+        log_print("[OPAL] poll rpc failed\n");
         return false;
     }
 

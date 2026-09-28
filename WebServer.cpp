@@ -197,6 +197,11 @@ static void handle_config_post() {
     String body = server.arg("plain");
     Serial.printf("[HTTP] POST /config: %s\n", body.c_str());
 
+    StaticJsonDocument<128> check;
+    if (deserializeJson(check, body) != DeserializationError::Ok) {
+        server.send(400, "text/plain", "bad json");
+        return;
+    }
     settings_apply_json(body.c_str());
     server.send(200, "text/plain", "OK");
 }

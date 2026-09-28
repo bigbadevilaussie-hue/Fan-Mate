@@ -103,13 +103,26 @@ void setup() {
     }
     initDisplay();
     log_init();
-    log_boot_recovery();
     log_write_reset_reason();
 
     drawSplashScreen();
     delay(5000);
 
     wifi_setup();
+
+    // Wait up to 15s for NTP before boot recovery
+    {
+        unsigned long wait_start = millis();
+        while (!ntp_synced() && millis() - wait_start < 15000) {
+            wifi_loop();
+            ntp_loop();
+            delay(100);
+        }
+        log_print("[BOOT] NTP wait done (%s)\n",
+                  ntp_synced() ? "synced" : "timeout");
+    }
+
+    log_boot_recovery();
 
     log_print("[BOOT] Fan-Mate V%s ready\n", FAN_MATE_VERSION);
 }
