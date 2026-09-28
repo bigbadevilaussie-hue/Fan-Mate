@@ -387,3 +387,41 @@ Firmware v3.95 writes `room_c` as column 9 in `/log.csv`.
 - Skip empty values (no data)
 - Skip `-99` values (sentinel, if we ever use it)
 - Handle both 8-column (pre-v3.95) and 9-column files
+
+---
+
+## GUI 2 v1.02 — TODO (open items from v1.01)
+
+1. **BOOST gauge shows 0** — `dev.boostLvl` likely missing from `bridge.py`. Verify `/status` exposes `boost_lvl`, add `Property(int)` for it in the bridge, bind to `BoostGauge.value`.
+
+2. **RPM needle pegs** at 5310 against 5000 max. Either:
+   - Raise `vmax` to 6000 (more headroom)
+   - Accept peg (real tachs peg too)
+   - Show "MAX" flash if value > vmax
+
+3. **Centre gauge glow bleed** — the amber/red glow rectangle at 1.35× gauge size bleeds into the window. Cap at ~1.15× or reduce opacity.
+
+4. **Three gauges don't align** — different y offsets (130 / 70 / 130). Should share a common vertical centre line:
+   - BOOST top = RPM top + 70
+   - TEMP top = RPM top + 70
+   - Or use `anchors.verticalCenter` against a container
+
+5. **LED row spacing** — 34px between dots. Currently floats at y:24, disconnected from gauges. Should tuck closer.
+
+6. **`BoostGauge` arc track** — verify the dim track renders (was invisible in v1.01 screenshot).
+
+7. **`BoostGauge` marks** — 4×22px, still small. Consider 5×28px for readability.
+
+8. **Layout responsiveness** — `Main.qml` uses hardcoded x/y. If window resizes, everything stays put. Either lock the window size (`setFixedSize`) or anchor properly.
+
+9. **`Bar.qml` unused** — either integrate back into layout (for network/enviro/alarm) or delete.
+
+10. **`Theme.qml` refactor** (deferred) — pull colours + fonts into a singleton.
+
+**Priority order:**
+1 → 4 → 3 → 2 → 6 → 7 → 5 → 8 → 9 → 10
+
+**Notes:**
+- Version string is `GUI 2 v1.01` in `Main.qml` `guiVersion` property
+- Update it when shipping v1.02
+- Commit and tag `gui-v2-v1.02` when done
