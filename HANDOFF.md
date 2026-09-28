@@ -425,3 +425,87 @@ Firmware v3.95 writes `room_c` as column 9 in `/log.csv`.
 - Version string is `GUI 2 v1.01` in `Main.qml` `guiVersion` property
 - Update it when shipping v1.02
 - Commit and tag `gui-v2-v1.02` when done
+
+---
+
+## SESSION END — 2026-09-28
+
+### Shipped tonight
+
+**Firmware v3.95 → v4.05** (tags: v3.95, v4.00-firmware, v4.01, v4.02, v4.03, v4.05)
+- Buzzer fixed: LEDC PWM was wrong for active buzzer → switched to `tone()`/`noTone()`
+- Kill state machine: AUTO / ACTIVE / OFF, latched, WDT guard, web button
+- Log hardening: eviction, real event values, comma sanitize, `room_c` column reserved
+- Boot recovery moved after NTP wait (was discarding live logs every boot)
+- Sealed file cap raised 32 → 64
+- Weather: success-only timer, 3s timeout
+- `/config` POST validates JSON
+- **Fan LEDC channel fix:** moved fan from channel 0 → channel 2. `tone()` was stealing channel 0, causing fan to pulse/stall during beeps.
+- OPAL diagnostics added — confirmed SID caching works, never was a bug
+
+**Tk GUI v3.75** (tag: gui-v3.75)
+- Report filename line removed
+- `None` crash in `max(nets)` fixed
+- OTA `NameError` fixed
+- `global latest_config` shadow removed
+- Double logo gone
+- Null-safe `_parse()` with `room_c` support
+
+### Current state
+
+| Layer | Version | Tag |
+|---|---|---|
+| Firmware | 4.05 | v4.05 |
+| Tk GUI | 3.75 | gui-v3.75 |
+| QML GUI v2 | 1.01 | gui-v2-v1.01 |
+| Repo HEAD | 1de4757 | — |
+
+### Hardware state
+
+- Fan: mounted in coupling assembly, blowing on phone back, working
+- DS18B20 probe: embedded in Quad Lock adapter, contacting phone back
+- Coupling assembly: mounted on phone case
+- Controller assembly: separate box
+- A3144 hall sensor: **not wired**
+- NTC MF52AT: **not arrived** (3-4 days out)
+
+### Open for next session
+
+**🟠 Deferred firmware:**
+1. Kill state machine skipped when asleep (`updateFanAndAlerts` gated by `sys_state == STATE_ACTIVE`)
+2. `tick_15s()` skipped when asleep → no overnight logging
+3. `quiet_hours()` uses Config.h defines, `settings_is_night()` uses NVS — they disagree
+4. AutoBoost gear doesn't persist across reboot
+5. Kill fires on ambient heat when phone absent (needs hall sensor to gate)
+
+**🟡 Cosmetic:**
+- `beep_once()` blocks 80ms
+- `runBeepSequence` ignores quiet hours
+
+**🟣 GUI 2 v1.02 (deferred until firmware stable):**
+- Boost bridge (`dev.boostLvl` missing)
+- RPM max 5000 → 6000
+- Centre glow bleed
+- Gauge alignment
+
+**🟢 Hardware (3-4 days):**
+- NTC → GPIO 0, replace `room_get_temp()` stub
+- A3144 → GPIO 1, set `phoneMode = "auto"`
+
+### Version history note
+
+- v4.04 exists on device but was never tagged. Fan fix and OPAL diagnostics landed together in v4.05.
+
+### Known false alarms
+
+- **OPAL login "loop"** — never existed. Normal 4-min SID refresh. Diagnostics confirmed `t=10848` set once, `diff` grows 15s/poll, relogin only at 240s.
+
+### How to test
+
+
+Web GUI: http://fan-mate.local
+
+### Handover protocol
+
+**No time references. No sleep suggestions.**
+Just do the work.
