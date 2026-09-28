@@ -11,11 +11,11 @@ static Preferences weatherPrefs;
 
 static const char* URL =
     "http://api.open-meteo.com/v1/forecast"
-    "?latitude=-27.28&longitude=152.51"
+    "?latitude=-27.4219&longitude=152.4339"
     "&current=temperature_2m"
     "&timezone=Australia%2FBrisbane";
 
-static const unsigned long REFRESH_MS = 15UL * 60UL * 1000UL;
+static const unsigned long REFRESH_MS = 5UL * 60UL * 1000UL;
 
 void weather_init() {
     weatherPrefs.begin("weather", true);

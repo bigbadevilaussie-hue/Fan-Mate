@@ -132,6 +132,8 @@ static void handle_status() {
     json += "],";
 
     json += "\"temp_warning\":" + String(config.tempWarning, 1) + ",";
+    json += "\"temp_panic\":" + String(config.tempPanic, 1) + ",";
+    json += "\"temp_kill\":" + String(config.tempKill, 1) + ",";
     int boostThr = 700;
     if (config.boostMode == 1) boostThr = config.boostNormal.threshold;
     else if (config.boostMode == 2) boostThr = config.boostAggr.threshold;
