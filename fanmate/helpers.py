@@ -71,3 +71,12 @@ def fan_emoji(p):
     if p < 30:  return "🍃"
     if p < 70:  return "💨"
     return "🌪️"
+
+
+def is_night_now():
+    """True if current local time is in the night window."""
+    from .config import NIGHT_START_HOUR, NIGHT_END_HOUR
+    h = datetime.now().hour
+    if NIGHT_START_HOUR < NIGHT_END_HOUR:
+        return NIGHT_START_HOUR <= h < NIGHT_END_HOUR
+    return h >= NIGHT_START_HOUR or h < NIGHT_END_HOUR

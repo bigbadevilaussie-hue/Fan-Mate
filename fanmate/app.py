@@ -383,10 +383,16 @@ class App:
             self.temp_lbl.config(text=f"{temp:.1f}°C  {em}", fg=c)
 
         fan_pct = int(d.get("fan", 0))
-        fe = fan_emoji(fan_pct)
+        night_now = is_night_now()
+        if night_now and fan_pct > 0:
+            fe = "💤"
+            fcolor = t["blue"]
+        else:
+            fe = fan_emoji(fan_pct)
+            fcolor = t["muted"] if fan_pct == 0 else t["green"]
         self.fan_lbl.config(
             text=f"OFF {fe}" if fan_pct == 0 else f"{fan_pct}% {fe}",
-            fg=t["muted"] if fan_pct == 0 else t["green"],
+            fg=fcolor,
         )
         rpm = int(d.get("rpm", 0))
         self.rpm_lbl.config(text=f"{rpm}", fg=t["green"] if rpm > 0 else t["muted"])

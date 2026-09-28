@@ -2,7 +2,7 @@
 
 import os
 
-GUI_VERSION = "3.75"
+GUI_VERSION = "3.77"
 FANMATE_URL = "http://fan-mate.local"
 FANMATE_DIR = os.path.expanduser("~/Documents/Arduino/fanmate")
 BUILD_DIR   = os.path.join(FANMATE_DIR, "build", "esp32.esp32.esp32c3")
@@ -36,3 +36,7 @@ THEME_NIGHT = {
 }
 
 HIST_LEN = 60
+
+NIGHT_START_HOUR = 22
+NIGHT_END_HOUR = 7
+NIGHT_MAX_PCT = 75

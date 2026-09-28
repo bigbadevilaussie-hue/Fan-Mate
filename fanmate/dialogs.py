@@ -214,18 +214,16 @@ class SettingsDialog(tk.Toplevel):
 
 
 class DynaTune(tk.Toplevel):
-    """Health check for fan + turbo performance. Reads ALL log files."""
+    """Traffic and phone temp on one time axis — dual y-axis overlay."""
 
     def __init__(self, parent, app):
         super().__init__(parent)
         self.app = app
-        self.title("Dyna Tune — Health Check")
+        self.title("Dyna Tune")
         self.resizable(False, False)
         self.transient(parent)
 
         self._rows = []
-        self._files = []
-        self._score_colors = []
         self._load_all()
 
         if not self._rows:
@@ -243,7 +241,6 @@ class DynaTune(tk.Toplevel):
         pattern = os.path.join(LOG_DIR, "log-*.csv")
         files = [p for p in glob.glob(pattern) if not p.endswith(".part")]
         files.sort()
-        self._files = files
         for path in files:
             self._rows.extend(self._parse(path))
         self._rows.sort(key=lambda r: r["t"])
@@ -265,209 +262,168 @@ class DynaTune(tk.Toplevel):
                         continue
                     try:
                         temp = float(parts[1])
-                        net  = float(parts[2])
-                        boost = int(parts[3])
-                        fan  = int(parts[4])
-                        rpm  = int(parts[5])
                     except Exception:
                         continue
-                    out.append({
-                        "t": ts, "temp": temp, "net": net,
-                        "boost": boost, "fan": fan, "rpm": rpm,
-                    })
+                    net = None
+                    if len(parts) > 2 and parts[2].strip():
+                        try: net = float(parts[2])
+                        except: pass
+                    out.append({"t": ts, "temp": temp, "net": net})
         except Exception as e:
             print(f"[DYNA] parse {path}: {e}")
         return out
 
-    def _score_fan(self):
-        rows = self._rows
-        issues = []
-        score = 10
-
-        fan_on = [r for r in rows if r["fan"] > 0]
-        if not fan_on:
-            return 10, ["No fan activity in window — nothing to grade"]
-
-        stall_frames = [r for r in rows if r["fan"] > 0 and r["rpm"] == 0]
-        if stall_frames:
-            score -= min(8, 5 + len(stall_frames) // 10)
-            issues.append(f"{len(stall_frames)} frames at fan>0 with rpm=0 — possible stall")
-
-        full_fan = [r for r in rows if r["fan"] >= 95]
-        if full_fan:
-            peak = max(r["rpm"] for r in full_fan)
-            if peak < 2000:
-                score -= 4
-                issues.append(f"Peak RPM {peak} at 100% fan — very low")
-            elif peak < 3500:
-                score -= 2
-                issues.append(f"Peak RPM {peak} at 100% fan — a bit low")
-
-        if max(r["fan"] for r in rows) < 100 and max(r["net"] for r in rows) > 2000:
-            score -= 1
-            issues.append("Fan never reached 100% despite heavy traffic")
-
-        pairs = [(r["fan"], r["rpm"]) for r in rows if r["rpm"] > 0]
-        if len(pairs) > 20:
-            xs = [p[0] for p in pairs]
-            ys = [p[1] for p in pairs]
-            mx = sum(xs)/len(xs); my = sum(ys)/len(ys)
-            num = sum((x-mx)*(y-my) for x,y in pairs)
-            dx = (sum((x-mx)**2 for x in xs))**0.5
-            dy = (sum((y-my)**2 for y in ys))**0.5
-            r = num / (dx*dy) if dx*dy > 0 else 0
-            if r < 0.3:
-                score -= 2
-                issues.append(f"Fan% and RPM weakly correlated (r={r:.2f})")
-            elif r < 0.6:
-                score -= 1
-                issues.append(f"Fan% and RPM loosely correlated (r={r:.2f})")
-
-        return max(0, min(10, score)), issues
-
-    def _score_turbo(self):
-        rows = self._rows
-        issues = []
-        score = 10
-
-        boost_frames = [r for r in rows if r["boost"] > 0]
-        max_net = max((r["net"] for r in rows), default=0)
-
-        if not boost_frames:
-            if max_net > 700:
-                score = 0
-                issues.append(f"Traffic peaked at {max_net:.0f} KB/s but boost never fired")
-            else:
-                issues.append("No load in window — boost untested")
-            return score, issues
-
-        gears = [r["boost"] for r in boost_frames]
-        max_gear = max(gears)
-        peak_net = max(r["net"] for r in rows)
-        if max_gear == 1:
-            if peak_net > 2000:
-                score -= 3
-                issues.append(f"Boost only reached gear 1 despite peak {peak_net:.0f} KB/s")
-            elif peak_net > 1000:
-                score -= 1
-                issues.append(f"Boost only reached gear 1 (peak {peak_net:.0f} KB/s — moderate load)")
-
-        changes = 0
-        prev = None
-        prev_t = None
-        for r in rows:
-            if prev is not None and r["boost"] != prev:
-                if prev_t is not None and (r["t"] - prev_t).total_seconds() < 20:
-                    changes += 1
-                prev = r["boost"]
-                prev_t = r["t"]
-            elif prev is None:
-                prev = r["boost"]
-                prev_t = r["t"]
-        if changes > 10:
-            score -= 4
-            issues.append(f"{changes} rapid gear changes — possible chatter")
-        elif changes > 5:
-            score -= 2
-            issues.append(f"{changes} gear changes close together — mild chatter")
-
-        stuck = 0
-        prev = None
-        for r in rows:
-            if prev and prev["boost"] >= 3 and r["net"] < 200:
-                stuck += 1
-            prev = r
-        if stuck > 20:
-            score -= 2
-            issues.append(f"Gear stayed ≥3 for {stuck} frames after traffic dropped")
-
-        return max(0, min(10, score)), issues
-
     def _build_ui(self):
-        pad = 16
         wrap = tk.Frame(self)
-        wrap.pack(fill="both", expand=True, padx=pad, pady=pad)
+        wrap.pack(fill="both", expand=True, padx=16, pady=16)
 
-        span = (self._rows[-1]["t"] - self._rows[0]["t"]).total_seconds() / 60.0
-        tk.Label(wrap, text="🩺  Dyna Tune Health Check",
+        t0 = self._rows[0]["t"]
+        t1 = self._rows[-1]["t"]
+        span_min = (t1 - t0).total_seconds() / 60.0
+
+        tk.Label(wrap, text="🎛️  Dyna Tune",
                  font=("Helvetica Neue", 15, "bold")).pack(anchor="w")
         tk.Label(wrap,
-                 text=f"{len(self._files)} files  ·  {len(self._rows)} rows  ·  span {span:.0f} min",
+                 text=f"{t0.strftime('%a %d %b')}  ·  "
+                      f"{t0.strftime('%H:%M')} → {t1.strftime('%H:%M')}  ·  "
+                      f"{span_min/60:.1f} h",
                  font=("Helvetica Neue", 10)).pack(anchor="w", pady=(0, 12))
 
-        fan_score, fan_issues = self._score_fan()
-        turbo_score, turbo_issues = self._score_turbo()
+        plot_w, plot_h = 760, 320
+        self.canvas = tk.Canvas(wrap, width=plot_w, height=plot_h,
+                                 highlightthickness=1, bd=0)
+        self.canvas.pack(pady=(0, 12))
+        self._draw(plot_w, plot_h)
 
-        self._section(wrap, "🌀 FAN", fan_score, fan_issues)
-        self._section(wrap, "🔥 TURBO", turbo_score, turbo_issues)
+        # Summary — 5 numbers, two lines
+        nets = [r["net"] for r in self._rows if r["net"] is not None]
+        temps = [r["temp"] for r in self._rows if r["temp"] > 0]
 
-        total = fan_score + turbo_score
-        verdict = "HEALTHY" if total >= 18 else "NEEDS ATTENTION" if total >= 12 else "PROBLEM"
-        color_key = "green" if total >= 18 else "orange" if total >= 12 else "red"
+        peak_net = max(nets) if nets else 0
+        avg_net  = sum(nets)/len(nets) if nets else 0
+        temp_first = temps[0] if temps else 0
+        temp_last  = temps[-1] if temps else 0
+        temp_max   = max(temps) if temps else 0
 
-        tk.Frame(wrap, height=1).pack(fill="x", pady=8)
+        def fmt_rate(v):
+            if v >= 1024:
+                return f"{v/1024:.2f} MB/s"
+            return f"{v:.0f} KB/s"
 
-        self.total_lbl = tk.Label(wrap,
-                                  text=f"🩺  OVERALL: {total}/20  ·  {verdict}",
-                                  font=("Helvetica Neue", 14, "bold"))
-        self.total_lbl.pack(anchor="w")
-        self._total_color = color_key
+        row1 = tk.Frame(wrap)
+        row1.pack(fill="x", pady=2)
+        tk.Label(row1, text=f"Peak net:  {fmt_rate(peak_net)}",
+                 font=("Helvetica Neue", 11), anchor="w").pack(side="left", padx=(0, 30))
+        tk.Label(row1, text=f"Avg net:  {fmt_rate(avg_net)}",
+                 font=("Helvetica Neue", 11), anchor="w").pack(side="left")
 
-        tk.Button(wrap, text="Refresh", width=12,
-                  font=("Helvetica Neue", 11),
-                  command=self._refresh).pack(pady=(14, 0))
+        row2 = tk.Frame(wrap)
+        row2.pack(fill="x", pady=2)
+        arrow = "▲" if temp_last > temp_first + 0.1 else ("▼" if temp_last < temp_first - 0.1 else "▬")
+        tk.Label(row2,
+                 text=f"Temp:  {temp_first:.1f} → {temp_last:.1f}°C  {arrow}",
+                 font=("Helvetica Neue", 11), anchor="w").pack(side="left", padx=(0, 30))
+        tk.Label(row2, text=f"Max:  {temp_max:.1f}°C",
+                 font=("Helvetica Neue", 11), anchor="w").pack(side="left")
+
         tk.Button(wrap, text="Close", width=12,
                   font=("Helvetica Neue", 11),
-                  command=self.destroy).pack(pady=(6, 0))
+                  command=self.destroy).pack(pady=(14, 0))
 
-    def _section(self, parent, title, score, issues):
-        fr = tk.Frame(parent)
-        fr.pack(fill="x", pady=(8, 4))
+    def _draw(self, w, h):
+        t = self.app.theme
+        c = self.canvas
+        c.configure(bg=t["card"])
+        c.delete("all")
 
-        score_color = "green" if score >= 9 else "yellow" if score >= 6 else "red"
+        pad_l, pad_r, pad_t, pad_b = 60, 60, 20, 30
+        pw = w - pad_l - pad_r
+        ph = h - pad_t - pad_b
+        n = len(self._rows)
 
-        head = tk.Frame(fr)
-        head.pack(fill="x")
-        tk.Label(head, text=title, font=("Helvetica Neue", 13, "bold"),
-                 anchor="w").pack(side="left")
-        sl = tk.Label(head, text=f"{score}/10",
-                      font=("Helvetica Neue", 13, "bold"), anchor="e")
-        sl.pack(side="right")
-        self._score_colors.append((sl, score_color))
+        nets = [r["net"] for r in self._rows if r["net"] is not None]
+        temps = [r["temp"] for r in self._rows if r["temp"] > 0]
 
-        if not issues:
-            tk.Label(fr, text="   ✅ No issues detected",
-                     font=("Helvetica Neue", 11), anchor="w").pack(fill="x")
-            return
+        if not nets: nets = [0]
+        if not temps: temps = [0]
 
-        for issue in issues:
-            tk.Label(fr, text="   💡 " + issue,
-                     font=("Helvetica Neue", 11), anchor="w",
-                     wraplength=560, justify="left").pack(fill="x")
+        # Net axis (left)
+        net_lo, net_hi = 0, max(nets) * 1.1
+        if net_hi < 1: net_hi = 1
+        net_rng = net_hi - net_lo
 
-    def _refresh(self):
-        for w in self.winfo_children():
-            w.destroy()
-        self._rows = []
-        self._files = []
-        self._score_colors = []
-        self._load_all()
-        if not self._rows:
-            tk.Label(self, text="No log files found.",
-                     font=("Helvetica Neue", 13), padx=30, pady=30).pack()
-            tk.Button(self, text="Close", command=self.destroy).pack(pady=(0, 20))
-        else:
-            self._build_ui()
-        self._apply_theme()
+        # Temp axis (right)
+        temp_lo = min(temps) - 1
+        temp_hi = max(temps) + 1
+        if temp_hi - temp_lo < 3:
+            m = (temp_hi + temp_lo) / 2
+            temp_lo, temp_hi = m - 1.5, m + 1.5
+        temp_rng = temp_hi - temp_lo
+
+        # --- Horizontal grid ---
+        for i in range(5):
+            y = pad_t + (i / 4) * ph
+            c.create_line(pad_l, y, w - pad_r, y, fill=t["grid"], width=1)
+
+            # Left axis: net
+            v = net_hi - (i / 4) * net_rng
+            if v >= 1024:
+                ltxt = f"{v/1024:.1f}M"
+            else:
+                ltxt = f"{v:.0f}K"
+            c.create_text(pad_l - 6, y, text=ltxt, fill=t["blue"],
+                          font=("Helvetica Neue", 9), anchor="e")
+
+            # Right axis: temp
+            tv = temp_hi - (i / 4) * temp_rng
+            c.create_text(w - pad_r + 6, y, text=f"{tv:.0f}",
+                          fill=t["orange"],
+                          font=("Helvetica Neue", 9), anchor="w")
+
+        # --- Axis labels ---
+        c.create_text(pad_l - 6, pad_t - 8, text="NET", fill=t["blue"],
+                      font=("Helvetica Neue", 9, "bold"), anchor="e")
+        c.create_text(w - pad_r + 6, pad_t - 8, text="°C", fill=t["orange"],
+                      font=("Helvetica Neue", 9, "bold"), anchor="w")
+
+        # --- Net line (blue) ---
+        net_pts = []
+        for i, r in enumerate(self._rows):
+            if r["net"] is None: continue
+            x = pad_l + (i / max(1, n - 1)) * pw
+            y = pad_t + ph - ((r["net"] - net_lo) / net_rng) * ph
+            net_pts.extend([x, y])
+        if len(net_pts) >= 4:
+            c.create_line(*net_pts, fill=t["blue"], width=2,
+                          capstyle=tk.ROUND, joinstyle=tk.ROUND)
+
+        # --- Temp line (orange) ---
+        temp_pts = []
+        for i, r in enumerate(self._rows):
+            if r["temp"] <= 0: continue
+            x = pad_l + (i / max(1, n - 1)) * pw
+            y = pad_t + ph - ((r["temp"] - temp_lo) / temp_rng) * ph
+            temp_pts.extend([x, y])
+        if len(temp_pts) >= 4:
+            c.create_line(*temp_pts, fill=t["orange"], width=2,
+                          capstyle=tk.ROUND, joinstyle=tk.ROUND)
+
+        # --- X-axis time labels ---
+        if n >= 2:
+            t0 = self._rows[0]["t"]
+            t1 = self._rows[-1]["t"]
+            for frac in (0.0, 0.25, 0.5, 0.75, 1.0):
+                x = pad_l + frac * pw
+                tt = t0 + (t1 - t0) * frac
+                anchor = "n" if frac in (0.0, 1.0) else "n"
+                c.create_text(x, h - 4, text=tt.strftime("%H:%M"),
+                              fill=t["muted"],
+                              font=("Helvetica Neue", 9), anchor=anchor)
 
     def _apply_theme(self):
         t = self.app.theme
         self.configure(bg=t["bg"])
         self._theme_recursive(self, t)
-        for lbl, ck in self._score_colors:
-            lbl.configure(bg=t["bg"], fg=t[ck])
-        if hasattr(self, "total_lbl") and hasattr(self, "_total_color"):
-            self.total_lbl.configure(bg=t["bg"], fg=t[self._total_color])
 
     def _theme_recursive(self, w, t):
         try:
@@ -483,5 +439,3 @@ class DynaTune(tk.Toplevel):
                         activebackground=t["accent"], activeforeground=t["fg"])
         for c in w.winfo_children():
             self._theme_recursive(c, t)
-
-
