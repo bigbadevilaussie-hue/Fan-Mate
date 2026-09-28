@@ -509,3 +509,27 @@ Web GUI: http://fan-mate.local
 
 **No time references. No sleep suggestions.**
 Just do the work.
+
+---
+
+## DEFERRED — SLEEP/WAKE ISSUES (needs hall sensor)
+
+**Status:** v4.08 ships sleep/wake framework. Real-world test deferred until
+A3144 hall sensor arrives (3-4 days).
+
+**Known issues when testing without hall sensor:**
+1. Sleep fires immediately after enabling `phoneMode = "auto"` because
+   `phone_absent_since` was set at boot, so 30s already elapsed.
+2. Wake requires `phone_present_since > 0`, which never gets set because
+   the hall is never "present".
+3. `/reboot` endpoint sends "Rebooting..." but device keeps running (or
+   reboot happens silently with serial buffer persistence).
+
+**To fix when hall sensor arrives:**
+- Reset `phone_absent_since = millis()` when `phoneMode` changes to "auto"
+  in `settings_apply_json()`
+- Verify wake path with real hall signal (LOW = present)
+- Investigate `/reboot` not triggering `ESP.restart()` reliably
+
+**Not blocking.** Sleep/wake logic is in place. Real test happens when
+sensor is wired.
