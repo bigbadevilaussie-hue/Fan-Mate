@@ -103,14 +103,6 @@ class SettingsDialog(tk.Toplevel):
                          relief="flat", highlightthickness=1).pack(side="left")
             self._row += 1
 
-        section("🌙", "NIGHT")
-        self.night_start = tk.StringVar(value=str(latest_config["night"].get("start", 22)))
-        field("Start hour (0-23)", self.night_start)
-        self.night_end = tk.StringVar(value=str(latest_config["night"].get("end", 7)))
-        field("End hour (0-23)", self.night_end)
-        self.night_max = tk.StringVar(value=str(latest_config["night"].get("nightMax", 75)))
-        field("Night max (%)", self.night_max)
-
         section("📱", "PHONE")
         self.phone_mode = tk.StringVar(
             value=latest_config["phone"].get("mode", "off"))
@@ -181,11 +173,7 @@ class SettingsDialog(tk.Toplevel):
                     "panic":   float(self.temp_panic.get()),
                     "kill":    float(self.temp_kill.get()),
                 },
-                "night": {
-                    "start":    int(self.night_start.get()),
-                    "end":      int(self.night_end.get()),
-                    "nightMax": int(self.night_max.get()),
-                },
+
                 "phone": {
                     "mode": self.phone_mode.get(),
                 },

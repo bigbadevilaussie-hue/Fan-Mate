@@ -72,7 +72,7 @@ class App:
         reports.add_command(label="Weekly",       command=self.menu_report_weekly)
         am.add_cascade(label="📊  Reports", menu=reports)
         am.add_separator()
-        am.add_command(label="🎛️  Dyna Tune Turbo Boost", command=self.menu_dyna_tune)
+        am.add_command(label="🎛️  Dyna Tune", command=self.menu_dyna_tune)
         am.add_separator()
         am.add_command(label="📡  Update Firmware", command=self.menu_ota)
         am.add_separator()
