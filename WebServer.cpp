@@ -98,10 +98,10 @@ static void handle_status() {
     json += "\"boost_lvl\":" + String(boostGear) + ",";
     json += "\"net_kbps\":" + String(lastNetKbps, 1) + ",";
     int tempGear = 0;
-    if (currentTemp >= config.tempKill)      tempGear = 4;
-    else if (currentTemp >= config.tempPanic) tempGear = 3;
-    else if (currentTemp >= config.tempWarning) tempGear = 2;
-    else if (currentTemp >= config.tempWarning - config.tempHysteresis) tempGear = 1;
+    if (currentTemp >= config.tempGear4)      tempGear = 4;
+    else if (currentTemp >= config.tempGear3) tempGear = 3;
+    else if (currentTemp >= config.tempGear2) tempGear = 2;
+    else if (currentTemp >= config.tempGear1 - config.tempHysteresis) tempGear = 1;
     json += "\"temp_lvl\":" + String(tempGear) + ",";
     json += "\"opal\":" + String(opal_logged_in() ? 1 : 0) + ",";
     unsigned long since_host = (host_last_ms > 0) ? (millis() - host_last_ms) : 999999;
@@ -136,9 +136,13 @@ static void handle_status() {
     json += "],";
 
     json += "\"kill_mode\":" + String(kill_get_state()) + ",";
-    json += "\"temp_warning\":" + String(config.tempWarning, 1) + ",";
-    json += "\"temp_panic\":" + String(config.tempPanic, 1) + ",";
-    json += "\"temp_kill\":" + String(config.tempKill, 1) + ",";
+    json += "\"temp_gear1\":" + String(config.tempGear1, 1) + ",";
+    json += "\"temp_gear2\":" + String(config.tempGear2, 1) + ",";
+    json += "\"temp_gear3\":" + String(config.tempGear3, 1) + ",";
+    json += "\"temp_gear4\":" + String(config.tempGear4, 1) + ",";
+    json += "\"temp_warning\":" + String(config.tempGear2, 1) + ",";
+    json += "\"temp_panic\":" + String(config.tempGear3, 1) + ",";
+    json += "\"temp_kill\":" + String(config.tempGear4, 1) + ",";
     int boostThr = 700;
     if (config.boostMode == 1) boostThr = config.boostNormal.threshold;
     else if (config.boostMode == 2) boostThr = config.boostAggr.threshold;
@@ -153,9 +157,10 @@ static void handle_config_get() {
     String json = "{";
 
     json += "\"temp\":{";
-    json += "\"warning\":" + String(config.tempWarning, 1) + ",";
-    json += "\"panic\":" + String(config.tempPanic, 1) + ",";
-    json += "\"kill\":" + String(config.tempKill, 1) + ",";
+    json += "\"gear1\":" + String(config.tempGear1, 1) + ",";
+    json += "\"gear2\":" + String(config.tempGear2, 1) + ",";
+    json += "\"gear3\":" + String(config.tempGear3, 1) + ",";
+    json += "\"gear4\":" + String(config.tempGear4, 1) + ",";
     json += "\"hysteresis\":" + String(config.tempHysteresis, 1);
     json += "},";
 

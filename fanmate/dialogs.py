@@ -65,12 +65,14 @@ class SettingsDialog(tk.Toplevel):
             self._row += 1
 
         section("🌡️", "HEAT CONTROL")
-        self.temp_warn = tk.StringVar(value=str(latest_config["temp"].get("warning", 32.0)))
-        field("Warning (°C)", self.temp_warn)
-        self.temp_panic = tk.StringVar(value=str(latest_config["temp"].get("panic", 34.0)))
-        field("Panic (°C)", self.temp_panic)
-        self.temp_kill = tk.StringVar(value=str(latest_config["temp"].get("kill", 36.0)))
-        field("Kill (°C)", self.temp_kill)
+        self.temp_g1 = tk.StringVar(value=str(latest_config["temp"].get("gear1", 30.0)))
+        field("Warm (36%)", self.temp_g1)
+        self.temp_g2 = tk.StringVar(value=str(latest_config["temp"].get("gear2", 32.0)))
+        field("Hot (57%)", self.temp_g2)
+        self.temp_g3 = tk.StringVar(value=str(latest_config["temp"].get("gear3", 34.0)))
+        field("Hotter (78%)", self.temp_g3)
+        self.temp_g4 = tk.StringVar(value=str(latest_config["temp"].get("gear4", 36.0)))
+        field("Critical (100%)", self.temp_g4)
 
         section("⚡", "BOOST")
         mode_map = {0: "off", 1: "normal", 2: "aggressive"}
@@ -169,9 +171,10 @@ class SettingsDialog(tk.Toplevel):
                     },
                 },
                 "temp": {
-                    "warning": float(self.temp_warn.get()),
-                    "panic":   float(self.temp_panic.get()),
-                    "kill":    float(self.temp_kill.get()),
+                    "gear1": float(self.temp_g1.get()),
+                    "gear2": float(self.temp_g2.get()),
+                    "gear3": float(self.temp_g3.get()),
+                    "gear4": float(self.temp_g4.get()),
                 },
 
                 "phone": {

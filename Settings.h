@@ -19,10 +19,11 @@ struct BoostProfile {
 };
 
 struct FanMateConfig {
-    // Heat control
-    float   tempWarning;
-    float   tempPanic;
-    float   tempKill;
+    // Heat control (four gear thresholds, 30/32/34/36 by default)
+    float   tempGear1;   // Warm     -> gear 1
+    float   tempGear2;   // Hot      -> gear 2
+    float   tempGear3;   // Hotter   -> gear 3
+    float   tempGear4;   // Critical -> gear 4 + kill
     float   tempHysteresis;
 
     // Night

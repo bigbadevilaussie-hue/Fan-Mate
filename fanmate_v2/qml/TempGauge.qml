@@ -8,9 +8,10 @@ Item {
     property real vmin: 18.0
     property real vmax: 38.0
 
-    property real tempWarning: 32.0
-    property real tempPanic:   34.0
-    property real tempKill:    36.0
+    property real tempGear1: 30.0
+    property real tempGear2: 32.0
+    property real tempGear3: 34.0
+    property real tempGear4: 36.0
 
     property color accent: "#55d7ff"
     property color accentDim: "#2b9fc7"
@@ -36,9 +37,9 @@ Item {
     function yAt(deg, r) { return cy - r * Math.cos(deg * Math.PI / 180) }
 
     function zoneColor(v) {
-        if (v < tempWarning) return cGreen
-        if (v < tempPanic)   return cYellow
-        if (v < tempKill)    return cOrange
+        if (v < tempGear2) return cGreen
+        if (v < tempGear3) return cYellow
+        if (v < tempGear4) return cOrange
         return cRed
     }
 
@@ -76,7 +77,7 @@ Item {
                 centerX: gaugeRoot.cx; centerY: gaugeRoot.cy
                 radiusX: gaugeRoot.rArc; radiusY: gaugeRoot.rArc
                 startAngle: gaugeRoot.angDeg(gaugeRoot.vmin) + 270
-                sweepAngle: gaugeRoot.angDeg(gaugeRoot.tempWarning) - gaugeRoot.angDeg(gaugeRoot.vmin)
+                sweepAngle: gaugeRoot.angDeg(gaugeRoot.tempGear2) - gaugeRoot.angDeg(gaugeRoot.vmin)
             }
         }
     }
@@ -89,8 +90,8 @@ Item {
             PathAngleArc {
                 centerX: gaugeRoot.cx; centerY: gaugeRoot.cy
                 radiusX: gaugeRoot.rArc; radiusY: gaugeRoot.rArc
-                startAngle: gaugeRoot.angDeg(gaugeRoot.tempWarning) + 270
-                sweepAngle: gaugeRoot.angDeg(gaugeRoot.tempPanic) - gaugeRoot.angDeg(gaugeRoot.tempWarning)
+                startAngle: gaugeRoot.angDeg(gaugeRoot.tempGear2) + 270
+                sweepAngle: gaugeRoot.angDeg(gaugeRoot.tempGear3) - gaugeRoot.angDeg(gaugeRoot.tempGear2)
             }
         }
     }
@@ -103,8 +104,8 @@ Item {
             PathAngleArc {
                 centerX: gaugeRoot.cx; centerY: gaugeRoot.cy
                 radiusX: gaugeRoot.rArc; radiusY: gaugeRoot.rArc
-                startAngle: gaugeRoot.angDeg(gaugeRoot.tempPanic) + 270
-                sweepAngle: gaugeRoot.angDeg(gaugeRoot.tempKill) - gaugeRoot.angDeg(gaugeRoot.tempPanic)
+                startAngle: gaugeRoot.angDeg(gaugeRoot.tempGear3) + 270
+                sweepAngle: gaugeRoot.angDeg(gaugeRoot.tempGear4) - gaugeRoot.angDeg(gaugeRoot.tempGear3)
             }
         }
     }
@@ -117,8 +118,8 @@ Item {
             PathAngleArc {
                 centerX: gaugeRoot.cx; centerY: gaugeRoot.cy
                 radiusX: gaugeRoot.rArc; radiusY: gaugeRoot.rArc
-                startAngle: gaugeRoot.angDeg(gaugeRoot.tempKill) + 270
-                sweepAngle: gaugeRoot.angDeg(gaugeRoot.vmax) - gaugeRoot.angDeg(gaugeRoot.tempKill)
+                startAngle: gaugeRoot.angDeg(gaugeRoot.tempGear4) + 270
+                sweepAngle: gaugeRoot.angDeg(gaugeRoot.vmax) - gaugeRoot.angDeg(gaugeRoot.tempGear4)
             }
         }
     }

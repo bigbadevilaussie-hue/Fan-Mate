@@ -119,10 +119,10 @@ void updatePhoneDetection() {
 
 // ------------------------------------------------------------
 static int compute_temp_gear(float t) {
-    if (t >= config.tempKill)      return 4;
-    if (t >= config.tempPanic)     return 3;
-    if (t >= config.tempWarning)   return 2;
-    if (t >= config.tempWarning - config.tempHysteresis) return 1;
+    if (t >= config.tempGear4)                          return 4;
+    if (t >= config.tempGear3)                          return 3;
+    if (t >= config.tempGear2)                          return 2;
+    if (t >= config.tempGear1 - config.tempHysteresis)  return 1;
     return 0;
 }
 
@@ -215,7 +215,7 @@ void kill_request_auto() {
 
 static void kill_state_machine(float currentTemp) {
     // AUTO -> ACTIVE
-    if (killState == KILL_AUTO && currentTemp >= config.tempKill) {
+    if (killState == KILL_AUTO && currentTemp >= config.tempGear4) {
         killState = KILL_ACTIVE;
         log_print("[KILL] -> ACTIVE (temp %.1f)\n", currentTemp);
         log_write_event("KILL");
@@ -262,9 +262,9 @@ void updateFanAndAlerts(
 
     // ---- Alert level (temperature) ----
     int newLevel = 0;
-    if      (currentTemp >= config.tempKill)    newLevel = 3;
-    else if (currentTemp >= config.tempPanic)   newLevel = 2;
-    else if (currentTemp >= config.tempWarning) newLevel = 1;
+    if      (currentTemp >= config.tempGear4)    newLevel = 3;
+    else if (currentTemp >= config.tempGear3)   newLevel = 2;
+    else if (currentTemp >= config.tempGear2) newLevel = 1;
 
     if (newLevel != alertLevel) {
         alertLevel = newLevel;

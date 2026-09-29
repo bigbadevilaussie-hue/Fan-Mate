@@ -9,9 +9,10 @@ FanMateConfig config;
 static Preferences prefs;
 
 static void set_defaults() {
-    config.tempWarning    = 32.0;
-    config.tempPanic      = 34.0;
-    config.tempKill       = 36.0;
+    config.tempGear1      = 30.0;
+    config.tempGear2      = 32.0;
+    config.tempGear3      = 34.0;
+    config.tempGear4      = 36.0;
     config.tempHysteresis = 1.0;
 
     config.nightStart   = 22;
@@ -35,10 +36,15 @@ void settings_load() {
     set_defaults();
     prefs.begin("fanmate", true);
 
-    config.tempWarning    = prefs.getFloat("temp.warning",     config.tempWarning);
-    config.tempPanic      = prefs.getFloat("temp.panic",       config.tempPanic);
-    config.tempKill       = prefs.getFloat("temp.kill",        config.tempKill);
-    config.tempHysteresis = prefs.getFloat("temp.hysteresis",  config.tempHysteresis);
+    config.tempGear1 = prefs.getFloat("temp.gear1",
+                        prefs.getFloat("temp.warning", config.tempGear1));
+    config.tempGear2 = prefs.getFloat("temp.gear2",
+                        prefs.getFloat("temp.panic",   config.tempGear2));
+    config.tempGear3 = prefs.getFloat("temp.gear3",
+                        prefs.getFloat("temp.kill",    config.tempGear3));
+    config.tempGear4 = prefs.getFloat("temp.gear4",
+                        prefs.getFloat("temp.kill",    config.tempGear4));
+    config.tempHysteresis = prefs.getFloat("temp.hysteresis", config.tempHysteresis);
 
     config.nightStart     = prefs.getInt  ("night.start",      config.nightStart);
     config.nightEnd       = prefs.getInt  ("night.end",        config.nightEnd);
@@ -59,8 +65,9 @@ void settings_load() {
     prefs.end();
 
     Serial.println("[CFG] loaded:");
-    Serial.printf("  temp warn=%.1f panic=%.1f kill=%.1f hyst=%.1f\n",
-                  config.tempWarning, config.tempPanic, config.tempKill, config.tempHysteresis);
+    Serial.printf("  temp warm=%.1f hot=%.1f hotter=%.1f crit=%.1f hyst=%.1f\n",
+                  config.tempGear1, config.tempGear2, config.tempGear3,
+                  config.tempGear4, config.tempHysteresis);
     Serial.printf("  night %02d:00-%02d:00 max=%d%%\n",
                   config.nightStart, config.nightEnd, config.nightMax);
     Serial.printf("  phone.mode=%s\n", config.phoneMode.c_str());
@@ -74,9 +81,10 @@ void settings_load() {
 void settings_save() {
     prefs.begin("fanmate", false);
 
-    prefs.putFloat("temp.warning",     config.tempWarning);
-    prefs.putFloat("temp.panic",       config.tempPanic);
-    prefs.putFloat("temp.kill",        config.tempKill);
+    prefs.putFloat("temp.gear1",       config.tempGear1);
+    prefs.putFloat("temp.gear2",       config.tempGear2);
+    prefs.putFloat("temp.gear3",       config.tempGear3);
+    prefs.putFloat("temp.gear4",       config.tempGear4);
     prefs.putFloat("temp.hysteresis",  config.tempHysteresis);
 
     prefs.putInt  ("night.start",      config.nightStart);
@@ -114,9 +122,13 @@ void settings_apply_json(const char* json) {
 
     if (doc.containsKey("temp")) {
         JsonObject t = doc["temp"];
-        if (t.containsKey("warning"))    config.tempWarning    = t["warning"].as<float>();
-        if (t.containsKey("panic"))      config.tempPanic      = t["panic"].as<float>();
-        if (t.containsKey("kill"))       config.tempKill       = t["kill"].as<float>();
+        if (t.containsKey("gear1"))      config.tempGear1 = t["gear1"].as<float>();
+        else if (t.containsKey("warning")) config.tempGear1 = t["warning"].as<float>();
+        if (t.containsKey("gear2"))      config.tempGear2 = t["gear2"].as<float>();
+        else if (t.containsKey("panic"))   config.tempGear2 = t["panic"].as<float>();
+        if (t.containsKey("gear3"))      config.tempGear3 = t["gear3"].as<float>();
+        if (t.containsKey("gear4"))      config.tempGear4 = t["gear4"].as<float>();
+        else if (t.containsKey("kill"))    config.tempGear4 = t["kill"].as<float>();
         if (t.containsKey("hysteresis")) config.tempHysteresis = t["hysteresis"].as<float>();
     }
 

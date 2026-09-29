@@ -33,7 +33,10 @@ class Bridge(QObject):
     alertChanged     = Signal()
     fwChanged        = Signal()
     outdoorChanged   = Signal()
-    tempWarningChanged = Signal()
+    tempGear1Changed = Signal()
+    tempGear2Changed = Signal()
+    tempGear3Changed = Signal()
+    tempGear4Changed = Signal()
     boostThresholdChanged = Signal()
     otaProgress = Signal(int)
     otaStatus   = Signal(str)
@@ -86,8 +89,14 @@ class Bridge(QObject):
             self.opalChanged.emit()
         if self._changed("outdoor_c", self._get("outdoor_c", 0.0)):
             self.outdoorChanged.emit()
-        if self._changed("temp_warning", self._get("temp_warning", 32.0)):
-            self.tempWarningChanged.emit()
+        if self._changed("temp_gear1", self._get("temp_gear1", 30.0)):
+            self.tempGear1Changed.emit()
+        if self._changed("temp_gear2", self._get("temp_gear2", 32.0)):
+            self.tempGear2Changed.emit()
+        if self._changed("temp_gear3", self._get("temp_gear3", 34.0)):
+            self.tempGear3Changed.emit()
+        if self._changed("temp_gear4", self._get("temp_gear4", 36.0)):
+            self.tempGear4Changed.emit()
         if self._changed("boost_threshold", self._get("boost_threshold", 700)):
             self.boostThresholdChanged.emit()
 
@@ -188,9 +197,21 @@ class Bridge(QObject):
     def outdoor(self):
         return float(self._get("outdoor_c", 0.0))
 
-    @Property(float, notify=tempWarningChanged)
-    def tempWarning(self):
-        return float(self._get("temp_warning", 32.0))
+    @Property(float, notify=tempGear1Changed)
+    def tempGear1(self):
+        return float(self._get("temp_gear1", 30.0))
+
+    @Property(float, notify=tempGear2Changed)
+    def tempGear2(self):
+        return float(self._get("temp_gear2", 32.0))
+
+    @Property(float, notify=tempGear3Changed)
+    def tempGear3(self):
+        return float(self._get("temp_gear3", 34.0))
+
+    @Property(float, notify=tempGear4Changed)
+    def tempGear4(self):
+        return float(self._get("temp_gear4", 36.0))
 
     @Property(int, notify=boostThresholdChanged)
     def boostThreshold(self):

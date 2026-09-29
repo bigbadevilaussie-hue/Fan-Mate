@@ -9,7 +9,7 @@ ApplicationWindow {
     visible: true
     title: "Fan-Mate v2"
     color: "#000000"
-    property string guiVersion: "1.06"
+    property string guiVersion: "1.07"
 
     // ---------- drawer ----------
     Drawer {
@@ -303,10 +303,11 @@ ApplicationWindow {
             height: 180
             value: dev.temp || 0
             vmin: 18.0
-            vmax: (dev.tempKill || 36.0) + 2.0
-            tempWarning: dev.tempWarning || 32.0
-            tempPanic:   dev.tempPanic   || 34.0
-            tempKill:    dev.tempKill    || 36.0
+            vmax: (dev.tempGear4 || 36.0) + 2.0
+            tempGear1: dev.tempGear1 || 30.0
+            tempGear2: dev.tempGear2 || 32.0
+            tempGear3: dev.tempGear3 || 34.0
+            tempGear4: dev.tempGear4 || 36.0
         }
 
         // footer
