@@ -202,36 +202,45 @@ class SettingsDialog(tk.Toplevel):
 
 
 class DynaTune(tk.Toplevel):
-    """Traffic and phone temp on one time axis — dual y-axis overlay."""
+    """
+    Improved diagnostic view.
+    Three stacked ReportPlots (Network / Fan% / Temp) so thermal lag is obvious.
+    """
 
-    def __init__(self, parent, app):
+    def __init__(self, parent, app, hours=18):
         super().__init__(parent)
         self.app = app
         self.title("Dyna Tune")
         self.resizable(False, False)
         self.transient(parent)
 
-        self._rows = []
-        self._load_all()
-
-        if not self._rows:
-            tk.Label(self, text="No log files found in\n" + LOG_DIR,
-                     font=("Helvetica Neue", 13), padx=30, pady=30).pack()
-            tk.Button(self, text="Close", command=self.destroy).pack(pady=(0, 20))
+        rows = self._load_recent_rows(hours=hours)
+        if not rows:
+            tk.Label(self, text="No log data found",
+                     font=("Helvetica Neue", 14), padx=40, pady=40).pack()
+            tk.Button(self, text="Close", command=self.destroy).pack(pady=10)
             self._apply_theme()
             return
 
+        self.rows = rows
         self._build_ui()
         self._apply_theme()
 
-    def _load_all(self):
-        import glob
+    # ------------------------------------------------------------------
+    def _load_recent_rows(self, hours=18):
         pattern = os.path.join(LOG_DIR, "log-*.csv")
-        files = [p for p in glob.glob(pattern) if not p.endswith(".part")]
-        files.sort()
-        for path in files:
-            self._rows.extend(self._parse(path))
-        self._rows.sort(key=lambda r: r["t"])
+        files = sorted(p for p in glob.glob(pattern) if not p.endswith(".part"))
+        if not files:
+            return []
+
+        cutoff = datetime.now() - timedelta(hours=hours)
+        rows = []
+        for path in files[-18:]:
+            rows.extend(self._parse(path))
+
+        rows = [r for r in rows if r["t"] >= cutoff]
+        rows.sort(key=lambda r: r["t"])
+        return rows
 
     def _parse(self, path):
         out = []
@@ -244,6 +253,7 @@ class DynaTune(tk.Toplevel):
                     parts = line.split(",")
                     if len(parts) < 6:
                         continue
+
                     try:
                         ts = datetime.strptime(parts[0], "%Y-%m-%d %H:%M:%S")
                     except Exception:
@@ -252,178 +262,189 @@ class DynaTune(tk.Toplevel):
                         temp = float(parts[1])
                     except Exception:
                         continue
-                    net = None
-                    if len(parts) > 2 and parts[2].strip():
-                        try: net = float(parts[2])
-                        except: pass
-                    out.append({"t": ts, "temp": temp, "net": net})
+
+                    try: net = float(parts[2]) if parts[2].strip() else 0.0
+                    except Exception: net = 0.0
+                    try: boost = int(parts[3]) if parts[3].strip() else 0
+                    except Exception: boost = 0
+                    try: fan = int(parts[4]) if parts[4].strip() else 0
+                    except Exception: fan = 0
+                    try: rpm = int(parts[5]) if parts[5].strip() else 0
+                    except Exception: rpm = 0
+                    try:
+                        room = float(parts[8]) if len(parts) > 8 and parts[8].strip() else None
+                        if room is not None and room < -90.0:
+                            room = None
+                    except Exception:
+                        room = None
+
+                    out.append({
+                        "t": ts, "temp": temp, "net": net,
+                        "boost": boost, "fan": fan, "rpm": rpm,
+                        "room": room,
+                    })
         except Exception as e:
-            print(f"[DYNA] parse {path}: {e}")
+            print(f"[DynaTune] parse {path}: {e}")
         return out
 
+    # ------------------------------------------------------------------
     def _build_ui(self):
+        pad = 16
         wrap = tk.Frame(self)
-        wrap.pack(fill="both", expand=True, padx=16, pady=16)
+        wrap.pack(fill="both", expand=True, padx=pad, pady=pad)
 
-        t0 = self._rows[0]["t"]
-        t1 = self._rows[-1]["t"]
-        span_min = (t1 - t0).total_seconds() / 60.0
+        start = self.rows[0]["t"]
+        end   = self.rows[-1]["t"]
+        span_h = (end - start).total_seconds() / 3600.0
 
-        tk.Label(wrap, text="🎛️  Dyna Tune",
-                 font=("Helvetica Neue", 15, "bold")).pack(anchor="w")
         tk.Label(wrap,
-                 text=f"{t0.strftime('%a %d %b')}  ·  "
-                      f"{t0.strftime('%H:%M')} → {t1.strftime('%H:%M')}  ·  "
-                      f"{span_min/60:.1f} h",
-                 font=("Helvetica Neue", 10)).pack(anchor="w", pady=(0, 12))
+                 text=f"Dyna Tune  ·  {start.strftime('%a %d %b  %H:%M')} → {end.strftime('%H:%M')}  ·  {span_h:.1f} h",
+                 font=("Helvetica Neue", 15, "bold")).pack(anchor="w")
+        tk.Label(wrap, text=f"{len(self.rows)} samples",
+                 font=("Helvetica Neue", 10)).pack(anchor="w", pady=(0, 10))
 
-        plot_w, plot_h = 760, 320
-        self.canvas = tk.Canvas(wrap, width=plot_w, height=plot_h,
-                                 highlightthickness=1, bd=0)
-        self.canvas.pack(pady=(0, 12))
-        self._draw(plot_w, plot_h)
+        plot_w, plot_h = 620, 110
 
-        # Summary — 5 numbers, two lines
-        nets = [r["net"] for r in self._rows if r["net"] is not None]
-        temps = [r["temp"] for r in self._rows if r["temp"] > 0]
+        net_peak = max((r["net"] for r in self.rows), default=0)
+        self.net_plot = ReportPlot(wrap, self.app, plot_w, plot_h,
+                                   y_min=0, y_max=max(2048, net_peak * 1.15),
+                                   color_key="blue")
+        self.net_plot.pack(pady=(0, 6))
+        self.net_plot.set_series(self.rows, "net", "NETWORK (KB/s)")
 
-        peak_net = max(nets) if nets else 0
-        avg_net  = sum(nets)/len(nets) if nets else 0
-        temp_first = temps[0] if temps else 0
-        temp_last  = temps[-1] if temps else 0
-        temp_max   = max(temps) if temps else 0
+        self.fan_plot = ReportPlot(wrap, self.app, plot_w, plot_h,
+                                   y_min=0, y_max=100,
+                                   color_key="green")
+        self.fan_plot.pack(pady=(0, 6))
+        self.fan_plot.set_series(self.rows, "fan", "FAN (%)")
 
-        def fmt_rate(v):
-            if v >= 1024:
-                return f"{v/1024:.2f} MB/s"
-            return f"{v:.0f} KB/s"
+        self.temp_plot = ReportPlot(wrap, self.app, plot_w, plot_h,
+                                    y_min=15, y_max=45,
+                                    color_key="orange")
+        self.temp_plot.pack(pady=(0, 12))
+        self.temp_plot.set_series(self.rows, "temp", "TEMP (°C)")
 
-        row1 = tk.Frame(wrap)
-        row1.pack(fill="x", pady=2)
-        tk.Label(row1, text=f"Peak net:  {fmt_rate(peak_net)}",
-                 font=("Helvetica Neue", 11), anchor="w").pack(side="left", padx=(0, 30))
-        tk.Label(row1, text=f"Avg net:  {fmt_rate(avg_net)}",
-                 font=("Helvetica Neue", 11), anchor="w").pack(side="left")
+        s = self._analyse()
 
-        row2 = tk.Frame(wrap)
-        row2.pack(fill="x", pady=2)
-        arrow = "▲" if temp_last > temp_first + 0.1 else ("▼" if temp_last < temp_first - 0.1 else "▬")
-        tk.Label(row2,
-                 text=f"Temp:  {temp_first:.1f} → {temp_last:.1f}°C  {arrow}",
-                 font=("Helvetica Neue", 11), anchor="w").pack(side="left", padx=(0, 30))
-        tk.Label(row2, text=f"Max:  {temp_max:.1f}°C",
-                 font=("Helvetica Neue", 11), anchor="w").pack(side="left")
+        summary = tk.Frame(wrap)
+        summary.pack(fill="x")
+
+        def col(label, value):
+            c = tk.Frame(summary)
+            c.pack(side="left", expand=True, fill="x", padx=6)
+            tk.Label(c, text=label, font=("Helvetica Neue", 9, "bold"),
+                     anchor="w").pack(fill="x")
+            tk.Label(c, text=value, font=("Helvetica Neue", 13, "bold"),
+                     anchor="w").pack(fill="x")
+
+        col("PEAK NET",   self._fmt_rate(s['net_peak']))
+        col("AVG NET",    self._fmt_rate(s['net_avg']))
+        col("TEMP",       f"{s['temp_start']:.1f} → {s['temp_end']:.1f}°C")
+        col("TEMP MAX",   f"{s['temp_max']:.1f}°C")
+        col("FAN ON",     f"{s['fan_on_pct']:.0f}%")
+
+        lag_frame = tk.Frame(wrap)
+        lag_frame.pack(fill="x", pady=(10, 0))
+        tk.Label(lag_frame, text=s["lag_text"],
+                 font=("Helvetica Neue", 11),
+                 anchor="w", justify="left", wraplength=600).pack(anchor="w")
+
+        foot = tk.Frame(wrap)
+        foot.pack(fill="x", pady=(12, 0))
+        tk.Label(foot,
+                 text=f"rows: {len(self.rows)}  ·  span: {span_h:.1f} h  ·  boost thr: {s['boost_thr']} KB/s",
+                 font=("Helvetica Neue", 10)).pack(anchor="w")
 
         tk.Button(wrap, text="Close", width=12,
                   font=("Helvetica Neue", 11),
                   command=self.destroy).pack(pady=(14, 0))
 
-    def _draw(self, w, h):
-        t = self.app.theme
-        c = self.canvas
-        c.configure(bg=t["card"])
-        c.delete("all")
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _fmt_rate(kbps):
+        if kbps >= 1024:
+            return f"{kbps/1024:.2f} MB/s"
+        return f"{kbps:.0f} KB/s"
 
-        pad_l, pad_r, pad_t, pad_b = 60, 60, 20, 30
-        pw = w - pad_l - pad_r
-        ph = h - pad_t - pad_b
-        n = len(self._rows)
+    def _boost_threshold(self):
+        try:
+            from . import state
+            b = state.latest_config.get("boost", {})
+            mode = b.get("mode", 1)
+            if mode == 1:
+                return int(b.get("normal", {}).get("threshold", 700))
+            if mode == 2:
+                return int(b.get("aggr", {}).get("threshold", 400))
+        except Exception:
+            pass
+        return 700
 
-        nets = [r["net"] for r in self._rows if r["net"] is not None]
-        temps = [r["temp"] for r in self._rows if r["temp"] > 0]
+    def _analyse(self):
+        nets  = [r["net"] for r in self.rows]
+        fans  = [r["fan"] for r in self.rows]
+        temps = [r["temp"] for r in self.rows if r["temp"] > 0]
 
-        if not nets: nets = [0]
-        if not temps: temps = [0]
+        net_peak = max(nets) if nets else 0.0
+        net_avg  = sum(nets) / len(nets) if nets else 0.0
+        temp_max = max(temps) if temps else 0.0
 
-        # Net axis (left)
-        net_lo, net_hi = 0, max(nets) * 1.1
-        if net_hi < 1: net_hi = 1
-        net_rng = net_hi - net_lo
+        first = self.rows[0]["temp"]
+        last  = self.rows[-1]["temp"]
+        temp_start = first if first > 0 else (temps[0] if temps else 0.0)
+        temp_end   = last  if last  > 0 else (temps[-1] if temps else 0.0)
 
-        # Temp axis (right)
-        temp_lo = min(temps) - 1
-        temp_hi = max(temps) + 1
-        if temp_hi - temp_lo < 3:
-            m = (temp_hi + temp_lo) / 2
-            temp_lo, temp_hi = m - 1.5, m + 1.5
-        temp_rng = temp_hi - temp_lo
+        fan_on = sum(1 for f in fans if f > 0)
+        fan_on_pct = 100.0 * fan_on / len(fans) if fans else 0.0
 
-        # --- Horizontal grid ---
-        for i in range(5):
-            y = pad_t + (i / 4) * ph
-            c.create_line(pad_l, y, w - pad_r, y, fill=t["grid"], width=1)
+        thr = self._boost_threshold()
+        high = thr * 2.5
+        low  = thr * 0.6
 
-            # Left axis: net
-            v = net_hi - (i / 4) * net_rng
-            if v >= 1024:
-                ltxt = f"{v/1024:.1f}M"
-            else:
-                ltxt = f"{v:.0f}K"
-            c.create_text(pad_l - 6, y, text=ltxt, fill=t["blue"],
-                          font=("Helvetica Neue", 9), anchor="e")
+        lag_text = "No clear thermal-lag event found in this window."
+        if len(self.rows) > 40:
+            for i in range(20, len(self.rows) - 25):
+                prev  = [r["net"] for r in self.rows[i-15:i]]
+                after = [r["net"] for r in self.rows[i:i+12]]
+                if max(prev) > high and max(after) < low:
+                    t_drop = self.rows[i]["temp"]
+                    later = [r["temp"] for r in self.rows[i:i+35] if r["temp"] > 0]
+                    if later:
+                        peak = max(later)
+                        rise = peak - t_drop
+                        if rise >= 1.5:
+                            lag_text = (f"Thermal lag detected: after traffic dropped, "
+                                        f"temperature still rose {rise:.1f}°C "
+                                        f"({t_drop:.1f}° → {peak:.1f}°)")
+                            break
 
-            # Right axis: temp
-            tv = temp_hi - (i / 4) * temp_rng
-            c.create_text(w - pad_r + 6, y, text=f"{tv:.0f}",
-                          fill=t["orange"],
-                          font=("Helvetica Neue", 9), anchor="w")
+        return {
+            "net_peak": net_peak,
+            "net_avg": net_avg,
+            "temp_start": temp_start,
+            "temp_end": temp_end,
+            "temp_max": temp_max,
+            "fan_on_pct": fan_on_pct,
+            "lag_text": lag_text,
+            "boost_thr": thr,
+        }
 
-        # --- Axis labels ---
-        c.create_text(pad_l - 6, pad_t - 8, text="NET", fill=t["blue"],
-                      font=("Helvetica Neue", 9, "bold"), anchor="e")
-        c.create_text(w - pad_r + 6, pad_t - 8, text="°C", fill=t["orange"],
-                      font=("Helvetica Neue", 9, "bold"), anchor="w")
-
-        # --- Net line (blue) ---
-        net_pts = []
-        for i, r in enumerate(self._rows):
-            if r["net"] is None: continue
-            x = pad_l + (i / max(1, n - 1)) * pw
-            y = pad_t + ph - ((r["net"] - net_lo) / net_rng) * ph
-            net_pts.extend([x, y])
-        if len(net_pts) >= 4:
-            c.create_line(*net_pts, fill=t["blue"], width=2,
-                          capstyle=tk.ROUND, joinstyle=tk.ROUND)
-
-        # --- Temp line (orange) ---
-        temp_pts = []
-        for i, r in enumerate(self._rows):
-            if r["temp"] <= 0: continue
-            x = pad_l + (i / max(1, n - 1)) * pw
-            y = pad_t + ph - ((r["temp"] - temp_lo) / temp_rng) * ph
-            temp_pts.extend([x, y])
-        if len(temp_pts) >= 4:
-            c.create_line(*temp_pts, fill=t["orange"], width=2,
-                          capstyle=tk.ROUND, joinstyle=tk.ROUND)
-
-        # --- X-axis time labels ---
-        if n >= 2:
-            t0 = self._rows[0]["t"]
-            t1 = self._rows[-1]["t"]
-            for frac in (0.0, 0.25, 0.5, 0.75, 1.0):
-                x = pad_l + frac * pw
-                tt = t0 + (t1 - t0) * frac
-                anchor = "n" if frac in (0.0, 1.0) else "n"
-                c.create_text(x, h - 4, text=tt.strftime("%H:%M"),
-                              fill=t["muted"],
-                              font=("Helvetica Neue", 9), anchor=anchor)
-
+    # ------------------------------------------------------------------
     def _apply_theme(self):
         t = self.app.theme
         self.configure(bg=t["bg"])
-        self._theme_recursive(self, t)
-
-    def _theme_recursive(self, w, t):
-        try:
-            cls = w.winfo_class()
-        except Exception:
-            return
-        if cls in ("Frame", "Toplevel"):
-            w.configure(bg=t["bg"])
-        elif cls == "Label":
-            w.configure(bg=t["bg"], fg=t["fg"])
-        elif cls == "Button":
-            w.configure(bg=t["card"], fg=t["fg"],
-                        activebackground=t["accent"], activeforeground=t["fg"])
-        for c in w.winfo_children():
-            self._theme_recursive(c, t)
+        def walk(w):
+            try:
+                cls = w.winfo_class()
+                if cls in ("Frame", "Toplevel"):
+                    w.configure(bg=t["bg"])
+                elif cls == "Label":
+                    w.configure(bg=t["bg"], fg=t["fg"])
+                elif cls == "Button":
+                    w.configure(bg=t["card"], fg=t["fg"],
+                                activebackground=t["accent"],
+                                activeforeground=t["fg"])
+            except Exception:
+                pass
+            for c in w.winfo_children():
+                walk(c)
+        walk(self)
