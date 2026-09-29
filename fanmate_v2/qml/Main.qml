@@ -8,7 +8,7 @@ Window {
     visible: true
     title: "Fan-Mate v2"
     color: "#000000"
-    property string guiVersion: "1.02"
+    property string guiVersion: "1.03"
 
     Row {
         anchors.horizontalCenter: parent.horizontalCenter
@@ -29,18 +29,36 @@ Window {
             border.color: "#ff304f"; border.width: 1; antialiasing: true }
     }
 
-    BoostGauge {
-        x: 80; y: 120; width: 240; height: 240
-        value: dev.boostLvl || 0
+    TrafficGauge {
+        x: 80
+        y: 120
+        width: 240
+        height: 240
+        value: (dev.netKbps || 0) / 1024.0
+        vmin: 0
+        vmax: 3
+        boostThresholdMb: (dev.boostThreshold || 700) / 1024.0
     }
+
     RpmGauge {
-        x: 360; y: 50; width: 380; height: 380
-        value: dev.rpm
-        warnRpm: 4500
+        x: 360
+        y: 50
+        width: 380
+        height: 380
+        value: dev.rpm || 0
+        vmin: 0
+        vmax: 7500
+        rpmWarn: 2000
+        rpmFast: 4000
+        rpmMax: 6000
     }
+
     TempGauge {
-        x: 780; y: 120; width: 240; height: 240
-        value: dev.temp || 25.0
+        x: 780
+        y: 120
+        width: 240
+        height: 240
+        value: dev.temp || 0
         vmin: 18.0
         vmax: (dev.tempKill || 36.0) + 2.0
         tempWarning: dev.tempWarning || 32.0

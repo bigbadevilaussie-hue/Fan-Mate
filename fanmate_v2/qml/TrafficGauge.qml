@@ -6,11 +6,9 @@ Item {
 
     property real value: 0.0
     property real vmin: 0.0
-    property real vmax: 7500.0
+    property real vmax: 3.0
 
-    property real rpmWarn:  3000.0
-    property real rpmFast:  4500.0
-    property real rpmMax:   6000.0
+    property real boostThresholdMb: 0.68
 
     property color accent: "#55d7ff"
     property color accentDim: "#2b9fc7"
@@ -36,9 +34,10 @@ Item {
     function yAt(deg, r) { return cy - r * Math.cos(deg * Math.PI / 180) }
 
     function zoneColor(v) {
-        if (v < rpmWarn) return cGreen
-        if (v < rpmFast) return cYellow
-        if (v < rpmMax)  return cOrange
+        var thr = boostThresholdMb
+        if (v < thr * 1) return cGreen
+        if (v < thr * 2) return cYellow
+        if (v < thr * 3) return cOrange
         return cRed
     }
 
@@ -87,7 +86,7 @@ Item {
                 centerX: gaugeRoot.cx; centerY: gaugeRoot.cy
                 radiusX: gaugeRoot.rArc; radiusY: gaugeRoot.rArc
                 startAngle: gaugeRoot.angDeg(gaugeRoot.vmin) + 270
-                sweepAngle: gaugeRoot.angDeg(gaugeRoot.rpmWarn) - gaugeRoot.angDeg(gaugeRoot.vmin)
+                sweepAngle: gaugeRoot.angDeg(gaugeRoot.boostThresholdMb * 1) - gaugeRoot.angDeg(gaugeRoot.vmin)
             }
         }
     }
@@ -100,8 +99,8 @@ Item {
             PathAngleArc {
                 centerX: gaugeRoot.cx; centerY: gaugeRoot.cy
                 radiusX: gaugeRoot.rArc; radiusY: gaugeRoot.rArc
-                startAngle: gaugeRoot.angDeg(gaugeRoot.rpmWarn) + 270
-                sweepAngle: gaugeRoot.angDeg(gaugeRoot.rpmFast) - gaugeRoot.angDeg(gaugeRoot.rpmWarn)
+                startAngle: gaugeRoot.angDeg(gaugeRoot.boostThresholdMb * 1) + 270
+                sweepAngle: gaugeRoot.angDeg(gaugeRoot.boostThresholdMb * 2) - gaugeRoot.angDeg(gaugeRoot.boostThresholdMb * 1)
             }
         }
     }
@@ -114,8 +113,8 @@ Item {
             PathAngleArc {
                 centerX: gaugeRoot.cx; centerY: gaugeRoot.cy
                 radiusX: gaugeRoot.rArc; radiusY: gaugeRoot.rArc
-                startAngle: gaugeRoot.angDeg(gaugeRoot.rpmFast) + 270
-                sweepAngle: gaugeRoot.angDeg(gaugeRoot.rpmMax) - gaugeRoot.angDeg(gaugeRoot.rpmFast)
+                startAngle: gaugeRoot.angDeg(gaugeRoot.boostThresholdMb * 2) + 270
+                sweepAngle: gaugeRoot.angDeg(gaugeRoot.boostThresholdMb * 3) - gaugeRoot.angDeg(gaugeRoot.boostThresholdMb * 2)
             }
         }
     }
@@ -128,18 +127,18 @@ Item {
             PathAngleArc {
                 centerX: gaugeRoot.cx; centerY: gaugeRoot.cy
                 radiusX: gaugeRoot.rArc; radiusY: gaugeRoot.rArc
-                startAngle: gaugeRoot.angDeg(gaugeRoot.rpmMax) + 270
-                sweepAngle: gaugeRoot.angDeg(gaugeRoot.vmax) - gaugeRoot.angDeg(gaugeRoot.rpmMax)
+                startAngle: gaugeRoot.angDeg(gaugeRoot.boostThresholdMb * 3) + 270
+                sweepAngle: gaugeRoot.angDeg(gaugeRoot.vmax) - gaugeRoot.angDeg(gaugeRoot.boostThresholdMb * 3)
             }
         }
     }
 
     Repeater {
-        model: [1, 2, 3, 4, 5, 6, 7]
+        model: [1, 2, 3]
         Rectangle {
-            property real d: gaugeRoot.angDeg(modelData * 1000)
+            property real d: gaugeRoot.angDeg(modelData)
             width: 2; height: 16
-            color: gaugeRoot.zoneColor(modelData * 1000)
+            color: gaugeRoot.zoneColor(modelData)
             antialiasing: true
             x: gaugeRoot.xAt(d, gaugeRoot.rArc - 8) - width / 2
             y: gaugeRoot.yAt(d, gaugeRoot.rArc - 8) - height / 2
@@ -149,9 +148,9 @@ Item {
     }
 
     Repeater {
-        model: [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5]
+        model: [0.5, 1.5, 2.5]
         Rectangle {
-            property real d: gaugeRoot.angDeg(modelData * 1000)
+            property real d: gaugeRoot.angDeg(modelData)
             width: 1; height: 8
             color: "#2a3a44"
             antialiasing: true
@@ -163,9 +162,9 @@ Item {
     }
 
     Repeater {
-        model: [1, 2, 3, 4, 5, 6, 7]
+        model: [1, 2, 3]
         Text {
-            property real d: gaugeRoot.angDeg(modelData * 1000)
+            property real d: gaugeRoot.angDeg(modelData)
             text: modelData
             color: gaugeRoot.accentDim
             font.family: "Menlo"
@@ -202,8 +201,8 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         anchors.verticalCenterOffset: 24
         text: gaugeRoot.hasData
-              ? gaugeRoot.value.toFixed(0) + " RPM"
-              : "---- RPM"
+              ? gaugeRoot.value.toFixed(1) + " MB/s"
+              : "--.- MB/s"
         color: gaugeRoot.valueColor
         font.family: "Menlo"
         font.pixelSize: 14
@@ -215,7 +214,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
         anchors.verticalCenterOffset: 44
-        text: "FAN"
+        text: "NET"
         color: gaugeRoot.accentDim
         font.family: "Helvetica Neue"
         font.pixelSize: 9
