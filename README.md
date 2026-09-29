@@ -50,7 +50,7 @@ The iPhone is the sole internet uplink (weak signal, rural Queensland). Every by
 
 ## Firmware
 
-Current version: **V4.09**
+Current version: **V4.10**
 
 ### HTTP API
 
