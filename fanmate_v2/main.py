@@ -22,7 +22,11 @@ def main():
     bridge = Bridge()
     engine.rootContext().setContextProperty("dev", bridge)
 
-    qml_path = os.path.join(os.path.dirname(__file__), "qml", "Main.qml")
+    if getattr(sys, "frozen", False):
+        # Nuitka / PyInstaller bundle: QML files are extracted next to the exe
+        qml_path = os.path.join(os.path.dirname(sys.executable), "Main.qml")
+    else:
+        qml_path = os.path.join(os.path.dirname(__file__), "qml", "Main.qml")
     print("Loading:", qml_path)
     engine.load(QUrl.fromLocalFile(qml_path))
 

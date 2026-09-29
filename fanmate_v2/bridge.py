@@ -7,7 +7,8 @@ import sys
 import os
 import threading
 
-from PySide6.QtCore import QObject, Signal, Property, QTimer
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QUrl
 
 # Reuse existing backend
 sys.path.insert(0, os.path.expanduser("~/Documents/Arduino/fanmate"))
@@ -82,6 +83,15 @@ class Bridge(QObject):
             self.tempWarningChanged.emit()
         if self._changed("boost_threshold", self._get("boost_threshold", 700)):
             self.boostThresholdChanged.emit()
+
+    @Slot(str)
+    def open_url(self, url):
+        QDesktopServices.openUrl(QUrl(url))
+
+    @Slot()
+    def quit_app(self):
+        from PySide6.QtWidgets import QApplication
+        QApplication.quit()
 
     # --- Properties exposed to QML ---
 
