@@ -1,8 +1,8 @@
 # Fan-Mate — Project State
 
 Snapshot date: 2026-09-29
-Latest firmware: V4.08
-Latest firmware tag: v4.08
+Latest firmware: V4.09
+Latest firmware tag: v4.09
 Latest GUI: Tk v3.80 (tag gui-v3.80) / QML v2 v1.01 (tag gui-v2-v1.01)
 Repo: https://github.com/bigbadevilaussie-hue/Fan-Mate
 
@@ -59,7 +59,7 @@ Rule 4 — Fuck it lmao
 
 ## FIRMWARE
 
-**Current version:** V4.08
+**Current version:** V4.09
 
 ### Modules
 | File | Purpose |
