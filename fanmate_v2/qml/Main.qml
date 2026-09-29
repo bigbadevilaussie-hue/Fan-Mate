@@ -9,7 +9,7 @@ ApplicationWindow {
     visible: true
     title: "Fan-Mate v2"
     color: "#000000"
-    property string guiVersion: "1.04"
+    property string guiVersion: "1.06"
 
     // ---------- drawer ----------
     Drawer {

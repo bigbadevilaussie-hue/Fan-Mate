@@ -23,6 +23,7 @@ class Bridge(QObject):
 
     # Notify signals — QML binds to these for property updates
     tempChanged      = Signal()
+    opalChanged      = Signal()
     fanChanged       = Signal()
     rpmChanged       = Signal()
     boostChanged     = Signal()
@@ -81,6 +82,8 @@ class Bridge(QObject):
             self.alertChanged.emit()
         if self._changed("fw", self._get("fv", "?")):
             self.fwChanged.emit()
+        if self._changed("opal", self._get("opal", 1)):
+            self.opalChanged.emit()
         if self._changed("outdoor_c", self._get("outdoor_c", 0.0)):
             self.outdoorChanged.emit()
         if self._changed("temp_warning", self._get("temp_warning", 32.0)):
@@ -176,6 +179,10 @@ class Bridge(QObject):
     @Property(str, notify=fwChanged)
     def fw(self):
         return str(self._get("fv", "?"))
+
+    @Property(int, notify=opalChanged)
+    def opal(self):
+        return int(self._get("opal", 1))
 
     @Property(float, notify=outdoorChanged)
     def outdoor(self):
