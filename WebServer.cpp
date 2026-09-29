@@ -93,9 +93,10 @@ static void handle_status() {
     json += "\"phone\":" + String(phonePresent ? 1 : 0) + ",";
     json += "\"alert\":" + String(alertState) + ",";
     json += "\"fan_stall\":" + String(fan_stall_active() ? 1 : 0) + ",";
-    int boostGear = auto_boost_gear();
+    int boostGear = auto_boost_data_gear();
     json += "\"boost\":" + String(boostGear > 0 ? 1 : 0) + ",";
     json += "\"boost_lvl\":" + String(boostGear) + ",";
+    json += "\"cooling\":" + String(auto_boost_cooling() ? 1 : 0) + ",";
     json += "\"net_kbps\":" + String(lastNetKbps, 1) + ",";
     int tempGear = 0;
     if (currentTemp >= config.tempGear4)      tempGear = 4;

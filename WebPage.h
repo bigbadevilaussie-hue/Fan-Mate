@@ -108,12 +108,6 @@ canvas {
   width: 100%;
   height: 110px;
 }
-.footer {
-  text-align: center;
-  font-size: 10px;
-  color: #7a8194;
-  margin-top: 20px;
-}
 .disconnected { opacity: 0.45; }
 
 .kill-banner {
@@ -208,7 +202,6 @@ canvas {
     <canvas id="temp-graph" width="800" height="200"></canvas>
   </div>
 
-  <div class="footer">HTTP · Live view · <span id="fw">v?</span></div>
 </div>
 
 <script>
@@ -406,7 +399,6 @@ function render(data) {
   drawGraph('net-graph', netHist, 0, 2048, '#1e66f5', '#cfe0ff', threshold, ['-15m', '-7m', 'now']);
   drawGraph('temp-graph', tempHist, 15, 45, '#1e66f5', '#cfe0ff', tempWarning, ['-15m', '-7m', 'now']);
 
-  el('fw').textContent = 'v' + (data.fw || '?');
 
   if (data.kill_mode !== undefined) {
     renderKillBanner(data.kill_mode);

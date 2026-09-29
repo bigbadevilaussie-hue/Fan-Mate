@@ -151,6 +151,11 @@ void auto_boost_release() {
     reset_all();
 }
 
+int auto_boost_data_gear() {
+    if (force_active) return force_gear_value;
+    return data_gear;
+}
+
 int auto_boost_gear() {
     if (force_active) return force_gear_value;
     if (phase == PH_COOLDOWN) return 1;

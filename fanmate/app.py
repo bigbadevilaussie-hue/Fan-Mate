@@ -82,22 +82,6 @@ class App:
         mb.add_cascade(label="🌀 Fan-Mate", menu=am)
         root.config(menu=mb)
 
-        self.title_lbl = tk.Label(root, text="Fan-Mate", font=FONT_TITLE)
-        self.title_lbl.pack(pady=(16, 2))
-        self.status_label = tk.Label(root, text="connecting…", font=("Helvetica Neue", 10, "italic"))
-        self.status_label.pack(pady=(0, 8))
-
-        self.weather_card = Card(root, self)
-        self.weather_card.pack(fill="x", padx=18, pady=(0, 8))
-        self.weather_title = tk.Label(self.weather_card, text="📍 Atkinsons Dam", font=("Helvetica Neue", 11, "bold"))
-        self.weather_title.pack(pady=(10, 0))
-        self.weather_temp_lbl = tk.Label(self.weather_card, text="--.-°", font=("Helvetica Neue", 28, "bold"))
-        self.weather_temp_lbl.pack(pady=(2, 0))
-        self.weather_desc_lbl = tk.Label(self.weather_card, text="Loading…", font=FONT_SECTION)
-        self.weather_desc_lbl.pack(pady=(0, 2))
-        self.weather_range_lbl = tk.Label(self.weather_card, text="", font=FONT_TINY)
-        self.weather_range_lbl.pack(pady=(0, 10))
-
         self.temp_card = Card(root, self)
         self.temp_card.pack(fill="x", padx=18, pady=8)
         self.temp_title = tk.Label(self.temp_card, text="🌡️ PHONE TEMPERATURE", font=FONT_LABEL)
@@ -113,18 +97,23 @@ class App:
         self._divider(fr)
         self.rpm_lbl = self._col(fr, "⚙️ RPM", "--")
 
-        self.status_card = Card(root, self)
-        self.status_card.pack(fill="x", padx=18, pady=8)
-        sr = tk.Frame(self.status_card)
-        sr.pack(fill="x", pady=10)
-        self.phone_lbl = self._col(sr, "📱 PHONE", "--")
-        self._divider(sr)
-        self.alert_lbl = self._col(sr, "📊 STATUS", "None")
+        self.boost_temp_card = Card(root, self)
+        self.boost_temp_card.pack(fill="x", padx=18, pady=8)
+        bt = tk.Frame(self.boost_temp_card)
+        bt.pack(fill="x", pady=10)
+        self.boost_lbl = self._col(bt, "🏎️ BOOST", "Parked")
+        self._divider(bt)
+        self.temp_level_lbl = self._col(bt, "🌡️ TEMP", "Normal")
 
-        self.time_card = Card(root, self)
-        self.time_card.pack(fill="x", padx=18, pady=8)
-        self.time_lbl = tk.Label(self.time_card, text="--:--", font=("Helvetica Neue", 14, "bold"))
-        self.time_lbl.pack(pady=10)
+        self.bottom_card = Card(root, self)
+        self.bottom_card.pack(fill="x", padx=18, pady=8)
+        br = tk.Frame(self.bottom_card)
+        br.pack(fill="x", pady=10)
+        self.outdoor_lbl = self._col(br, "📍 OUTDOOR", "--.-°")
+        self._divider(br)
+        self.phone_lbl = self._col(br, "📱 PHONE", "--")
+        self._divider(br)
+        self.time_lbl = self._col(br, "🕐 TIME", "--:--")
 
         self.data_card = Card(root, self)
         self.data_card.pack(fill="x", padx=18, pady=8)
@@ -144,7 +133,7 @@ class App:
 
         self.footer_lbl = tk.Label(
             root,
-            text=f"GUI v{GUI_VERSION}  •  HTTP  •  Logs on ESP32",
+            text=f"GUI v{GUI_VERSION}  ·  FW {latest.get('fv', '?')}",
             font=FONT_TINY,
         )
         self.footer_lbl.pack(pady=(2, 10))
@@ -285,21 +274,16 @@ class App:
     def apply_theme(self):
         t = self.theme
         self.root.configure(bg=t["bg"])
-        for card in (self.weather_card, self.temp_card, self.fan_card,
-                     self.status_card, self.time_card, self.data_card, self.graph_card):
+        for card in (self.temp_card, self.fan_card,
+                     self.boost_temp_card, self.bottom_card,
+                     self.data_card, self.graph_card):
             card.apply_theme()
-        self.title_lbl.configure(bg=t["bg"], fg=t["accent"])
-        self.status_label.configure(bg=t["bg"], fg=t["muted"])
         self.footer_lbl.configure(bg=t["bg"], fg=t["muted"])
-        for lbl in (self.weather_title, self.temp_title, self.graph_title, self.data_title):
+        for lbl in (self.temp_title, self.graph_title, self.data_title):
             lbl.configure(bg=t["card"], fg=t["muted"])
-        self.weather_temp_lbl.configure(bg=t["card"], fg=t["fg"])
-        self.weather_desc_lbl.configure(bg=t["card"], fg=t["muted"])
-        self.weather_range_lbl.configure(bg=t["card"], fg=t["muted"])
         self.temp_lbl.configure(bg=t["card"])
-        self.time_lbl.configure(bg=t["card"], fg=t["fg"])
         self.rate_lbl.configure(bg=t["card"], fg=t["fg"])
-        for holder in (self.fan_card, self.status_card):
+        for holder in (self.fan_card, self.boost_temp_card, self.bottom_card):
             for child in holder.winfo_children():
                 if isinstance(child, tk.Frame):
                     child.configure(bg=t["card"])
@@ -334,44 +318,10 @@ class App:
         countdown = d.get("sleep_countdown", 0)
         boost = d.get("boost", 0)
         opal = d.get("opal", 1)
-
-        if not state.connected:
-            self.status_label.config(
-                text="disconnected",
-                font=("Helvetica Neue", 10, "italic"),
-                fg=t["muted"],
-            )
-        elif sleep:
-            self.status_label.config(
-                text="💤 sleeping (phone absent)",
-                font=("Helvetica Neue", 12, "bold"),
-                fg=t["muted"],
-            )
-        elif countdown > 0:
-            self.status_label.config(
-                text=f"⚠️  Sleeping in {countdown}s",
-                font=("Helvetica Neue", 11, "bold"),
-                fg=t["orange"],
-            )
-        elif boost and connected:
-            turbo_colors = ["#00ff00", "#ffff00", "#ff8800", "#ff0000"]
-            self.status_label.config(
-                text="🏎️ TURBO",
-                font=("Helvetica Neue", 13, "bold"),
-                fg=turbo_colors[self.turbo_phase],
-            )
-        elif not opal:
-            self.status_label.config(
-                text="🔌 opal offline",
-                font=("Helvetica Neue", 10, "italic"),
-                fg=t["orange"],
-            )
-        else:
-            self.status_label.config(
-                text=get_status(),
-                font=("Helvetica Neue", 10, "italic"),
-                fg=t["muted"],
-            )
+        alert = d.get("alert", 0)
+        stall = d.get("fan_stall", 0)
+        temp_lvl  = d.get("temp_lvl", 0)
+        boost_lvl = d.get("boost_lvl", 0)
 
         temp = d.get("temp")
         if temp is None:
@@ -407,28 +357,24 @@ class App:
                 fg=t["green"] if phone else t["muted"],
             )
 
-        alert = int(d.get("alert", 0))
-        stall = d.get("fan_stall", 0)
-        boost_active = d.get("boost", 0) == 1
+        # BOOST level name
+        bl = int(d.get("boost_lvl", 0))
+        boost_names  = ["Parked", "Cruising", "Fast", "Racing", "Nitro"]
+        boost_colors = [t["muted"], t["green"], t["yellow"], t["orange"], t["red"]]
+        self.boost_lbl.config(text=boost_names[bl], fg=boost_colors[bl])
 
-        if stall:
-            self.alert_lbl.config(text="FAN STALL 🚨", fg=t["red"])
-        elif alert >= 3:
-            self.alert_lbl.config(text="Kill 💀", fg=t["red"])
-        elif alert == 2:
-            self.alert_lbl.config(text="Oh Shit 🚨", fg=t["red"])
-        elif alert == 1:
-            self.alert_lbl.config(text="Warn ⚠️", fg=t["orange"])
-        elif boost_active:
-            self.alert_lbl.config(text="🏎️ Boosting", fg=t["green"])
+        # TEMP level name
+        tl = int(d.get("temp_lvl", 0))
+        temp_names  = ["Normal", "Warm", "Hot", "Hotter", "Critical"]
+        temp_colors = [t["green"], t["yellow"], t["orange"], t["orange"], t["red"]]
+        self.temp_level_lbl.config(text=temp_names[tl], fg=temp_colors[tl])
+
+        # weather card removed; outdoor temp goes into bottom card
+        od = d.get("outdoor_c")
+        if od is not None and od > -90:
+            self.outdoor_lbl.config(text=f"{od:.1f}°")
         else:
-            self.alert_lbl.config(text="None", fg=t["muted"])
-
-        self.weather_temp_lbl.config(text=f"{weather['temp']:.1f}°")
-        self.weather_desc_lbl.config(text=weather["desc"])
-        self.weather_range_lbl.config(
-            text=f"⬆️ {weather['high']:.0f}°   ⬇️ {weather['low']:.0f}°"
-        )
+            self.outdoor_lbl.config(text="--.-°")
 
         self.time_lbl.config(text=f"{local_time_str()}  {time_emoji()}")
 
@@ -438,6 +384,9 @@ class App:
         else:
             self.rate_lbl.config(text=f"{rate_kbps:.1f} KB/s")
 
+        self.footer_lbl.config(
+            text=f"GUI v{GUI_VERSION}  ·  FW {d.get('fv', '?')}"
+        )
         self.temp_graph.trigger = latest_config.get("temp", {}).get("warning", None)
         self.temp_graph.set_data(temp_hist)
 

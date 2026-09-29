@@ -2,7 +2,7 @@
 
 import os
 
-GUI_VERSION = "3.82"
+GUI_VERSION = "3.84"
 FANMATE_URL = "http://fan-mate.local"
 FANMATE_DIR = os.path.expanduser("~/Documents/Arduino/fanmate")
 BUILD_DIR   = os.path.join(FANMATE_DIR, "build", "esp32.esp32.esp32c3")

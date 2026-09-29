@@ -44,6 +44,7 @@ def http_poll_loop():
                 latest["opal"]      = d.get("opal", 1)
                 latest["outdoor_c"] = d.get("outdoor_c", 0.0)
                 latest["fan_stall"] = d.get("fan_stall", 0)
+                latest["temp_lvl"]  = d.get("temp_lvl", 0)
 
                 if latest["temp"] is not None:
                     temp_hist.append(float(latest["temp"]))
@@ -69,6 +70,7 @@ def http_poll_loop():
             latest["sleep"] = 0
             latest["sleep_countdown"] = 0
             latest["fan_stall"] = 0
+            latest["temp_lvl"] = 0
         time.sleep(POLL_INTERVAL)
 
 

@@ -25,7 +25,8 @@ void  auto_boost_init();
 void  auto_boost_update(float net_kbps, float phone_temp, bool net_ok = true);
 void  auto_boost_release();                 // reset everything (sleep / boost off)
 
-int   auto_boost_gear();                    // 0-4, what the fan controller uses
+int   auto_boost_gear();                    // 0-4, what the fan controller uses (includes cooldown hold)
+int   auto_boost_data_gear();               // 0-4, real boost data gear (0 during cooldown)
 int   auto_boost_threshold();               // current mode's threshold (KB/s)
 void  auto_boost_force_gear(int n, float phone_temp);  // 0=release, 1-4=lock
 
