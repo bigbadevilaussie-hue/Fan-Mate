@@ -1,6 +1,6 @@
 # Fan-Mate — Chat Handoff
 
-Generated: 2026-09-27 11:00:36
+Generated: 2026-09-29 11:37:44
 
 ---
 
@@ -8,25 +8,26 @@ Generated: 2026-09-27 11:00:36
 
 ```
 $ git log --oneline -5
-3e6848d gitignore: HANDOFF.md (generated)
-a71ad14 docs: PROJECT_STATE, FILES index, update_handoff.sh, README refresh
-2cfc344 V3.80: responsive web dashboard, /status history arrays
-f2cf772 GUI: split fanmate.py into package modules, add Daily + Weekly reports
-b46e98e GUI: add Daily report, HTTP timeout 10s, quiet connected print, section markers
+37db566 handoff: sleep/wake issues deferred to hall sensor arrival
+bdd98ff v4.08: sleep/wake delays, log flush/pause, non-blocking beep, phone timestamps
+e4e1771 gui v3.80: fan_emoji(0) -> circle, distinquish off from night
+e35726c gui v3.79: remove NIGHT from settings, rename Dyna Tune menu item
+307f99a gui v3.77: DynaTune dual-axis graph, ZZZ night fan, boost start temp note
 
 $ git status --short
+ M HANDOFF.md
 
 $ git tag -l | tail -10
-v3.43
-v3.44
-v3.45.2
-v3.46
-v3.70
-v3.71
-v3.72
-v3.73
-v3.74
-v3.80
+v3.81
+v3.93
+v3.94
+v3.95
+v4.00-firmware
+v4.01
+v4.02
+v4.03
+v4.05
+v4.08
 ```
 
 ---
@@ -277,27 +278,27 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 ```
 -rw-r--r--@ 1 Nick  staff   2143 27 Sep 00:54 AutoBoost.cpp
 -rw-r--r--@ 1 Nick  staff    657 26 Sep 16:33 AutoBoost.h
--rw-r--r--@ 1 Nick  staff   3560 27 Sep 10:28 Config.h
--rw-r--r--@ 1 Nick  staff   5240 26 Sep 21:25 DisplayManager.cpp
+-rw-r--r--@ 1 Nick  staff   2196 29 Sep 09:05 Config.h
+-rw-r--r--@ 1 Nick  staff   5501 27 Sep 18:00 DisplayManager.cpp
 -rw-r--r--@ 1 Nick  staff    422 26 Sep 10:16 DisplayManager.h
--rw-r--r--@ 1 Nick  staff   8821 27 Sep 00:54 FanController.cpp
--rw-r--r--@ 1 Nick  staff    447 26 Sep 21:25 FanController.h
--rw-r--r--@ 1 Nick  staff  10220 27 Sep 01:44 Logging.cpp
--rw-r--r--@ 1 Nick  staff    601 26 Sep 18:42 Logging.h
--rw-r--r--@ 1 Nick  staff   6042 26 Sep 10:16 OpalClient.cpp
--rw-r--r--@ 1 Nick  staff   1008 26 Sep 10:16 OpalClient.h
+-rw-r--r--@ 1 Nick  staff  11855 29 Sep 08:44 FanController.cpp
+-rw-r--r--@ 1 Nick  staff    731 29 Sep 08:06 FanController.h
+-rw-r--r--@ 1 Nick  staff  14073 29 Sep 08:06 Logging.cpp
+-rw-r--r--@ 1 Nick  staff    647 29 Sep 08:06 Logging.h
+-rw-r--r--@ 1 Nick  staff   8513 28 Sep 23:36 OpalClient.cpp
+-rw-r--r--@ 1 Nick  staff    343 28 Sep 21:16 OpalClient.h
 -rw-r--r--@ 1 Nick  staff    779 26 Sep 22:04 SerialBuffer.cpp
 -rw-r--r--@ 1 Nick  staff    170 26 Sep 22:03 SerialBuffer.h
--rw-r--r--@ 1 Nick  staff   6627 26 Sep 16:33 Settings.cpp
+-rw-r--r--@ 1 Nick  staff   6626 27 Sep 17:56 Settings.cpp
 -rw-r--r--@ 1 Nick  staff   1154 26 Sep 22:09 Settings.h
--rw-r--r--@ 1 Nick  staff   1678 26 Sep 16:33 WeatherClient.cpp
+-rw-r--r--@ 1 Nick  staff   1716 28 Sep 22:42 WeatherClient.cpp
 -rw-r--r--@ 1 Nick  staff    185 26 Sep 16:33 WeatherClient.h
--rw-r--r--  1 Nick  staff   9796 27 Sep 10:29 WebPage.h
--rw-r--r--@ 1 Nick  staff  15300 27 Sep 10:29 WebServer.cpp
--rw-r--r--@ 1 Nick  staff    142 25 Sep 23:53 WebServer.h
+-rw-r--r--@ 1 Nick  staff  12712 28 Sep 20:42 WebPage.h
+-rw-r--r--@ 1 Nick  staff  15254 28 Sep 22:42 WebServer.cpp
+-rw-r--r--@ 1 Nick  staff    142 27 Sep 17:39 WebServer.h
 -rw-r--r--@ 1 Nick  staff   3533 26 Sep 22:05 WiFiManager.cpp
 -rw-r--r--@ 1 Nick  staff    315 26 Sep 17:54 WiFiManager.h
--rw-r--r--  1 Nick  staff   6216 27 Sep 10:35 fanmate.ino
+-rw-r--r--  1 Nick  staff   6054 29 Sep 09:04 fanmate.ino
 -rw-r--r--@ 1 Nick  staff    669 25 Sep 15:31 secrets.example.h
 -rw-r--r--@ 1 Nick  staff    770 25 Sep 16:48 secrets.h
 ```
@@ -309,14 +310,13 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 ```
 -rw-r--r--@ 1 Nick  staff    162 27 Sep 09:23 fanmate.py
 -rw-r--r--  1 Nick  staff     27 27 Sep 09:09 fanmate/__init__.py
--rw-r--r--  1 Nick  staff  16938 27 Sep 10:17 fanmate/app.py
--rw-r--r--  1 Nick  staff   1202 27 Sep 09:13 fanmate/config.py
--rw-r--r--  1 Nick  staff  18945 27 Sep 10:06 fanmate/dialogs.py
--rw-r--r--@ 1 Nick  staff  63292 27 Sep 09:09 fanmate/fanmate_legacy.py
--rw-r--r--  1 Nick  staff   1971 27 Sep 10:07 fanmate/helpers.py
--rw-r--r--  1 Nick  staff   3674 27 Sep 10:06 fanmate/http_client.py
+-rw-r--r--  1 Nick  staff  17126 29 Sep 07:45 fanmate/app.py
+-rw-r--r--  1 Nick  staff   1266 29 Sep 07:49 fanmate/config.py
+-rw-r--r--  1 Nick  staff  16648 29 Sep 07:43 fanmate/dialogs.py
+-rw-r--r--  1 Nick  staff   2289 29 Sep 07:49 fanmate/helpers.py
+-rw-r--r--  1 Nick  staff   3649 28 Sep 22:15 fanmate/http_client.py
 -rw-r--r--  1 Nick  staff   2248 27 Sep 10:06 fanmate/log_sync.py
--rw-r--r--  1 Nick  staff   9757 27 Sep 10:13 fanmate/reports.py
+-rw-r--r--  1 Nick  staff  10314 28 Sep 22:21 fanmate/reports.py
 -rw-r--r--  1 Nick  staff   1145 27 Sep 09:14 fanmate/state.py
 -rw-r--r--  1 Nick  staff   1888 27 Sep 09:19 fanmate/weather.py
 -rw-r--r--  1 Nick  staff   6205 27 Sep 09:22 fanmate/widgets.py
@@ -335,201 +335,15 @@ device unreachable
 ## LOG FILES ON MAC
 
 ```
--rw-r--r--  1 Nick  staff  10270 27 Sep 03:08 /Users/Nick/Documents/FanMate_logs/log-3.74-20260927-0200.csv
--rw-r--r--  1 Nick  staff  10484 27 Sep 04:00 /Users/Nick/Documents/FanMate_logs/log-3.74-20260927-0300.csv
--rw-r--r--  1 Nick  staff  10497 27 Sep 05:00 /Users/Nick/Documents/FanMate_logs/log-3.74-20260927-0400.csv
--rw-r--r--  1 Nick  staff  10494 27 Sep 06:00 /Users/Nick/Documents/FanMate_logs/log-3.74-20260927-0500.csv
--rw-r--r--  1 Nick  staff  10497 27 Sep 07:00 /Users/Nick/Documents/FanMate_logs/log-3.74-20260927-0600.csv
--rw-r--r--  1 Nick  staff  10455 27 Sep 08:00 /Users/Nick/Documents/FanMate_logs/log-3.74-20260927-0700.csv
--rw-r--r--  1 Nick  staff  10467 27 Sep 09:00 /Users/Nick/Documents/FanMate_logs/log-3.74-20260927-0800.csv
--rw-r--r--  1 Nick  staff  10285 27 Sep 10:06 /Users/Nick/Documents/FanMate_logs/log-3.74-20260927-0900.csv
--rw-r--r--  1 Nick  staff   6459 27 Sep 10:37 /Users/Nick/Documents/FanMate_logs/log-3.80-20260927-1000.csv
--rw-r--r--  1 Nick  staff   4129 27 Sep 11:00 /Users/Nick/Documents/FanMate_logs/log-3.80-20260927-1037.csv
+-rw-r--r--  1 Nick  staff  10724 29 Sep 07:15 /Users/Nick/Documents/FanMate_logs/log-4.05-20260929-0600.csv
+-rw-r--r--  1 Nick  staff  10867 29 Sep 08:00 /Users/Nick/Documents/FanMate_logs/log-4.05-20260929-0700.csv
+-rw-r--r--  1 Nick  staff   5730 29 Sep 08:32 /Users/Nick/Documents/FanMate_logs/log-4.06-20260929-0800.csv
+-rw-r--r--  1 Nick  staff   2983 29 Sep 08:47 /Users/Nick/Documents/FanMate_logs/log-4.071-20260929-0847.csv
+-rw-r--r--  1 Nick  staff   1373 29 Sep 09:00 /Users/Nick/Documents/FanMate_logs/log-4.071-20260929-0853.csv
+-rw-r--r--  1 Nick  staff    374 29 Sep 09:01 /Users/Nick/Documents/FanMate_logs/log-4.071-20260929-0900.csv
+-rw-r--r--  1 Nick  staff    108 29 Sep 09:06 /Users/Nick/Documents/FanMate_logs/log-4.071-20260929-0906.csv
+-rw-r--r--  1 Nick  staff    243 29 Sep 09:07 /Users/Nick/Documents/FanMate_logs/log-4.08-20260929-0907.csv
+-rw-r--r--  1 Nick  staff   9316 29 Sep 10:00 /Users/Nick/Documents/FanMate_logs/log-4.08-20260929-0908.csv
+-rw-r--r--  1 Nick  staff  10600 29 Sep 11:21 /Users/Nick/Documents/FanMate_logs/log-4.08-20260929-1000.csv
 ```
 
-
----
-
-## NOTES FOR THE AI
-
-- **Do not reference the time of day.** Nick finds it annoying.
-- **Do not suggest Nick should sleep, rest, or take a break.** He decides when to stop.
-- **Do not comment on how long the session has been running.**
-- **Do not open with pleasantries about mornings, evenings, or late nights.**
-
-Just do the work.
-
----
-
----
-
-## PENDING: room_c in reports
-
-Firmware v3.95 writes `room_c` as column 9 in `/log.csv`.
-- Empty value until NTC is wired (3-4 days)
-- `LOG_HEADER` = `timestamp,temp_c,net_kbps,boost,fan,rpm,event,outdoor_c,room_c`
-- Stub: `room_get_temp()` in `Logging.cpp` returns `-99.0f`
-
-**Tk GUI `fanmate/reports.py` `_parse()` does NOT yet read `room_c`.**
-- Currently reads indices 0-5 only
-- Old 8-column files still parse fine
-- New 9-column files parse fine, but `room_c` is ignored
-- **Decision: do NOT fix Tk GUI parser. Put room_c support into the new QML GUI report/log handler instead.**
-
-**When NTC arrives:**
-1. Wire MF52AT 10k B=3950 to GPIO 0 (voltage divider with 10k)
-2. Replace `room_get_temp()` stub in `Logging.cpp` with real Steinhart-Hart read
-3. No schema change, no version bump needed
-4. Verify `/log.csv` row has a real value in the 9th field
-
-**Future QML GUI report parser must:**
-- Read column 9 (`room_c`)
-- Skip empty values (no data)
-- Skip `-99` values (sentinel, if we ever use it)
-- Handle both 8-column (pre-v3.95) and 9-column files
-
----
-
-## GUI 2 v1.02 — TODO (open items from v1.01)
-
-1. **BOOST gauge shows 0** — `dev.boostLvl` likely missing from `bridge.py`. Verify `/status` exposes `boost_lvl`, add `Property(int)` for it in the bridge, bind to `BoostGauge.value`.
-
-2. **RPM needle pegs** at 5310 against 5000 max. Either:
-   - Raise `vmax` to 6000 (more headroom)
-   - Accept peg (real tachs peg too)
-   - Show "MAX" flash if value > vmax
-
-3. **Centre gauge glow bleed** — the amber/red glow rectangle at 1.35× gauge size bleeds into the window. Cap at ~1.15× or reduce opacity.
-
-4. **Three gauges don't align** — different y offsets (130 / 70 / 130). Should share a common vertical centre line:
-   - BOOST top = RPM top + 70
-   - TEMP top = RPM top + 70
-   - Or use `anchors.verticalCenter` against a container
-
-5. **LED row spacing** — 34px between dots. Currently floats at y:24, disconnected from gauges. Should tuck closer.
-
-6. **`BoostGauge` arc track** — verify the dim track renders (was invisible in v1.01 screenshot).
-
-7. **`BoostGauge` marks** — 4×22px, still small. Consider 5×28px for readability.
-
-8. **Layout responsiveness** — `Main.qml` uses hardcoded x/y. If window resizes, everything stays put. Either lock the window size (`setFixedSize`) or anchor properly.
-
-9. **`Bar.qml` unused** — either integrate back into layout (for network/enviro/alarm) or delete.
-
-10. **`Theme.qml` refactor** (deferred) — pull colours + fonts into a singleton.
-
-**Priority order:**
-1 → 4 → 3 → 2 → 6 → 7 → 5 → 8 → 9 → 10
-
-**Notes:**
-- Version string is `GUI 2 v1.01` in `Main.qml` `guiVersion` property
-- Update it when shipping v1.02
-- Commit and tag `gui-v2-v1.02` when done
-
----
-
-## SESSION END — 2026-09-28
-
-### Shipped tonight
-
-**Firmware v3.95 → v4.05** (tags: v3.95, v4.00-firmware, v4.01, v4.02, v4.03, v4.05)
-- Buzzer fixed: LEDC PWM was wrong for active buzzer → switched to `tone()`/`noTone()`
-- Kill state machine: AUTO / ACTIVE / OFF, latched, WDT guard, web button
-- Log hardening: eviction, real event values, comma sanitize, `room_c` column reserved
-- Boot recovery moved after NTP wait (was discarding live logs every boot)
-- Sealed file cap raised 32 → 64
-- Weather: success-only timer, 3s timeout
-- `/config` POST validates JSON
-- **Fan LEDC channel fix:** moved fan from channel 0 → channel 2. `tone()` was stealing channel 0, causing fan to pulse/stall during beeps.
-- OPAL diagnostics added — confirmed SID caching works, never was a bug
-
-**Tk GUI v3.75** (tag: gui-v3.75)
-- Report filename line removed
-- `None` crash in `max(nets)` fixed
-- OTA `NameError` fixed
-- `global latest_config` shadow removed
-- Double logo gone
-- Null-safe `_parse()` with `room_c` support
-
-### Current state
-
-| Layer | Version | Tag |
-|---|---|---|
-| Firmware | 4.05 | v4.05 |
-| Tk GUI | 3.75 | gui-v3.75 |
-| QML GUI v2 | 1.01 | gui-v2-v1.01 |
-| Repo HEAD | 1de4757 | — |
-
-### Hardware state
-
-- Fan: mounted in coupling assembly, blowing on phone back, working
-- DS18B20 probe: embedded in Quad Lock adapter, contacting phone back
-- Coupling assembly: mounted on phone case
-- Controller assembly: separate box
-- A3144 hall sensor: **not wired**
-- NTC MF52AT: **not arrived** (3-4 days out)
-
-### Open for next session
-
-**🟠 Deferred firmware:**
-1. Kill state machine skipped when asleep (`updateFanAndAlerts` gated by `sys_state == STATE_ACTIVE`)
-2. `tick_15s()` skipped when asleep → no overnight logging
-3. `quiet_hours()` uses Config.h defines, `settings_is_night()` uses NVS — they disagree
-4. AutoBoost gear doesn't persist across reboot
-5. Kill fires on ambient heat when phone absent (needs hall sensor to gate)
-
-**🟡 Cosmetic:**
-- `beep_once()` blocks 80ms
-- `runBeepSequence` ignores quiet hours
-
-**🟣 GUI 2 v1.02 (deferred until firmware stable):**
-- Boost bridge (`dev.boostLvl` missing)
-- RPM max 5000 → 6000
-- Centre glow bleed
-- Gauge alignment
-
-**🟢 Hardware (3-4 days):**
-- NTC → GPIO 0, replace `room_get_temp()` stub
-- A3144 → GPIO 1, set `phoneMode = "auto"`
-
-### Version history note
-
-- v4.04 exists on device but was never tagged. Fan fix and OPAL diagnostics landed together in v4.05.
-
-### Known false alarms
-
-- **OPAL login "loop"** — never existed. Normal 4-min SID refresh. Diagnostics confirmed `t=10848` set once, `diff` grows 15s/poll, relogin only at 240s.
-
-### How to test
-
-
-Web GUI: http://fan-mate.local
-
-### Handover protocol
-
-**No time references. No sleep suggestions.**
-Just do the work.
-
----
-
-## DEFERRED — SLEEP/WAKE ISSUES (needs hall sensor)
-
-**Status:** v4.08 ships sleep/wake framework. Real-world test deferred until
-A3144 hall sensor arrives (3-4 days).
-
-**Known issues when testing without hall sensor:**
-1. Sleep fires immediately after enabling `phoneMode = "auto"` because
-   `phone_absent_since` was set at boot, so 30s already elapsed.
-2. Wake requires `phone_present_since > 0`, which never gets set because
-   the hall is never "present".
-3. `/reboot` endpoint sends "Rebooting..." but device keeps running (or
-   reboot happens silently with serial buffer persistence).
-
-**To fix when hall sensor arrives:**
-- Reset `phone_absent_since = millis()` when `phoneMode` changes to "auto"
-  in `settings_apply_json()`
-- Verify wake path with real hall signal (LOW = present)
-- Investigate `/reboot` not triggering `ESP.restart()` reliably
-
-**Not blocking.** Sleep/wake logic is in place. Real test happens when
-sensor is wired.
