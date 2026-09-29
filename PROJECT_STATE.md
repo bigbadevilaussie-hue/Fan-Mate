@@ -88,6 +88,8 @@ Rule 4 — Fuck it lmao
 | V3.73 | Serial buffer refactor, log event routing, stall gated |
 | V3.74 | Fan/boost events through serial buffer, log time-jump recovery |
 | V3.80 | Responsive web dashboard, /status history arrays |
+| V4.09 | Boost start temp logging on gear 0->1 transition, manual `/boost/gear?n=` force endpoint with 30-min auto-release, DS18B20 moved to loop() for every-pass sampling |
+| V4.10 | **Boost overhaul**: rate-based target gears (`floor(rate/threshold)`), 80% down-band hysteresis, cold temp capture, temp-latched cooldown phase (fan holds at gear 1 until phone <= cold + 0.3°C), router-down cooldown runs every tick via `net_ok` flag |
 
 ---
 

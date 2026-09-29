@@ -49,10 +49,19 @@ One entry per file. Purpose / Key items / Notes.
 - **Notes:** Every 15s. Also drives LED during rpc_call.
 
 ### AutoBoost.cpp / .h
-- **Purpose:** Network-traffic-triggered boost with hysteresis.
-- **Key vars:** gear, over_ticks, under_ticks.
-- **Key funcs:** auto_boost_init, auto_boost_update, auto_boost_gear, auto_boost_release, auto_boost_threshold.
-- **Notes:** Honors on_hold / off_hold from config. Deadzone at 0.8 × threshold.
+- **Purpose:** Rate-based boost gears + thermal cooldown hold. Rewritten in v4.10.
+- **State machine:** `PH_IDLE` → `PH_RUNNING` → `PH_COOLDOWN` → `PH_IDLE`
+- **Key vars:** `phase`, `data_gear`, `over_ticks`, `under_ticks`, `cold_temp`, `cooldown_start`, `force_active`, `force_gear_value`, `force_start`
+- **Key funcs:** `auto_boost_init`, `auto_boost_update(net_kbps, phone_temp, net_ok)`, `auto_boost_gear`, `auto_boost_release`, `auto_boost_threshold`, `auto_boost_force_gear(n, phone_temp)`, `auto_boost_cooling`, `auto_boost_cold_temp`
+- **How it works:**
+  - **Data gear** = `floor(rate / threshold)`, clamped 0–4. One gear per `on_hold` ticks up, one per `off_hold` down.
+  - **Down-band hysteresis** — gear holds until rate drops below `80% × current_gear × threshold`.
+  - **Cold temp** captured on first tick over threshold while idle. Persists across sessions, overwritten on next boost start.
+  - **Cooldown** — when data gear returns to 0, phase → COOLDOWN. `auto_boost_gear()` returns 1 (hold) until `phone_temp <= cold_temp + 0.3°C` or 20-min timeout.
+  - **Router-down** — call site passes `opal_ok` as `net_ok`; cooldown check still runs when router unreachable.
+  - **Force** — `/boost/gear?n=N` locks gear, auto-releases after 30 min, kicks to COOLDOWN on release.
+- **Config:** Uses `boostNormal` / `boostAggr` thresholds and on/off_hold. `boostMode == 0` disables entirely.
+- **Notes:** Log lines: `[BOOST] start cold=X`, `[BOOST] gear+ ...`, `[BOOST] gear- ...`, `[BOOST] data stopped, cooling to X`, `[BOOST] cooled (...) end`, `[BOOST] force gear=N`, `[BOOST] force released`, `[BOOST] force expired`.
 
 ### Logging.cpp / .h
 - **Purpose:** CSV log write, hourly rotation, seal, boot recovery, time-jump guard.

@@ -38,7 +38,11 @@ The iPhone is the sole internet uplink (weak signal, rural Queensland). Every by
 
 **Network-triggered boost.** The fan responds to router WAN traffic, not to the phone temperature. Traffic heats the modem *before* the phone surface warms. By the time the DS18B20 sees heat, the modem is already cooking. Fan-Mate watches the leading indicator.
 
-**Auto Boost with hysteresis.** Network rate crosses threshold → fan steps up one gear per 4 ticks (60s) → up to 4 gears (25/50/75/100% PWM). Traffic drops below 0.8 × threshold → steps back down. No jitter, no chatter.
+**Auto Boost with rate-based gears and thermal cooldown.** Fan target gear = `floor(network_rate / threshold)`, clamped 0–4. A rate of 1× threshold targets gear 1, 2× targets gear 2, and so on. Up-steps are gated by `on_hold` ticks to prevent chatter; down-steps hold until rate drops below 80% of the current gear's entry point.
+
+When traffic stops, the data gear ramps back to zero — but the fan doesn't. The phone's modem keeps heating for a while after the bytes stop arriving, so a **cooldown phase** holds the fan at gear 1 until the phone temperature returns to the "cold temp" recorded when the boost began (or a 20-minute timeout expires). The cold temp persists across boost sessions, only overwritten on the next 0→1 gear transition.
+
+If the router becomes unreachable mid-session, boost gears freeze but the cooldown check keeps running — so the fan doesn't get stuck on while the network is down.
 
 **Hourly log rotation.** Log sealed every hour, streamed to the Mac over WiFi, CRC32 verified, then deleted from the ESP32. Files named `log-vX.YY-YYYYMMDD-HHMM.csv`.
 
