@@ -66,6 +66,8 @@ class Bridge(QObject):
             self.rpmChanged.emit()
         if self._changed("boost", self._get("boost", 0)):
             self.boostChanged.emit()
+        if self._changed("boost_lvl", self._get("boost_lvl", 0)):
+            self.boostLvlChanged.emit()
         if self._changed("net_kbps", self._get("net_kbps", 0.0)):
             self.netChanged.emit()
         if self._changed("phone", self._get("phone", 0)):
@@ -98,6 +100,10 @@ class Bridge(QObject):
     @Property(int, notify=boostChanged)
     def boost(self):
         return int(self._get("boost", 0))
+
+    @Property(int, notify=boostLvlChanged)
+    def boostLvl(self):
+        return int(self._get("boost_lvl", 0))
 
     @Property(float, notify=netChanged)
     def netKbps(self):

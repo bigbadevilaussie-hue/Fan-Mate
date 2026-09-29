@@ -5,6 +5,7 @@ Run: python3 -m fanmate_v2.main
 
 import sys
 import os
+import signal
 
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QGuiApplication
@@ -14,6 +15,7 @@ from fanmate_v2.bridge import Bridge
 
 
 def main():
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
     app = QGuiApplication(sys.argv)
 
     engine = QQmlApplicationEngine()

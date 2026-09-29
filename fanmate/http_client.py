@@ -36,6 +36,7 @@ def http_poll_loop():
                 latest["phone"]     = d.get("phone", 0)
                 latest["alert"]     = d.get("alert", 0)
                 latest["boost"]     = d.get("boost", 0)
+                latest["boost_lvl"] = d.get("boost_lvl", 0)
                 latest["fv"]        = d.get("fw", "?")
                 latest["net_kbps"]  = float(d.get("net_kbps", 0.0))
                 latest["sleep"]     = d.get("sleep", 0)
