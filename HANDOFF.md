@@ -1,6 +1,6 @@
 # Fan-Mate — Chat Handoff
 
-Generated: 2026-09-29 11:37:44
+Generated: 2026-09-29 11:42:10
 
 ---
 
@@ -8,11 +8,11 @@ Generated: 2026-09-29 11:37:44
 
 ```
 $ git log --oneline -5
+690a919 docs: sync PROJECT_STATE + README to v4.08, fix update_handoff.sh paths
+4be145c docs: regenerate handoff at v4.08 / gui-v3.80
 37db566 handoff: sleep/wake issues deferred to hall sensor arrival
 bdd98ff v4.08: sleep/wake delays, log flush/pause, non-blocking beep, phone timestamps
 e4e1771 gui v3.80: fan_emoji(0) -> circle, distinquish off from night
-e35726c gui v3.79: remove NIGHT from settings, rename Dyna Tune menu item
-307f99a gui v3.77: DynaTune dual-axis graph, ZZZ night fan, boost start temp note
 
 $ git status --short
  M HANDOFF.md
@@ -36,10 +36,10 @@ v4.08
 
 # Fan-Mate — Project State
 
-Snapshot date: 2026-09-27
-Latest firmware: V3.80
-Latest firmware tag: v3.80
-Latest GUI: v3.74 (Python package, split from monolith)
+Snapshot date: 2026-09-29
+Latest firmware: V4.08
+Latest firmware tag: v4.08
+Latest GUI: Tk v3.80 (tag gui-v3.80) / QML v2 v1.01 (tag gui-v2-v1.01)
 Repo: https://github.com/bigbadevilaussie-hue/Fan-Mate
 
 ---
@@ -95,7 +95,7 @@ Rule 4 — Fuck it lmao
 
 ## FIRMWARE
 
-**Current version:** V3.80
+**Current version:** V4.08
 
 ### Modules
 | File | Purpose |
@@ -162,7 +162,7 @@ Rule 4 — Fuck it lmao
 
 ---
 
-## WEB DASHBOARD (new in V3.80)
+## WEB DASHBOARD (new in V3.80, current V4.08)
 
 Served directly by the ESP32. Open `http://fan-mate.local/` from iPhone, iPad, iMac.
 
@@ -176,7 +176,7 @@ Served directly by the ESP32. Open `http://fan-mate.local/` from iPhone, iPad, i
 
 ## LOG FORMAT
 
-**Schema (v3.80):**
+**Schema (v4.08):**
 
 **Planned v3.81:**
 
