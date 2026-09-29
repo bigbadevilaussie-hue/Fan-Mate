@@ -6,6 +6,7 @@ Wraps the existing fanmate/ backend. Does not touch it.
 import sys
 import os
 import threading
+import requests
 
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QUrl
@@ -33,6 +34,9 @@ class Bridge(QObject):
     outdoorChanged   = Signal()
     tempWarningChanged = Signal()
     boostThresholdChanged = Signal()
+    otaProgress = Signal(int)
+    otaStatus   = Signal(str)
+    otaError    = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -92,6 +96,48 @@ class Bridge(QObject):
     def quit_app(self):
         from PySide6.QtWidgets import QApplication
         QApplication.quit()
+
+    @Slot(str)
+    def upload_firmware(self, path):
+        threading.Thread(target=self._ota_worker, args=(path,), daemon=True).start()
+
+    @Slot()
+    def reboot_device(self):
+        try:
+            requests.get("http://fan-mate.local/reboot", timeout=5)
+        except Exception:
+            pass
+
+    def _ota_worker(self, path):
+        import os
+        try:
+            size = os.path.getsize(path)
+            self.otaStatus.emit("Uploading {} bytes...".format(size))
+
+            def progress_hook(monitor):
+                # called by requests during upload
+                try:
+                    pct = int(100 * monitor.bytes_read / monitor.len)
+                    self.otaProgress.emit(pct)
+                except Exception:
+                    pass
+
+            with open(path, "rb") as f:
+                files = {"firmware": ("fanmate.ino.bin", f, "application/octet-stream")}
+                r = requests.post(
+                    "http://fan-mate.local/ota",
+                    files=files,
+                    timeout=120
+                )
+
+            if r.status_code == 200:
+                self.otaStatus.emit("Done — device rebooting")
+                self.otaProgress.emit(100)
+            else:
+                self.otaError.emit("HTTP {}".format(r.status_code))
+
+        except Exception as e:
+            self.otaError.emit(str(e))
 
     # --- Properties exposed to QML ---
 
