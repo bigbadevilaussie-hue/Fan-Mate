@@ -128,8 +128,6 @@ void setup() {
 float lastNetKbps = 0.0;
 
 static void tick_15s() {
-    readDS18B20(currentTemp);
-
     uint64_t rx_now = 0;
     bool opal_ok = opal_poll(rx_now);
 
@@ -162,7 +160,7 @@ static void tick_15s() {
     webNetHist[webHistIdx]  = kbps_smooth;
     webHistIdx = (webHistIdx + 1) % WEB_HIST_LEN;
 
-    if (opal_ok) auto_boost_update(kbps_smooth, currentTemp);
+    auto_boost_update(kbps_smooth, currentTemp, opal_ok);
 
     if (currentTemp > 0.0) {
         log_write(currentTemp, kbps_smooth,
@@ -201,6 +199,7 @@ void loop() {
 
     updatePhoneDetection();
     updateTach();
+    readDS18B20(currentTemp);
 
     bool phone_now = (config.phoneMode == "off") ? true : phonePresent;
 
