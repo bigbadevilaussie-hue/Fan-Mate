@@ -2,7 +2,7 @@
 # Fan-Mate handoff generator
 # Run before starting a new chat session.
 
-cd ~/Documents/Arduino/fanmate
+cd "$(dirname "$0")"
 
 {
   echo "# Fan-Mate — Chat Handoff"
@@ -67,4 +67,4 @@ cd ~/Documents/Arduino/fanmate
 echo "HANDOFF.md updated ($(wc -l < HANDOFF.md) lines)"
 echo ""
 echo "To paste into new chat:"
-echo "  cat ~/Documents/Arduino/fanmate/HANDOFF.md | pbcopy"
+echo "  cat $(pwd)/HANDOFF.md | pbcopy"

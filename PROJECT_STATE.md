@@ -1,9 +1,9 @@
 # Fan-Mate — Project State
 
-Snapshot date: 2026-09-27
-Latest firmware: V3.80
-Latest firmware tag: v3.80
-Latest GUI: v3.74 (Python package, split from monolith)
+Snapshot date: 2026-09-29
+Latest firmware: V4.08
+Latest firmware tag: v4.08
+Latest GUI: Tk v3.80 (tag gui-v3.80) / QML v2 v1.01 (tag gui-v2-v1.01)
 Repo: https://github.com/bigbadevilaussie-hue/Fan-Mate
 
 ---
@@ -59,7 +59,7 @@ Rule 4 — Fuck it lmao
 
 ## FIRMWARE
 
-**Current version:** V3.80
+**Current version:** V4.08
 
 ### Modules
 | File | Purpose |
@@ -126,7 +126,7 @@ Rule 4 — Fuck it lmao
 
 ---
 
-## WEB DASHBOARD (new in V3.80)
+## WEB DASHBOARD (new in V3.80, current V4.08)
 
 Served directly by the ESP32. Open `http://fan-mate.local/` from iPhone, iPad, iMac.
 
@@ -140,7 +140,7 @@ Served directly by the ESP32. Open `http://fan-mate.local/` from iPhone, iPad, i
 
 ## LOG FORMAT
 
-**Schema (v3.80):**
+**Schema (v4.08):**
 
 **Planned v3.81:**
 
