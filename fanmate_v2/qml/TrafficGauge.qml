@@ -51,17 +51,6 @@ Item {
     }
     onNeedleAngleChanged: needlePos = needleAngle
 
-    Rectangle {
-        anchors.centerIn: parent
-        width: parent.width * 1.12
-        height: parent.height * 1.12
-        radius: width / 2
-        color: "transparent"
-        border.color: gaugeRoot.valueColor
-        border.width: 1
-        opacity: 0.18
-    }
-
     Shape {
         anchors.fill: parent
         layer.enabled: true; layer.samples: 4
