@@ -162,7 +162,7 @@ static void tick_15s() {
     webNetHist[webHistIdx]  = kbps_smooth;
     webHistIdx = (webHistIdx + 1) % WEB_HIST_LEN;
 
-    if (opal_ok) auto_boost_update(kbps_smooth);
+    if (opal_ok) auto_boost_update(kbps_smooth, currentTemp);
 
     if (currentTemp > 0.0) {
         log_write(currentTemp, kbps_smooth,

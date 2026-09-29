@@ -6,6 +6,9 @@
 static int gear = 0;
 static int over_ticks  = 0;
 static int under_ticks = 0;
+static float boost_start_temp = 0.0f;
+static bool  force_active = false;
+static int   force_gear_value = 0;
 
 static int current_threshold() {
     if (config.boostMode == 2) return config.boostAggr.threshold;
@@ -34,7 +37,8 @@ void auto_boost_init() {
                   current_on_hold(), current_off_hold());
 }
 
-void auto_boost_update(float net_kbps) {
+void auto_boost_update(float net_kbps, float currentTemp) {
+    if (force_active) { gear = force_gear_value; return; }
     int thr = current_threshold();
     int on_hold  = current_on_hold();
     int off_hold = current_off_hold();
@@ -52,8 +56,13 @@ void auto_boost_update(float net_kbps) {
         under_ticks = 0;
         over_ticks++;
         if (over_ticks >= on_hold && gear < 4) {
+            int old_gear = gear;
             gear++;
             over_ticks = 0;
+            if (old_gear == 0 && gear == 1) {
+                boost_start_temp = currentTemp;
+                log_print("[BOOST] start temp=%.1f\n", boost_start_temp);
+            }
             log_print("[BOOST] gear+ net=%.1f thr=%d gear=%d\n",
                           net_kbps, thr, gear);
         }
@@ -65,6 +74,9 @@ void auto_boost_update(float net_kbps) {
             under_ticks = 0;
             log_print("[BOOST] gear- net=%.1f thr=%d gear=%d\n",
                           net_kbps, thr, gear);
+            if (gear == 0) {
+                log_print("[BOOST] end (start was %.1f)\n", boost_start_temp);
+            }
         }
     } else {
         over_ticks = 0;
@@ -80,3 +92,21 @@ void auto_boost_release() {
 
 int auto_boost_gear() { return gear; }
 int auto_boost_threshold() { return current_threshold(); }
+
+void auto_boost_force_gear(int n, float currentTemp) {
+    if (n <= 0) {
+        force_active = false;
+        force_gear_value = 0;
+        log_print("[BOOST] force released\n");
+    } else {
+        if (n > 4) n = 4;
+        if (force_gear_value == 0 && n == 1) {
+            boost_start_temp = currentTemp;
+            log_print("[BOOST] start temp=%.1f\n", boost_start_temp);
+        }
+        force_active = true;
+        force_gear_value = n;
+        gear = n;
+        log_print("[BOOST] force gear=%d\n", n);
+    }
+}

@@ -15,10 +15,11 @@
 // Between 80% and 100% of threshold → hold.
 
 void     auto_boost_init();
-void     auto_boost_update(float net_kbps);
+void     auto_boost_update(float net_kbps, float currentTemp);
 void     auto_boost_release();       // force reset to 0
 
 int      auto_boost_gear();          // 0-4
+void     auto_boost_force_gear(int n, float currentTemp);  // 0=release, 1-4=lock
 int      auto_boost_threshold();     // current mode's threshold
 
 #endif

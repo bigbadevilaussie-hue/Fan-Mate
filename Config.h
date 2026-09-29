@@ -15,7 +15,7 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "4.08"
+#define FAN_MATE_VERSION "4.09"
 
 #define QUIET_START_HOUR 22
 #define QUIET_END_HOUR   7

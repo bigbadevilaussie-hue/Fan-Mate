@@ -427,6 +427,13 @@ static void handle_kill_auto() {
     server.send(200, "text/plain", "OK");
 }
 
+static void handle_boost_gear() {
+    int n = server.arg("n").toInt();
+    extern float currentTemp;
+    auto_boost_force_gear(n, currentTemp);
+    server.send(200, "text/plain", "gear=" + String(n));
+}
+
 void server_setup() {
     if (!wifi_connected()) {
         Serial.println("[HTTP] WiFi not connected — server not started");
@@ -448,6 +455,7 @@ void server_setup() {
     server.on("/serial",     HTTP_GET,  handle_serial_page);
     server.on("/serial-raw", HTTP_GET,  handle_serial_raw);
     server.on("/kill/clear",  HTTP_POST, handle_kill_clear);
+    server.on("/boost/gear",  HTTP_GET,  handle_boost_gear);
     server.on("/kill/auto",   HTTP_POST, handle_kill_auto);
     server.on("/reboot",     HTTP_GET,  handle_reboot);
     server.on("/ota",        HTTP_POST, handle_ota_done, handle_ota_upload);
