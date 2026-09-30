@@ -48,13 +48,14 @@
 >       for f in fanmate_v2/__init__.py fanmate_v2/bridge.py fanmate_v2/main.py \
 >                fanmate_v2/qml/Main.qml fanmate_v2/qml/TempGauge.qml \
 >                fanmate_v2/qml/RpmGauge.qml fanmate_v2/qml/TrafficGauge.qml \
->                fanmate_v2/qml/BoostBar.qml fanmate_v2/qml/MenuButton.qml \
+>                fanmate_v2/qml/BoostBar.qml fanmate_v2/qml/TempBar.qml \
+>                fanmate_v2/qml/StatusLamps.qml fanmate_v2/qml/MenuButton.qml \
 >                fanmate_v2/qml/OtaDialog.qml fanmate_v2/qml/Bar.qml; do
 >         echo "########## $f ##########"; cat "$f" 2>&1; echo
 >       done
 >       echo "===== LIVE DEVICE ====="
->       curl -s --max-time 5 http://fan-mate.local/status 2>&1 | python3 -m json.tool 2>&1 | head -50
->       curl -s --max-time 5 http://fan-mate.local/config 2>&1 | python3 -m json.tool 2>&1
+>       curl -s --max-time 5 http://192.168.8.242/status 2>&1 | python3 -m json.tool 2>&1 | head -50
+>       curl -s --max-time 5 http://192.168.8.242/config 2>&1 | python3 -m json.tool 2>&1
 >       echo "===== LOGS ====="
 >       ls -la ~/Documents/FanMate_logs/*.csv 2>/dev/null | tail -5
 >     } > ~/Desktop/fanmate-dump.txt 2>&1
@@ -67,7 +68,7 @@
 > scripts written to /tmp/ then run with python3. Never paste heredocs
 > or # comments directly.
 
-Generated: 2026-09-30 17:43:27
+Generated: 2026-09-30 21:37:37
 
 ---
 
@@ -75,24 +76,22 @@ Generated: 2026-09-30 17:43:27
 
 ```
 $ git log --oneline -10
-24a8bec docs: regenerate handoff
-95ae390 docs: handoff puts AI instructions at the top
-0f86673 docs: regenerate handoff
-ab39347 docs: add NOTES.md, rewrite update_handoff.sh (no pbcopy)
-2ec541c docs: regenerate handoff at v4.16 / gui-v3.86
-8e96a00 v4.16 / gui-v3.86: phoneMode removed (always auto-detect via hall); Nokia tune; NTC + hall wired and verified
-8b6f3c4 tools: add hwtest.ino — fan/NTC/hall verification sketch
-d056123 v4.14: NTC +6.0 offset, fan kick-start, interrupt-safe tach; gui-v3.85 room column + footer
-b43bce2 v4.13: NTC room temp — readNTC(), room_get_temp() wired, room_c in /status
-ec99b06 v4.12 / gui-v3.84: boost_lvl reports data_gear (0 during cooldown), cooling flag in /status; Tk layout rework
+500ecb4 docs: NOTES session log to v4.18/GUI2-v1.11; PROJECT_STATE header updated; pending items refreshed
+1b12561 gui-v2-v1.11: lamp bars (BoostBar/TempBar) + 4 status lamps + bottom info row; top strip + STATUS removed
+98c24fe gui-v2-v1.08: QML room temp wired to bridge (room_c from /status)
+cd7ab69 gui-v3.87: SettingsDialog None guard on fetch_config failure
+d90a6f4 v4.18: delta guard (phone-room > 5C -> gear 1 + WARN), flat PWM map (gear 1 = 25%), kick-start 400ms
+10a2963 v4.17: phonePresent extern shadow fix; Nokia jingle on sleep/wake
+55d1ac7 docs: remove FIRST.md (unused)
+4dbe9da docs: add FIRST.md — bare command file for new chat opener
+69319e4 docs: regenerate handoff
+17e75e5 docs: handoff top block inlines dump command, forces first response
 
 $ git status --short
  M HANDOFF.md
  M update_handoff.sh
 
 $ git tag -l | tail -15
-v3.94
-v3.95
 v4.00-firmware
 v4.01
 v4.02
@@ -106,6 +105,8 @@ v4.12
 v4.13
 v4.14
 v4.16
+v4.17
+v4.18
 ```
 
 ---
@@ -113,9 +114,9 @@ v4.16
 ## VERSIONS
 
 ```
-#define FAN_MATE_VERSION "4.16"
-GUI_VERSION = "3.86"
-    property string guiVersion: "1.07"
+#define FAN_MATE_VERSION "4.18"
+GUI_VERSION = "3.87"
+    property string guiVersion: "1.11"
             text: "GUI v" + root.guiVersion + "  ·  FW " + dev.fw
 ```
 
@@ -241,17 +242,111 @@ NEVER edit files by pasting shell commands directly. Always via Python script fi
 
 ---
 
+### 2026-09-30 — v4.17 → v4.18, GUI2 work begins
+
+**Firmware:**
+- v4.17 — `phonePresent` made `extern` in `FanController.cpp` (was `static`, shadowed the global in `fanmate.ino`). Wake path corrected. Nokia jingle moved to sleep/wake transitions.
+- v4.18 — **delta guard** added to decision tree: `fanGear = max(tempGear, deltaGear, boostGear)`, delta floor is gear 1 when `phone - room > 5.0` and NTC valid. **Delta alert branch** added: `newLevel = 1` when delta fires and no temp gear active (Tk shows WARNING). **Flat PWM map**: `map(fanGear, 0, 4, 0, 255)` → gear 1 = real 25%, gear 2 = 50%, gear 3 = 75%, gear 4 = 100%. **Kick-start** duration 350 → 400 ms. Verified: 24%/1500 RPM on forced gear 1, full Shakira ramp 0→1→2→3→4 at 60s/step, down-ramp 4→3→2→1 same cadence, cooldown hold engaged and released.
+
+**Priority order confirmed:** heat control (absolute thresholds) > room delta > boost (network rate). Highest demand wins — `max()` of three sources.
+
+**Tk GUI:**
+- v3.87 — `SettingsDialog` None guard: if `fetch_config()` returns None, show error and exit gracefully instead of crashing with `TypeError`.
+
+**QML GUI2:**
+- v1.08 — room temp wired to bridge (`room_c` from `/status`).
+- v1.11 — BoostBar rewritten as 5 separate lamp rectangles (Parked/Cruising/Fast/Racing/Nitro, bottom-to-top, single active lamp in zone colour). New TempBar mirror on right (Normal/Warm/Hot/Hotter/Critical). New StatusLamps row centred above gauges: BOOST / TEMP / OPAL / KILL lamps, small uppercase labels under each. Bottom info row added (OUT / ROOM / TIME / PHONE). Top strip removed. STATUS text removed. Window 900×440.
+
+**Bridge additions in `fanmate_v2/bridge.py`:**
+- `roomChanged` / `room` (v1.08)
+- `tempLvlChanged` / `tempLvl`
+- `killModeChanged` / `killMode`
+- `fanStallChanged` / `fanStall`
+
+---
+
+### Lessons from tonight
+
+**QML `Column` + anchors don't mix.** Any child of a `Column` cannot use `anchors.verticalCenter`, `anchors.fill`, `anchors.top`, etc. — Column manages vertical positioning and Qt errors out with `QML Column: Cannot specify top, bottom, verticalCenter, fill or centerIn anchors for items inside Column.` Use `TapHandler` for click handling inside Columns, not `MouseArea`.
+
+**QML `Drawer` for side panels fails when its content needs MouseAreas.** Tried adding BoostPanel/TempPanel as left/right Drawers — reverted. The Drawer's MouseArea needs `anchors.fill`, which is illegal inside Column-managed items. Panel approach on hold.
+
+**macOS Catalina mDNS is slow.** `curl http://fan-mate.local/status` takes ~3–5 seconds to resolve. `curl http://192.168.8.242/status` takes 0.17s. Same host, same LAN. `sudo killall -HUP mDNSResponder` improves it slightly (5.3s → 3.0s) but doesn't fix it. This was causing Tk GUI polls to feel sluggish, and OTA from the GUI to occasionally time out. The GUI was updated to use the IP for the live demo, but `FANMATE_URL` in `fanmate/config.py` and the OTA/reboot URLs in `fanmate_v2/bridge.py` are still `.local` — small pending fixes.
+
+**Hardware is 100% complete.** Fan shroud printed and mounted on Quad Lock adapter. DS18B20 sits inside the Quad Lock socket against the thinnest part of the case back (best available position given the geometry). NTC reads ambient on the board. Phone mounted upside down (antenna toward tower). Fan over the camera bump, which is adjacent to the SoC heat spreader.
+
+**Cooldown hold vs probe position.** Cold temp is captured before boost starts. Cooldown releases when `phone_temp <= cold_temp + 0.3`. In practice the probe lags (thermal mass of case + shroud) so release often happens at the 20-minute timeout rather than the temperature condition. Not a bug — probe physics.
+
+**Version bump rule applies to both.** Any firmware change bumps `FAN_MATE_VERSION` in `Config.h`. Any Tk GUI change bumps `GUI_VERSION` in `fanmate/config.py`. Any QML GUI2 change bumps `guiVersion` in `fanmate_v2/qml/Main.qml`. No exceptions. Previous AIs didn't do this and it caused confusion.
+
+**The kill mode is three actions, not one.** (1) Firmware fires `opal_set_repeater(false)` at Critical — network drops. (2) Human acknowledges by clicking SILENCE on web dashboard → killState → OFF, but repeater stays off. (3) Human manually re-enables repeater on Opal admin, then clicks ARM → killState → AUTO. No auto-recovery at any stage. Intentional.
+
+**Fan fails safe to 100%.** With the ESP32-C3 in bootloader mode (GPIO 9 held low), GPIO 7 is undriven and the fan spins at full speed. If a 10k pull-down were added, it would fail to 0%. Fail-to-100% is the current behaviour and is deliberate — no change planned.
+
+---
+
 ## PENDING ITEMS
 
+### Firmware
 1. **Thermal runaway failsafe** — sensor health (DS18B20 stale detection, NTC plausibility, rate-of-rise trigger). Designed, not implemented.
-2. **Night cap removal** — `FanController.cpp` still caps all fan output at `nightMax` (75%). No UI to change it.
+2. **Night cap removal** — `FanController.cpp` still caps all fan output at `nightMax` (75%). No UI to change it. `PWM_MIN = 40` in `Config.h` is now unused (flat map doesn't use it) — clean up or leave as documentation.
 3. **Temp gear hysteresis for gears 2/3/4** — currently exact-threshold. Only gear 1 entry has hysteresis (`tempGear1 - hysteresis`).
-4. **Kill repeater restore** — kill fires `opal_set_repeater(false)`, no code path turns it back on.
+4. **Delta guard hysteresis** — the delta floor (`phone-room > 5`) has no release band. In the 24–29 °C band with no heat/boost active, the fan can hunt (fan on → probe cools → delta drops below 5 → fan off → phone warms → delta > 5 → fan on). Watch the reports; add a release band if it's annoying.
 5. **Beep on gear 0→1 during cooldown** — `beep_once` fires on any gear change.
 6. **WiFi Nokia trigger** — patch failed (duplicate `_last_connected_state` declaration in `WiFiManager.cpp`). Currently only phone-detect triggers the tune.
-7. **Docs stale** — `FILES.md`, `PROJECT_STATE.md`, `README.md` stop at v4.10.
 
-**Web dashboard rework — NOT DONE.** The layout Nick asked for (BOOST into PHONE slot, TEMP into STATUS, OUT+PHONE+TIME bottom row, remove title/kill banner/footer) is not applied. Source is `WebPage.h`. Needs compile + flash.
+### Tk GUI
+7. **`FANMATE_URL` still `.local`** — change to `http://192.168.8.242` to bypass the 3–5s Catalina mDNS tax.
+8. **Settings "did not work"** — reported after v3.87 None guard. Not diagnosed. Could be: (a) fetch_config returns partial data, (b) Apply doesn't reach device, (c) apply persists but doesn't show. Reproduce and fix.
+9. **Report2H `_find_recent_files(2)`** — takes last 2 sealed files by name, not "last 2 hours of coverage". Should walk backwards accumulating files until the cumulative span reaches 2h.
+10. **Report2H `missing` heuristic** — `expected = span_min * 60 / 15` assumes one row per 15s. Sleep windows, seal boundaries, and log-paused periods all break this. Shows phantom "missing" rows. Either rewrite to count real inter-row gaps >20s, or drop the metric.
+
+### QML GUI2
+11. **Kill banner not in GUI2** — GUI2 shows KILL lamp but no way to SILENCE / ARM. Bridge needs `killSilence()` and `killArm()` slots that POST `/kill/clear` and `/kill/auto`. Add a top-centred Rectangle banner visible when `killMode >= 1`.
+12. **Boost / Temp settings panels** — Drawer approach failed (Qt layout rules). Need a different pattern — likely a plain Rectangle with x-animation, or a StackView.
+13. **Bridge uses `.local` for OTA and reboot URLs** — same mDNS tax. Change to IP.
+14. **BoostBar/TempBar lamp colors** — currently only the active lamp is coloured; the other four are dim grey text. Confirmed design. But `#4a5568` may be a touch dark — consider `#5a6578` for readability.
+
+### Docs
+15. **PROJECT_STATE.md stale** — needs top section update (v4.18, HW complete, GUI2 in progress, new priority order).
+16. **FILES.md** — doesn't list `StatusLamps.qml`, `TempBar.qml`, `Songs.cpp/h`, `hwtest/hwtest.ino`.
+17. **README.md** — check build command and endpoint list are current.
+18. **Web dashboard rework — NOT DONE.** The layout Nick asked for (BOOST into PHONE slot, TEMP into STATUS, OUT+PHONE+TIME bottom row, remove title/kill banner/footer) is not applied. Source is `WebPage.h`. Needs compile + flash.
+
+---
+
+## KNOWN FALSE ALARMS
+
+- **Phone +10°C above room** — observed once, transient. Delta settled to +2.6. Not a bug.
+- **NTC offset tuning** — +7.0 was picking up board heat, +6.0 correct (verified 25.8 vs 25.81).
+- **OPAL login "loop"** — never existed. Normal 4-min SID refresh.
+- **"Boost is not working"** — observed mid-ramp. Boost ramps one gear per `on_hold × 15s` tick = 60s per gear. From IDLE to Nitro takes ~4 minutes if rate holds. Not broken, just slow by design.
+- **Curtain incident** — sun through the window heated the phone back. Delta crossed 5 with no network activity. This is exactly what the delta guard was built for; it would have fired gear 1 (25%) if it had been in place. Prior to v4.18, fan did nothing. Not a bug — expected behaviour after v4.18.
+
+---
+
+## TESTING CHEATSHEET
+
+Force a boost gear (auto-expires after 30 min, or release with n=0):
+
+    curl "http://192.168.8.242/boost/gear?n=1"
+    curl "http://192.168.8.242/boost/gear?n=2"
+    curl "http://192.168.8.242/boost/gear?n=3"
+    curl "http://192.168.8.242/boost/gear?n=4"
+    curl "http://192.168.8.242/boost/gear?n=0"
+
+Kill mode (only test with the phone off the mount or actually overheated):
+
+    curl -X POST "http://192.168.8.242/kill/clear"   # silence
+    curl -X POST "http://192.168.8.242/kill/auto"    # re-arm
+
+Live status in one line:
+
+    curl -s http://192.168.8.242/status | python3 -c "import json,sys; d=json.load(sys.stdin); print('temp:',d.get('temp'),'room:',d.get('room_c'),'delta:',round(d.get('temp',0)-d.get('room_c',0),2),'fan:',d.get('fan'),'rpm:',d.get('rpm'),'boost_lvl:',d.get('boost_lvl'),'temp_lvl:',d.get('temp_lvl'),'alert:',d.get('alert'),'kill:',d.get('kill_mode'))"
+
+Serial tail:
+
+    curl -s http://192.168.8.242/serial-raw | tail -30
 
 ---
 
@@ -333,9 +428,11 @@ https://github.com/bigbadevilaussie-hue/Fan-Mate
 # Fan-Mate — Project State
 
 Snapshot date: 2026-09-29
-Latest firmware: V4.10
-Latest firmware tag: v4.10
-Latest GUI: Tk v3.80 (tag gui-v3.80) / QML v2 v1.01 (tag gui-v2-v1.01)
+Latest firmware: V4.18 (tag v4.18)
+Latest GUI: Tk v3.87 (tag gui-v3.87) — workhorse, primary
+Latest GUI2: QML v1.11 (tag gui-v2-v1.11) — in progress, target
+
+**Hardware is 100% complete and installed.** Fan shroud printed, mounted on Quad Lock adapter, phone docked, all sensors wired and verified on-bench and in-place.
 Repo: https://github.com/bigbadevilaussie-hue/Fan-Mate
 
 ---
@@ -391,7 +488,7 @@ Rule 4 — Fuck it lmao
 
 ## FIRMWARE
 
-**Current version:** V4.10
+**Current version:** V4.18
 
 ### Modules
 | File | Purpose |
@@ -422,6 +519,14 @@ Rule 4 — Fuck it lmao
 | V3.80 | Responsive web dashboard, /status history arrays |
 | V4.09 | Boost start temp logging on gear 0->1 transition, manual `/boost/gear?n=` force endpoint with 30-min auto-release, DS18B20 moved to loop() for every-pass sampling |
 | V4.10 | **Boost overhaul**: rate-based target gears (`floor(rate/threshold)`), 80% down-band hysteresis, cold temp capture, temp-latched cooldown phase (fan holds at gear 1 until phone <= cold + 0.3°C), router-down cooldown runs every tick via `net_ok` flag |
+| V4.11 | Heat thresholds renamed Warm/Hot/Hotter/Critical (30/32/34/36) |
+| V4.12 | `boost_lvl` reports `data_gear` (0 during cooldown); `cooling` flag in `/status` |
+| V4.13 | NTC room temp: `readNTC()`, `room_get_temp()`, `room_c` in `/status` |
+| V4.14 | NTC +6.0 offset (board heat); fan kick-start; interrupt-safe tach |
+| V4.15 | Nokia tune on phone detect/disconnect (`Songs.cpp/h`) |
+| V4.16 | `phoneMode` removed entirely — always auto-detect via hall sensor |
+| V4.17 | `phonePresent` made `extern` in `FanController.cpp` (was `static`, shadowing global); jingle moved to sleep/wake |
+| V4.18 | **Delta guard** (`phone-room > 5` → gear 1 floor), delta alert branch, **flat PWM map** (`map(gear, 0, 4, 0, 255)` = real 25/50/75/100), kick-start 400ms |
 
 ---
 
@@ -576,10 +681,10 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 ```
 -rw-r--r--@ 1 Nick  staff   5701 30 Sep 09:46 AutoBoost.cpp
 -rw-r--r--@ 1 Nick  staff   1610 30 Sep 09:46 AutoBoost.h
--rw-r--r--@ 1 Nick  staff   2224 30 Sep 16:47 Config.h
+-rw-r--r--@ 1 Nick  staff   2224 30 Sep 19:30 Config.h
 -rw-r--r--@ 1 Nick  staff   5501 27 Sep 18:00 DisplayManager.cpp
 -rw-r--r--@ 1 Nick  staff    422 26 Sep 10:16 DisplayManager.h
--rw-r--r--@ 1 Nick  staff  12666 30 Sep 16:44 FanController.cpp
+-rw-r--r--@ 1 Nick  staff  13243 30 Sep 19:30 FanController.cpp
 -rw-r--r--@ 1 Nick  staff    748 30 Sep 12:46 FanController.h
 -rw-r--r--@ 1 Nick  staff  14104 30 Sep 12:46 Logging.cpp
 -rw-r--r--@ 1 Nick  staff    647 29 Sep 08:06 Logging.h
@@ -598,7 +703,7 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 -rw-r--r--@ 1 Nick  staff    142 27 Sep 17:39 WebServer.h
 -rw-r--r--@ 1 Nick  staff   3533 30 Sep 16:05 WiFiManager.cpp
 -rw-r--r--@ 1 Nick  staff    315 26 Sep 17:54 WiFiManager.h
--rw-r--r--  1 Nick  staff   5910 30 Sep 16:45 fanmate.ino
+-rw-r--r--  1 Nick  staff   5971 30 Sep 18:07 fanmate.ino
 -rw-r--r--@ 1 Nick  staff    669 25 Sep 15:31 secrets.example.h
 -rw-r--r--@ 1 Nick  staff    770 25 Sep 16:48 secrets.h
 ```
@@ -611,8 +716,8 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 -rw-r--r--@ 1 Nick  staff    162 27 Sep 09:23 fanmate.py
 -rw-r--r--  1 Nick  staff     27 27 Sep 09:09 fanmate/__init__.py
 -rw-r--r--  1 Nick  staff  14895 30 Sep 16:45 fanmate/app.py
--rw-r--r--  1 Nick  staff   1266 30 Sep 16:47 fanmate/config.py
--rw-r--r--  1 Nick  staff  17630 30 Sep 16:46 fanmate/dialogs.py
+-rw-r--r--  1 Nick  staff   1266 30 Sep 20:04 fanmate/config.py
+-rw-r--r--  1 Nick  staff  17801 30 Sep 20:05 fanmate/dialogs.py
 -rw-r--r--  1 Nick  staff   2289 29 Sep 07:49 fanmate/helpers.py
 -rw-r--r--  1 Nick  staff   3963 30 Sep 12:55 fanmate/http_client.py
 -rw-r--r--  1 Nick  staff   2248 27 Sep 10:06 fanmate/log_sync.py
@@ -627,18 +732,20 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 ## QML GUI2 FILES
 
 ```
--rw-r--r--  1 Nick  staff      0 28 Sep 13:37 fanmate_v2/__init__.py
--rw-r--r--  1 Nick  staff   7096 30 Sep 08:27 fanmate_v2/bridge.py
--rw-r--r--  1 Nick  staff   1049 30 Sep 00:45 fanmate_v2/main.py
--rw-r--r--  1 Nick  staff   2012 28 Sep 16:49 fanmate_v2/qml/Bar.qml
--rw-r--r--  1 Nick  staff   2743 30 Sep 00:03 fanmate_v2/qml/BoostBar.qml
--rw-r--r--  1 Nick  staff   4543 29 Sep 20:00 fanmate_v2/qml/BoostGauge.qml
--rw-r--r--  1 Nick  staff  10300 30 Sep 08:32 fanmate_v2/qml/Main.qml
--rw-r--r--  1 Nick  staff    599 30 Sep 00:19 fanmate_v2/qml/MenuButton.qml
--rw-r--r--  1 Nick  staff   6659 30 Sep 01:08 fanmate_v2/qml/OtaDialog.qml
--rw-r--r--  1 Nick  staff   7503 30 Sep 01:01 fanmate_v2/qml/RpmGauge.qml
--rw-r--r--  1 Nick  staff   7481 30 Sep 08:27 fanmate_v2/qml/TempGauge.qml
--rw-r--r--  1 Nick  staff   7521 30 Sep 00:09 fanmate_v2/qml/TrafficGauge.qml
+-rw-r--r--  1 Nick  staff     0 28 Sep 13:37 fanmate_v2/__init__.py
+-rw-r--r--  1 Nick  staff  8089 30 Sep 21:29 fanmate_v2/bridge.py
+-rw-r--r--  1 Nick  staff  1049 30 Sep 00:45 fanmate_v2/main.py
+-rw-r--r--  1 Nick  staff  2012 28 Sep 16:49 fanmate_v2/qml/Bar.qml
+-rw-r--r--  1 Nick  staff  1517 30 Sep 20:39 fanmate_v2/qml/BoostBar.qml
+-rw-r--r--  1 Nick  staff  4543 29 Sep 20:00 fanmate_v2/qml/BoostGauge.qml
+-rw-r--r--  1 Nick  staff  9567 30 Sep 21:29 fanmate_v2/qml/Main.qml
+-rw-r--r--  1 Nick  staff   599 30 Sep 00:19 fanmate_v2/qml/MenuButton.qml
+-rw-r--r--  1 Nick  staff  6659 30 Sep 01:08 fanmate_v2/qml/OtaDialog.qml
+-rw-r--r--  1 Nick  staff  7503 30 Sep 01:01 fanmate_v2/qml/RpmGauge.qml
+-rw-r--r--  1 Nick  staff  4639 30 Sep 21:29 fanmate_v2/qml/StatusLamps.qml
+-rw-r--r--  1 Nick  staff  1407 30 Sep 20:39 fanmate_v2/qml/TempBar.qml
+-rw-r--r--  1 Nick  staff  7481 30 Sep 08:27 fanmate_v2/qml/TempGauge.qml
+-rw-r--r--  1 Nick  staff  7521 30 Sep 00:09 fanmate_v2/qml/TrafficGauge.qml
 ```
 
 ---
@@ -646,7 +753,165 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 ## LIVE DEVICE
 
 ```
-device unreachable
+{
+    "fw": "4.18",
+    "uptime": 4430,
+    "ip": "192.168.8.242",
+    "rssi": -61,
+    "ssid": "StarCabin",
+    "temp": 21.12,
+    "fan": 49,
+    "rpm": 3540,
+    "phone": 1,
+    "alert": 0,
+    "fan_stall": 0,
+    "boost": 1,
+    "boost_lvl": 2,
+    "cooling": 0,
+    "net_kbps": 34.8,
+    "temp_lvl": 0,
+    "opal": 1,
+    "host": 1,
+    "host_last_seen": 0,
+    "sleep": 0,
+    "sleep_countdown": 0,
+    "log_size": 7625,
+    "outdoor_c": 15.1,
+    "room_c": 20.3,
+    "temp_hist": [
+        21.5,
+        21.5,
+        21.5,
+        21.5,
+        21.4,
+        21.4,
+        21.4,
+        21.4,
+        21.4,
+        21.4,
+        21.4,
+        21.4,
+        21.4,
+        21.4,
+        21.4,
+        21.4,
+        21.4,
+        21.4,
+        21.4,
+        21.4,
+        21.4,
+        21.4,
+        21.4,
+        21.3,
+        21.3,
+        21.4,
+        21.3,
+        21.3,
+        21.3,
+        21.3,
+        21.3,
+        21.3,
+        21.3,
+        21.3,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.2,
+        21.1,
+        21.2,
+        21.1,
+        21.1,
+        21.2
+    ],
+    "net_hist": [
+        47.1,
+        231.3,
+        231.3,
+        231.3,
+        32.0,
+        38.4,
+        38.4,
+        38.4,
+        34.0,
+        34.0,
+        32.6,
+        32.6,
+        30.2,
+        30.2,
+        29.5,
+        32.6,
+        40.3,
+        40.3,
+        40.3,
+        30.2,
+        30.2,
+        30.8,
+        51.2,
+        51.2,
+        51.2,
+        30.3,
+        30.3,
+        31.4,
+        31.4,
+        31.5,
+        31.5,
+        31.5,
+        30.8,
+        32.1,
+        32.1,
+        34.6,
+        34.6,
+        34.6,
+        31.5,
+        36.9,
+        36.9,
+        37.4,
+        37.4,
+        37.4,
+        34.1,
+        34.1,
+        34.1,
+        32.4,
+        29.8,
+        29.8,
+        27.7,
+        30.7,
+        30.7,
+        31.2,
+        31.2,
+        36.1,
+        36.1,
+        36.1,
+        34.8,
+        34.8
+    ],
+    "kill_mode": 0,
+    "temp_gear1": 30.0,
+    "temp_gear2": 32.0,
+    "temp_gear3": 34.0,
+    "temp_gear4": 36.0,
+    "temp_warning": 32.0,
+    "temp_panic": 34.0,
+    "temp_kill": 36.0,
+    "boost_threshold": 700
+}
 ```
 
 ---
@@ -654,15 +919,15 @@ device unreachable
 ## LOG FILES ON MAC
 
 ```
--rw-r--r--  1 Nick  staff   9709 30 Sep 09:51 /Users/Nick/Documents/FanMate_logs/log-4.12-20260930-0900.csv
--rw-r--r--  1 Nick  staff   2033 30 Sep 10:00 /Users/Nick/Documents/FanMate_logs/log-4.12-20260930-0950.csv
--rw-r--r--  1 Nick  staff   2503 30 Sep 12:50 /Users/Nick/Documents/FanMate_logs/log-4.13-20260930-1000.csv
--rw-r--r--  1 Nick  staff   2204 30 Sep 13:00 /Users/Nick/Documents/FanMate_logs/log-4.13-20260930-1249.csv
--rw-r--r--  1 Nick  staff   2698 30 Sep 13:13 /Users/Nick/Documents/FanMate_logs/log-4.14-20260930-1300.csv
--rw-r--r--  1 Nick  staff   1861 30 Sep 13:22 /Users/Nick/Documents/FanMate_logs/log-4.14-20260930-1322.csv
--rw-r--r--  1 Nick  staff   4534 30 Sep 16:00 /Users/Nick/Documents/FanMate_logs/log-4.14-20260930-1537.csv
--rw-r--r--  1 Nick  staff   2470 30 Sep 16:12 /Users/Nick/Documents/FanMate_logs/log-4.15-20260930-1600.csv
--rw-r--r--  1 Nick  staff    194 30 Sep 16:27 /Users/Nick/Documents/FanMate_logs/log-4.15-20260930-1614.csv
--rw-r--r--  1 Nick  staff   7672 30 Sep 17:00 /Users/Nick/Documents/FanMate_logs/log-4.16-20260930-1700.csv
+-rw-r--r--  1 Nick  staff   2228 30 Sep 18:11 /Users/Nick/Documents/FanMate_logs/log-4.16-20260930-1800.csv
+-rw-r--r--  1 Nick  staff    512 30 Sep 18:12 /Users/Nick/Documents/FanMate_logs/log-4.16-20260930-1811.csv
+-rw-r--r--  1 Nick  staff    932 30 Sep 18:15 /Users/Nick/Documents/FanMate_logs/log-4.16-20260930-1815.csv
+-rw-r--r--  1 Nick  staff    340 30 Sep 18:16 /Users/Nick/Documents/FanMate_logs/log-4.16-20260930-1816.csv
+-rw-r--r--  1 Nick  staff    698 30 Sep 18:17 /Users/Nick/Documents/FanMate_logs/log-4.17-20260930-1817.csv
+-rw-r--r--  1 Nick  staff    797 30 Sep 18:20 /Users/Nick/Documents/FanMate_logs/log-4.17-20260930-1820.csv
+-rw-r--r--  1 Nick  staff   1728 30 Sep 18:38 /Users/Nick/Documents/FanMate_logs/log-4.17-20260930-1829.csv
+-rw-r--r--  1 Nick  staff   2128 30 Sep 19:00 /Users/Nick/Documents/FanMate_logs/log-4.17-20260930-1849.csv
+-rw-r--r--  1 Nick  staff   6663 30 Sep 19:35 /Users/Nick/Documents/FanMate_logs/log-4.18-20260930-1900.csv
+-rw-r--r--  1 Nick  staff   5381 30 Sep 20:00 /Users/Nick/Documents/FanMate_logs/log-4.18-20260930-1935.csv
 ```
 
