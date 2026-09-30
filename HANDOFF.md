@@ -68,7 +68,7 @@
 > scripts written to /tmp/ then run with python3. Never paste heredocs
 > or # comments directly.
 
-Generated: 2026-09-30 21:37:37
+Generated: 2026-09-30 21:39:12
 
 ---
 
@@ -76,6 +76,8 @@ Generated: 2026-09-30 21:37:37
 
 ```
 $ git log --oneline -10
+0ea9ac0 docs: log next session plan (fix Tk Settings, then port to GUI2)
+5bf135f docs: regenerate handoff at v4.18 / gui-v3.87 / gui-v2-v1.11; dump command uses IP and lists new QML
 500ecb4 docs: NOTES session log to v4.18/GUI2-v1.11; PROJECT_STATE header updated; pending items refreshed
 1b12561 gui-v2-v1.11: lamp bars (BoostBar/TempBar) + 4 status lamps + bottom info row; top strip + STATUS removed
 98c24fe gui-v2-v1.08: QML room temp wired to bridge (room_c from /status)
@@ -84,12 +86,9 @@ d90a6f4 v4.18: delta guard (phone-room > 5C -> gear 1 + WARN), flat PWM map (gea
 10a2963 v4.17: phonePresent extern shadow fix; Nokia jingle on sleep/wake
 55d1ac7 docs: remove FIRST.md (unused)
 4dbe9da docs: add FIRST.md — bare command file for new chat opener
-69319e4 docs: regenerate handoff
-17e75e5 docs: handoff top block inlines dump command, forces first response
 
 $ git status --short
  M HANDOFF.md
- M update_handoff.sh
 
 $ git tag -l | tail -15
 v4.00-firmware
@@ -282,6 +281,31 @@ NEVER edit files by pasting shell commands directly. Always via Python script fi
 **The kill mode is three actions, not one.** (1) Firmware fires `opal_set_repeater(false)` at Critical — network drops. (2) Human acknowledges by clicking SILENCE on web dashboard → killState → OFF, but repeater stays off. (3) Human manually re-enables repeater on Opal admin, then clicks ARM → killState → AUTO. No auto-recovery at any stage. Intentional.
 
 **Fan fails safe to 100%.** With the ESP32-C3 in bootloader mode (GPIO 9 held low), GPIO 7 is undriven and the fan spins at full speed. If a 10k pull-down were added, it would fail to 0%. Fail-to-100% is the current behaviour and is deliberate — no change planned.
+
+---
+
+## NEXT SESSION PLAN
+
+**Priority:** fix Tk GUI Settings, then port the fixed Settings to GUI2.
+
+**Step 1 — Tk Settings.**
+Reported as "settings did not work" after v3.87 None guard was added.
+Candidates, in order:
+1. `fetch_config()` returns partial dict → dialog renders with defaults but Apply sends them back unchanged
+2. `apply()` POSTs to `/config` but request fails silently (mDNS timeout, busy WebServer)
+3. POST succeeds but the change doesn't persist in NVS, or persists but the dialog re-fetches stale values
+
+Reproduce: open Tk GUI, open Settings, note values, change one field, click Apply, curl `http://192.168.8.242/config` and compare.
+
+**Step 2 — Port to GUI2.**
+Once Tk Settings works, mirror the same interaction in QML.
+Previous attempt failed (see Lessons from tonight). Do NOT use Drawer.
+Better patterns to try:
+- Rectangle overlay with NumberAnimation on x, anchored to the left or right edge
+- StackView with slide transition
+- Second page inside the existing Drawer menu
+
+The QML column-with-anchors rule still applies: no `anchors.fill`, `anchors.verticalCenter`, etc. on children of a Column. Use `TapHandler` for click handling.
 
 ---
 
@@ -755,36 +779,30 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 ```
 {
     "fw": "4.18",
-    "uptime": 4430,
+    "uptime": 4525,
     "ip": "192.168.8.242",
-    "rssi": -61,
+    "rssi": -60,
     "ssid": "StarCabin",
     "temp": 21.12,
     "fan": 49,
-    "rpm": 3540,
+    "rpm": 3630,
     "phone": 1,
     "alert": 0,
     "fan_stall": 0,
     "boost": 1,
     "boost_lvl": 2,
     "cooling": 0,
-    "net_kbps": 34.8,
+    "net_kbps": 30.8,
     "temp_lvl": 0,
     "opal": 1,
     "host": 1,
     "host_last_seen": 0,
     "sleep": 0,
     "sleep_countdown": 0,
-    "log_size": 7625,
+    "log_size": 7931,
     "outdoor_c": 15.1,
-    "room_c": 20.3,
+    "room_c": 20.1,
     "temp_hist": [
-        21.5,
-        21.5,
-        21.5,
-        21.5,
-        21.4,
-        21.4,
         21.4,
         21.4,
         21.4,
@@ -838,15 +856,15 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
         21.2,
         21.1,
         21.1,
-        21.2
+        21.2,
+        21.1,
+        21.1,
+        21.1,
+        21.1,
+        21.1,
+        21.1
     ],
     "net_hist": [
-        47.1,
-        231.3,
-        231.3,
-        231.3,
-        32.0,
-        38.4,
         38.4,
         38.4,
         34.0,
@@ -900,7 +918,13 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
         36.1,
         36.1,
         34.8,
-        34.8
+        34.8,
+        34.8,
+        31.7,
+        33.0,
+        33.0,
+        33.0,
+        30.8
     ],
     "kill_mode": 0,
     "temp_gear1": 30.0,
