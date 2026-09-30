@@ -109,7 +109,9 @@ class App:
         self.bottom_card.pack(fill="x", padx=18, pady=8)
         br = tk.Frame(self.bottom_card)
         br.pack(fill="x", pady=10)
-        self.outdoor_lbl = self._col(br, "📍 OUTDOOR", "--.-°")
+        self.outdoor_lbl = self._col(br, "📍 OUT", "--.-°")
+        self._divider(br)
+        self.room_lbl = self._col(br, "🏠 ROOM", "--.-°")
         self._divider(br)
         self.phone_lbl = self._col(br, "📱 PHONE", "--")
         self._divider(br)
@@ -375,6 +377,12 @@ class App:
             self.outdoor_lbl.config(text=f"{od:.1f}°")
         else:
             self.outdoor_lbl.config(text="--.-°")
+
+        rc = d.get("room_c")
+        if rc is not None and rc > -90:
+            self.room_lbl.config(text=f"{rc:.1f}°")
+        else:
+            self.room_lbl.config(text="--.-°")
 
         self.time_lbl.config(text=f"{local_time_str()}  {time_emoji()}")
 

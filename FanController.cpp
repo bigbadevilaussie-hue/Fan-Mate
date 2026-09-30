@@ -92,7 +92,8 @@ float readNTC() {
     float r_ntc = 10000.0f * (v_out / (3.3f - v_out));
     float steinhart = log(r_ntc / 10000.0f) / 3950.0f;
     steinhart += 1.0f / 298.15f;
-    return (1.0f / steinhart) - 273.15f;
+    float temp_c = (1.0f / steinhart) - 273.15f;
+    return temp_c + 6.0f;  // calibration offset (7.0 was board heat)
 }
 
 void updatePhoneDetection() {
@@ -327,8 +328,15 @@ void updateFanAndAlerts(
     }
 
     fanPWM = newPwm;
-    fanPctLocal = map(fanPWM, 0, 255, 0, 100);
+
+    // Kick-start pulse when fan is stopped or nearly stopped
+    if (fanGear > 0 && fanRPMLocal < 200) {
+        ledcWrite(2, 200);
+        delay(350);
+    }
+
     ledcWrite(2, fanPWM);
+    fanPctLocal = map(fanPWM, 0, 255, 0, 100);
 
 #if FAN_STALL_ENABLED
     if (fanPctLocal >= 25 && fanRPMLocal == 0) {
@@ -393,9 +401,12 @@ static void IRAM_ATTR onTach() {
 void updateTach() {
     unsigned long now = millis();
     if (now - lastTachRead >= 1000) {
-        lastTachRead = now;
-        fanRPMLocal = (tachPulses * 60) / 2;
+        noInterrupts();
+        unsigned long pulses = tachPulses;
         tachPulses = 0;
+        interrupts();
+        lastTachRead = now;
+        fanRPMLocal = (pulses * 60) / 2;
     }
 }
 
