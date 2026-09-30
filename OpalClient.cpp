@@ -12,8 +12,6 @@
 static String   opal_sid           = "";
 static bool     opal_paused        = false;
 static volatile unsigned long opal_sid_time = 0;
-static uint64_t opal_last_rx       = 0;
-static bool     opal_have_baseline = false;
 static unsigned long opal_last_ok_ms = 0;
 
 #define OPAL_LOGIN_REFRESH_MS 240000UL
@@ -154,7 +152,6 @@ static bool opal_ensure_login() {
 void opal_init() {
     opal_sid           = "";
     opal_sid_time      = 0;
-    opal_have_baseline = false;
 
     if (!opal_login()) {
         log_print("[OPAL] init: login failed, will retry in poll\n");

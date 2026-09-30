@@ -5,11 +5,10 @@
 
 // ============================================================
 //  Fan-Mate runtime configuration
-//  V3.73 — schema:
-//    temp  : warning/panic/kill/hysteresis
+//  V4.20 — schema:
+//    temp  : gear1/gear2/gear3/gear4 + hysteresis
 //    boost : mode + normal/aggr profiles (nested)
 //    night : start/end/nightMax
-//    phone : mode
 // ============================================================
 
 struct BoostProfile {

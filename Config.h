@@ -15,7 +15,7 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "4.20"
+#define FAN_MATE_VERSION "4.21"
 
 #define QUIET_START_HOUR 22
 #define QUIET_END_HOUR   7
@@ -32,14 +32,8 @@ extern unsigned long phone_absent_since;
 #define PHONE_SENSE_PIN  1
 #define NTC_PIN          0
 
-#define TEMP_ON       34.0
-#define TEMP_FULL     42.0
-#define TEMP_WARNING  45.0
-#define TEMP_PANIC    50.0
-
 #define PWM_FREQ      25000
 #define PWM_RES       8
-#define PWM_MIN       40
 
 #define FAN_STALL_ENABLED 1
 
@@ -64,16 +58,10 @@ extern unsigned long phone_absent_since;
 #define WIFI_RETRY_INTERVAL_MS   30000
 
 #define SERIAL_BUF_LINES        50
-#define OPAL_POLL_INTERVAL_MS   15000
 #define PHONE_SLEEP_DELAY_MS    30000UL
 #define PHONE_WAKE_DELAY_MS      5000UL
 #define OPAL_LOGIN_REFRESH_MS   3000000
 
-#define BOOST_DEFAULT_THRESHOLD_KBPS  300
-#define BOOST_DEFAULT_HOLD_SEC        4
-#define BOOST_DEFAULT_ENABLED         1
-
-#define LOG_TICK_MS    15000
 #define LOG_SEAL_MIN_ROWS        3
 #define LOG_PAUSE_FREE_BYTES     (100 * 1024)
 #define LOG_FILENAME_PREFIX      "log-"

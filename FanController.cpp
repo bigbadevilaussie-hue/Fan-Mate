@@ -29,11 +29,15 @@ static unsigned long beepTimer      = 0;
 
 static bool          tempConversionRunning = false;
 static unsigned long tempConversionStart   = 0;
-static float         lastGoodTemp          = 25.0f;
 
 // Boost/heat state
 static int lastFanGear  = -1;
-static int lastTempGear = -1;
+
+// Delta guard state — enter at 5.0, exit at 4.0 (hysteresis)
+static bool delta_guard_active = false;
+
+// Heat gear state — stateful so each gear has entry/exit hysteresis
+static int heat_gear_state = 0;
 
 // Stall detection
 static unsigned long fan_stall_since = 0;
@@ -76,7 +80,6 @@ void readDS18B20(float &currentTemp) {
             Serial.printf("[DS18B20] bad read: %.1f - keeping last\n", t);
             return;
         }
-        lastGoodTemp = t;
         currentTemp  = t;
     }
 }
@@ -94,7 +97,7 @@ float readNTC() {
     float steinhart = log(r_ntc / 10000.0f) / 3950.0f;
     steinhart += 1.0f / 298.15f;
     float temp_c = (1.0f / steinhart) - 273.15f;
-    return temp_c + 6.0f;  // calibration offset (7.0 was board heat)
+    return temp_c + 6.0f;  // calibration offset
 }
 
 void updatePhoneDetection() {
@@ -136,10 +139,27 @@ void updatePhoneDetection() {
 
 // ------------------------------------------------------------
 static int compute_temp_gear(float t) {
-    if (t >= config.tempGear4)                          return 4;
-    if (t >= config.tempGear3)                          return 3;
-    if (t >= config.tempGear2)                          return 2;
-    if (t >= config.tempGear1 - config.tempHysteresis)  return 1;
+    // Stateful ladder with hysteresis on both entry and exit.
+    // Entry at each threshold; exit at threshold - tempHysteresis.
+    float h = config.tempHysteresis;
+
+    if (heat_gear_state >= 4) {
+        if (t >= config.tempGear4 - h) return 4;
+    } else if (t >= config.tempGear4) return 4;
+
+    if (heat_gear_state >= 3) {
+        if (t >= config.tempGear3 - h) return 3;
+    } else if (t >= config.tempGear3) return 3;
+
+    if (heat_gear_state >= 2) {
+        if (t >= config.tempGear2 - h) return 2;
+    } else if (t >= config.tempGear2) return 2;
+
+    if (heat_gear_state >= 1) {
+        if (t >= config.tempGear1 - h) return 1;
+    } else if (t >= config.tempGear1) return 1;
+
+    heat_gear_state = 0;
     return 0;
 }
 
@@ -277,16 +297,30 @@ void updateFanAndAlerts(
     // ---- Kill state machine (v4.00) ----
     kill_state_machine(currentTemp);
 
+    // ---- Delta guard evaluation (shared by alert and gear) ----
+    // Hysteresis: enter at 5.0, exit at 4.0, so the fan doesn't flap
+    // when the delta sits on the boundary.
+    {
+        float room = readNTC();
+        if (room > -90.0f) {
+            float d = currentTemp - room;
+            if (delta_guard_active) {
+                if (d < 4.0f) delta_guard_active = false;
+            } else {
+                if (d > 5.0f) delta_guard_active = true;
+            }
+        } else {
+            delta_guard_active = false;
+        }
+    }
+
     // ---- Alert level (temperature OR delta) ----
     int newLevel = 0;
     if      (currentTemp >= config.tempGear4)   newLevel = 3;
     else if (currentTemp >= config.tempGear3)   newLevel = 2;
     else if (currentTemp >= config.tempGear2)   newLevel = 1;
-    else {
-        float room_now = readNTC();
-        if (room_now > -90.0f && (currentTemp - room_now) > 5.0f) {
-            newLevel = 1;
-        }
+    else if (delta_guard_active) {
+        newLevel = 1;
     }
 
     if (newLevel != alertLevel) {
@@ -308,16 +342,11 @@ void updateFanAndAlerts(
     // ---- Fan gear = max(heat, room-diff, boost) ----
     // Priority: heat control > room delta > boost. Highest demand wins.
     int tempGear  = compute_temp_gear(currentTemp);
+    heat_gear_state = tempGear;
     int boostGear = auto_boost_gear();
 
-    // Delta guard: phone > room by 5C -> floor at gear 1 (never higher)
-    int deltaGear = 0;
-    {
-        float room = readNTC();
-        if (room > -90.0f && (currentTemp - room) > 5.0f) {
-            deltaGear = 1;
-        }
-    }
+    // Delta guard: state evaluated above; here we just apply it
+    int deltaGear = delta_guard_active ? 1 : 0;
 
     int fanGear = tempGear;
     if (boostGear > fanGear) fanGear = boostGear;

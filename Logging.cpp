@@ -13,8 +13,7 @@
 
 extern float weather_get_temp();
 
-// TODO(NTC): wire MF52AT 10k B=3950 to GPIO 0, replace this stub
-// Returns -99 to signal "no sensor"; log_write writes empty field
+// NTC on GPIO 0, MF52AT 10k. readNTC() returns -99 if unreadable.
 static float room_get_temp() {
     extern float readNTC();
     return readNTC();
@@ -248,10 +247,14 @@ void log_write(float temp, float net_kbps, int boost, int fan, int rpm) {
     if (!f) return;
     String t = log_time_string();
     float rt = room_get_temp();
+    float wt = weather_get_temp();
     if (rt < -90.0f) {
-        f.printf("%s,%.1f,%.1f,%d,%d,%d,,%.1f,\n",
-                 t.c_str(), temp, net_kbps, boost, fan, rpm,
-                 weather_get_temp());
+        if (wt < -90.0f)
+            f.printf("%s,%.1f,%.1f,%d,%d,%d,,,\n",
+                     t.c_str(), temp, net_kbps, boost, fan, rpm);
+        else
+            f.printf("%s,%.1f,%.1f,%d,%d,%d,,%.1f,\n",
+                     t.c_str(), temp, net_kbps, boost, fan, rpm, wt);
     } else {
         f.printf("%s,%.1f,%.1f,%d,%d,%d,,%.1f,%.1f\n",
                  t.c_str(), temp, net_kbps, boost, fan, rpm,
