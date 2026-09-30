@@ -116,17 +116,111 @@ NEVER edit files by pasting shell commands directly. Always via Python script fi
 
 ---
 
+### 2026-09-30 — v4.17 → v4.18, GUI2 work begins
+
+**Firmware:**
+- v4.17 — `phonePresent` made `extern` in `FanController.cpp` (was `static`, shadowed the global in `fanmate.ino`). Wake path corrected. Nokia jingle moved to sleep/wake transitions.
+- v4.18 — **delta guard** added to decision tree: `fanGear = max(tempGear, deltaGear, boostGear)`, delta floor is gear 1 when `phone - room > 5.0` and NTC valid. **Delta alert branch** added: `newLevel = 1` when delta fires and no temp gear active (Tk shows WARNING). **Flat PWM map**: `map(fanGear, 0, 4, 0, 255)` → gear 1 = real 25%, gear 2 = 50%, gear 3 = 75%, gear 4 = 100%. **Kick-start** duration 350 → 400 ms. Verified: 24%/1500 RPM on forced gear 1, full Shakira ramp 0→1→2→3→4 at 60s/step, down-ramp 4→3→2→1 same cadence, cooldown hold engaged and released.
+
+**Priority order confirmed:** heat control (absolute thresholds) > room delta > boost (network rate). Highest demand wins — `max()` of three sources.
+
+**Tk GUI:**
+- v3.87 — `SettingsDialog` None guard: if `fetch_config()` returns None, show error and exit gracefully instead of crashing with `TypeError`.
+
+**QML GUI2:**
+- v1.08 — room temp wired to bridge (`room_c` from `/status`).
+- v1.11 — BoostBar rewritten as 5 separate lamp rectangles (Parked/Cruising/Fast/Racing/Nitro, bottom-to-top, single active lamp in zone colour). New TempBar mirror on right (Normal/Warm/Hot/Hotter/Critical). New StatusLamps row centred above gauges: BOOST / TEMP / OPAL / KILL lamps, small uppercase labels under each. Bottom info row added (OUT / ROOM / TIME / PHONE). Top strip removed. STATUS text removed. Window 900×440.
+
+**Bridge additions in `fanmate_v2/bridge.py`:**
+- `roomChanged` / `room` (v1.08)
+- `tempLvlChanged` / `tempLvl`
+- `killModeChanged` / `killMode`
+- `fanStallChanged` / `fanStall`
+
+---
+
+### Lessons from tonight
+
+**QML `Column` + anchors don't mix.** Any child of a `Column` cannot use `anchors.verticalCenter`, `anchors.fill`, `anchors.top`, etc. — Column manages vertical positioning and Qt errors out with `QML Column: Cannot specify top, bottom, verticalCenter, fill or centerIn anchors for items inside Column.` Use `TapHandler` for click handling inside Columns, not `MouseArea`.
+
+**QML `Drawer` for side panels fails when its content needs MouseAreas.** Tried adding BoostPanel/TempPanel as left/right Drawers — reverted. The Drawer's MouseArea needs `anchors.fill`, which is illegal inside Column-managed items. Panel approach on hold.
+
+**macOS Catalina mDNS is slow.** `curl http://fan-mate.local/status` takes ~3–5 seconds to resolve. `curl http://192.168.8.242/status` takes 0.17s. Same host, same LAN. `sudo killall -HUP mDNSResponder` improves it slightly (5.3s → 3.0s) but doesn't fix it. This was causing Tk GUI polls to feel sluggish, and OTA from the GUI to occasionally time out. The GUI was updated to use the IP for the live demo, but `FANMATE_URL` in `fanmate/config.py` and the OTA/reboot URLs in `fanmate_v2/bridge.py` are still `.local` — small pending fixes.
+
+**Hardware is 100% complete.** Fan shroud printed and mounted on Quad Lock adapter. DS18B20 sits inside the Quad Lock socket against the thinnest part of the case back (best available position given the geometry). NTC reads ambient on the board. Phone mounted upside down (antenna toward tower). Fan over the camera bump, which is adjacent to the SoC heat spreader.
+
+**Cooldown hold vs probe position.** Cold temp is captured before boost starts. Cooldown releases when `phone_temp <= cold_temp + 0.3`. In practice the probe lags (thermal mass of case + shroud) so release often happens at the 20-minute timeout rather than the temperature condition. Not a bug — probe physics.
+
+**Version bump rule applies to both.** Any firmware change bumps `FAN_MATE_VERSION` in `Config.h`. Any Tk GUI change bumps `GUI_VERSION` in `fanmate/config.py`. Any QML GUI2 change bumps `guiVersion` in `fanmate_v2/qml/Main.qml`. No exceptions. Previous AIs didn't do this and it caused confusion.
+
+**The kill mode is three actions, not one.** (1) Firmware fires `opal_set_repeater(false)` at Critical — network drops. (2) Human acknowledges by clicking SILENCE on web dashboard → killState → OFF, but repeater stays off. (3) Human manually re-enables repeater on Opal admin, then clicks ARM → killState → AUTO. No auto-recovery at any stage. Intentional.
+
+**Fan fails safe to 100%.** With the ESP32-C3 in bootloader mode (GPIO 9 held low), GPIO 7 is undriven and the fan spins at full speed. If a 10k pull-down were added, it would fail to 0%. Fail-to-100% is the current behaviour and is deliberate — no change planned.
+
+---
+
 ## PENDING ITEMS
 
+### Firmware
 1. **Thermal runaway failsafe** — sensor health (DS18B20 stale detection, NTC plausibility, rate-of-rise trigger). Designed, not implemented.
-2. **Night cap removal** — `FanController.cpp` still caps all fan output at `nightMax` (75%). No UI to change it.
+2. **Night cap removal** — `FanController.cpp` still caps all fan output at `nightMax` (75%). No UI to change it. `PWM_MIN = 40` in `Config.h` is now unused (flat map doesn't use it) — clean up or leave as documentation.
 3. **Temp gear hysteresis for gears 2/3/4** — currently exact-threshold. Only gear 1 entry has hysteresis (`tempGear1 - hysteresis`).
-4. **Kill repeater restore** — kill fires `opal_set_repeater(false)`, no code path turns it back on.
+4. **Delta guard hysteresis** — the delta floor (`phone-room > 5`) has no release band. In the 24–29 °C band with no heat/boost active, the fan can hunt (fan on → probe cools → delta drops below 5 → fan off → phone warms → delta > 5 → fan on). Watch the reports; add a release band if it's annoying.
 5. **Beep on gear 0→1 during cooldown** — `beep_once` fires on any gear change.
 6. **WiFi Nokia trigger** — patch failed (duplicate `_last_connected_state` declaration in `WiFiManager.cpp`). Currently only phone-detect triggers the tune.
-7. **Docs stale** — `FILES.md`, `PROJECT_STATE.md`, `README.md` stop at v4.10.
 
-**Web dashboard rework — NOT DONE.** The layout Nick asked for (BOOST into PHONE slot, TEMP into STATUS, OUT+PHONE+TIME bottom row, remove title/kill banner/footer) is not applied. Source is `WebPage.h`. Needs compile + flash.
+### Tk GUI
+7. **`FANMATE_URL` still `.local`** — change to `http://192.168.8.242` to bypass the 3–5s Catalina mDNS tax.
+8. **Settings "did not work"** — reported after v3.87 None guard. Not diagnosed. Could be: (a) fetch_config returns partial data, (b) Apply doesn't reach device, (c) apply persists but doesn't show. Reproduce and fix.
+9. **Report2H `_find_recent_files(2)`** — takes last 2 sealed files by name, not "last 2 hours of coverage". Should walk backwards accumulating files until the cumulative span reaches 2h.
+10. **Report2H `missing` heuristic** — `expected = span_min * 60 / 15` assumes one row per 15s. Sleep windows, seal boundaries, and log-paused periods all break this. Shows phantom "missing" rows. Either rewrite to count real inter-row gaps >20s, or drop the metric.
+
+### QML GUI2
+11. **Kill banner not in GUI2** — GUI2 shows KILL lamp but no way to SILENCE / ARM. Bridge needs `killSilence()` and `killArm()` slots that POST `/kill/clear` and `/kill/auto`. Add a top-centred Rectangle banner visible when `killMode >= 1`.
+12. **Boost / Temp settings panels** — Drawer approach failed (Qt layout rules). Need a different pattern — likely a plain Rectangle with x-animation, or a StackView.
+13. **Bridge uses `.local` for OTA and reboot URLs** — same mDNS tax. Change to IP.
+14. **BoostBar/TempBar lamp colors** — currently only the active lamp is coloured; the other four are dim grey text. Confirmed design. But `#4a5568` may be a touch dark — consider `#5a6578` for readability.
+
+### Docs
+15. **PROJECT_STATE.md stale** — needs top section update (v4.18, HW complete, GUI2 in progress, new priority order).
+16. **FILES.md** — doesn't list `StatusLamps.qml`, `TempBar.qml`, `Songs.cpp/h`, `hwtest/hwtest.ino`.
+17. **README.md** — check build command and endpoint list are current.
+18. **Web dashboard rework — NOT DONE.** The layout Nick asked for (BOOST into PHONE slot, TEMP into STATUS, OUT+PHONE+TIME bottom row, remove title/kill banner/footer) is not applied. Source is `WebPage.h`. Needs compile + flash.
+
+---
+
+## KNOWN FALSE ALARMS
+
+- **Phone +10°C above room** — observed once, transient. Delta settled to +2.6. Not a bug.
+- **NTC offset tuning** — +7.0 was picking up board heat, +6.0 correct (verified 25.8 vs 25.81).
+- **OPAL login "loop"** — never existed. Normal 4-min SID refresh.
+- **"Boost is not working"** — observed mid-ramp. Boost ramps one gear per `on_hold × 15s` tick = 60s per gear. From IDLE to Nitro takes ~4 minutes if rate holds. Not broken, just slow by design.
+- **Curtain incident** — sun through the window heated the phone back. Delta crossed 5 with no network activity. This is exactly what the delta guard was built for; it would have fired gear 1 (25%) if it had been in place. Prior to v4.18, fan did nothing. Not a bug — expected behaviour after v4.18.
+
+---
+
+## TESTING CHEATSHEET
+
+Force a boost gear (auto-expires after 30 min, or release with n=0):
+
+    curl "http://192.168.8.242/boost/gear?n=1"
+    curl "http://192.168.8.242/boost/gear?n=2"
+    curl "http://192.168.8.242/boost/gear?n=3"
+    curl "http://192.168.8.242/boost/gear?n=4"
+    curl "http://192.168.8.242/boost/gear?n=0"
+
+Kill mode (only test with the phone off the mount or actually overheated):
+
+    curl -X POST "http://192.168.8.242/kill/clear"   # silence
+    curl -X POST "http://192.168.8.242/kill/auto"    # re-arm
+
+Live status in one line:
+
+    curl -s http://192.168.8.242/status | python3 -c "import json,sys; d=json.load(sys.stdin); print('temp:',d.get('temp'),'room:',d.get('room_c'),'delta:',round(d.get('temp',0)-d.get('room_c',0),2),'fan:',d.get('fan'),'rpm:',d.get('rpm'),'boost_lvl:',d.get('boost_lvl'),'temp_lvl:',d.get('temp_lvl'),'alert:',d.get('alert'),'kill:',d.get('kill_mode'))"
+
+Serial tail:
+
+    curl -s http://192.168.8.242/serial-raw | tail -30
 
 ---
 

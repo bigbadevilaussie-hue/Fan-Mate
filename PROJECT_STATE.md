@@ -1,9 +1,11 @@
 # Fan-Mate — Project State
 
 Snapshot date: 2026-09-29
-Latest firmware: V4.10
-Latest firmware tag: v4.10
-Latest GUI: Tk v3.80 (tag gui-v3.80) / QML v2 v1.01 (tag gui-v2-v1.01)
+Latest firmware: V4.18 (tag v4.18)
+Latest GUI: Tk v3.87 (tag gui-v3.87) — workhorse, primary
+Latest GUI2: QML v1.11 (tag gui-v2-v1.11) — in progress, target
+
+**Hardware is 100% complete and installed.** Fan shroud printed, mounted on Quad Lock adapter, phone docked, all sensors wired and verified on-bench and in-place.
 Repo: https://github.com/bigbadevilaussie-hue/Fan-Mate
 
 ---
@@ -59,7 +61,7 @@ Rule 4 — Fuck it lmao
 
 ## FIRMWARE
 
-**Current version:** V4.10
+**Current version:** V4.18
 
 ### Modules
 | File | Purpose |
@@ -90,6 +92,14 @@ Rule 4 — Fuck it lmao
 | V3.80 | Responsive web dashboard, /status history arrays |
 | V4.09 | Boost start temp logging on gear 0->1 transition, manual `/boost/gear?n=` force endpoint with 30-min auto-release, DS18B20 moved to loop() for every-pass sampling |
 | V4.10 | **Boost overhaul**: rate-based target gears (`floor(rate/threshold)`), 80% down-band hysteresis, cold temp capture, temp-latched cooldown phase (fan holds at gear 1 until phone <= cold + 0.3°C), router-down cooldown runs every tick via `net_ok` flag |
+| V4.11 | Heat thresholds renamed Warm/Hot/Hotter/Critical (30/32/34/36) |
+| V4.12 | `boost_lvl` reports `data_gear` (0 during cooldown); `cooling` flag in `/status` |
+| V4.13 | NTC room temp: `readNTC()`, `room_get_temp()`, `room_c` in `/status` |
+| V4.14 | NTC +6.0 offset (board heat); fan kick-start; interrupt-safe tach |
+| V4.15 | Nokia tune on phone detect/disconnect (`Songs.cpp/h`) |
+| V4.16 | `phoneMode` removed entirely — always auto-detect via hall sensor |
+| V4.17 | `phonePresent` made `extern` in `FanController.cpp` (was `static`, shadowing global); jingle moved to sleep/wake |
+| V4.18 | **Delta guard** (`phone-room > 5` → gear 1 floor), delta alert branch, **flat PWM map** (`map(gear, 0, 4, 0, 255)` = real 25/50/75/100), kick-start 400ms |
 
 ---
 
