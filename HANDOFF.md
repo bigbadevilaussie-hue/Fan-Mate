@@ -1,6 +1,6 @@
 # Fan-Mate — Chat Handoff
 
-Generated: 2026-09-29 11:42:10
+Generated: 2026-09-30 17:30:17
 
 ---
 
@@ -8,26 +8,26 @@ Generated: 2026-09-29 11:42:10
 
 ```
 $ git log --oneline -5
-690a919 docs: sync PROJECT_STATE + README to v4.08, fix update_handoff.sh paths
-4be145c docs: regenerate handoff at v4.08 / gui-v3.80
-37db566 handoff: sleep/wake issues deferred to hall sensor arrival
-bdd98ff v4.08: sleep/wake delays, log flush/pause, non-blocking beep, phone timestamps
-e4e1771 gui v3.80: fan_emoji(0) -> circle, distinquish off from night
+8e96a00 v4.16 / gui-v3.86: phoneMode removed (always auto-detect via hall); Nokia tune; NTC + hall wired and verified
+8b6f3c4 tools: add hwtest.ino — fan/NTC/hall verification sketch
+d056123 v4.14: NTC +6.0 offset, fan kick-start, interrupt-safe tach; gui-v3.85 room column + footer
+b43bce2 v4.13: NTC room temp — readNTC(), room_get_temp() wired, room_c in /status
+ec99b06 v4.12 / gui-v3.84: boost_lvl reports data_gear (0 during cooldown), cooling flag in /status; Tk layout rework
 
 $ git status --short
  M HANDOFF.md
 
 $ git tag -l | tail -10
-v3.81
-v3.93
-v3.94
-v3.95
-v4.00-firmware
-v4.01
-v4.02
 v4.03
 v4.05
 v4.08
+v4.09
+v4.10
+v4.11
+v4.12
+v4.13
+v4.14
+v4.16
 ```
 
 ---
@@ -37,8 +37,8 @@ v4.08
 # Fan-Mate — Project State
 
 Snapshot date: 2026-09-29
-Latest firmware: V4.08
-Latest firmware tag: v4.08
+Latest firmware: V4.10
+Latest firmware tag: v4.10
 Latest GUI: Tk v3.80 (tag gui-v3.80) / QML v2 v1.01 (tag gui-v2-v1.01)
 Repo: https://github.com/bigbadevilaussie-hue/Fan-Mate
 
@@ -95,7 +95,7 @@ Rule 4 — Fuck it lmao
 
 ## FIRMWARE
 
-**Current version:** V4.08
+**Current version:** V4.10
 
 ### Modules
 | File | Purpose |
@@ -124,6 +124,8 @@ Rule 4 — Fuck it lmao
 | V3.73 | Serial buffer refactor, log event routing, stall gated |
 | V3.74 | Fan/boost events through serial buffer, log time-jump recovery |
 | V3.80 | Responsive web dashboard, /status history arrays |
+| V4.09 | Boost start temp logging on gear 0->1 transition, manual `/boost/gear?n=` force endpoint with 30-min auto-release, DS18B20 moved to loop() for every-pass sampling |
+| V4.10 | **Boost overhaul**: rate-based target gears (`floor(rate/threshold)`), 80% down-band hysteresis, cold temp capture, temp-latched cooldown phase (fan holds at gear 1 until phone <= cold + 0.3°C), router-down cooldown runs every tick via `net_ok` flag |
 
 ---
 
@@ -276,29 +278,31 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 ## FIRMWARE FILES
 
 ```
--rw-r--r--@ 1 Nick  staff   2143 27 Sep 00:54 AutoBoost.cpp
--rw-r--r--@ 1 Nick  staff    657 26 Sep 16:33 AutoBoost.h
--rw-r--r--@ 1 Nick  staff   2196 29 Sep 09:05 Config.h
+-rw-r--r--@ 1 Nick  staff   5701 30 Sep 09:46 AutoBoost.cpp
+-rw-r--r--@ 1 Nick  staff   1610 30 Sep 09:46 AutoBoost.h
+-rw-r--r--@ 1 Nick  staff   2224 30 Sep 16:47 Config.h
 -rw-r--r--@ 1 Nick  staff   5501 27 Sep 18:00 DisplayManager.cpp
 -rw-r--r--@ 1 Nick  staff    422 26 Sep 10:16 DisplayManager.h
--rw-r--r--@ 1 Nick  staff  11855 29 Sep 08:44 FanController.cpp
--rw-r--r--@ 1 Nick  staff    731 29 Sep 08:06 FanController.h
--rw-r--r--@ 1 Nick  staff  14073 29 Sep 08:06 Logging.cpp
+-rw-r--r--@ 1 Nick  staff  12666 30 Sep 16:44 FanController.cpp
+-rw-r--r--@ 1 Nick  staff    748 30 Sep 12:46 FanController.h
+-rw-r--r--@ 1 Nick  staff  14104 30 Sep 12:46 Logging.cpp
 -rw-r--r--@ 1 Nick  staff    647 29 Sep 08:06 Logging.h
 -rw-r--r--@ 1 Nick  staff   8513 28 Sep 23:36 OpalClient.cpp
 -rw-r--r--@ 1 Nick  staff    343 28 Sep 21:16 OpalClient.h
 -rw-r--r--@ 1 Nick  staff    779 26 Sep 22:04 SerialBuffer.cpp
 -rw-r--r--@ 1 Nick  staff    170 26 Sep 22:03 SerialBuffer.h
--rw-r--r--@ 1 Nick  staff   6626 27 Sep 17:56 Settings.cpp
--rw-r--r--@ 1 Nick  staff   1154 26 Sep 22:09 Settings.h
+-rw-r--r--@ 1 Nick  staff   6978 30 Sep 16:45 Settings.cpp
+-rw-r--r--@ 1 Nick  staff   1266 30 Sep 16:44 Settings.h
+-rw-r--r--  1 Nick  staff    734 30 Sep 16:02 Songs.cpp
+-rw-r--r--  1 Nick  staff     85 30 Sep 16:02 Songs.h
 -rw-r--r--@ 1 Nick  staff   1716 28 Sep 22:42 WeatherClient.cpp
 -rw-r--r--@ 1 Nick  staff    185 26 Sep 16:33 WeatherClient.h
--rw-r--r--@ 1 Nick  staff  12712 28 Sep 20:42 WebPage.h
--rw-r--r--@ 1 Nick  staff  15254 28 Sep 22:42 WebServer.cpp
+-rw-r--r--@ 1 Nick  staff  12499 30 Sep 09:00 WebPage.h
+-rw-r--r--@ 1 Nick  staff  15926 30 Sep 16:44 WebServer.cpp
 -rw-r--r--@ 1 Nick  staff    142 27 Sep 17:39 WebServer.h
--rw-r--r--@ 1 Nick  staff   3533 26 Sep 22:05 WiFiManager.cpp
+-rw-r--r--@ 1 Nick  staff   3533 30 Sep 16:05 WiFiManager.cpp
 -rw-r--r--@ 1 Nick  staff    315 26 Sep 17:54 WiFiManager.h
--rw-r--r--  1 Nick  staff   6054 29 Sep 09:04 fanmate.ino
+-rw-r--r--  1 Nick  staff   5910 30 Sep 16:45 fanmate.ino
 -rw-r--r--@ 1 Nick  staff    669 25 Sep 15:31 secrets.example.h
 -rw-r--r--@ 1 Nick  staff    770 25 Sep 16:48 secrets.h
 ```
@@ -310,14 +314,14 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 ```
 -rw-r--r--@ 1 Nick  staff    162 27 Sep 09:23 fanmate.py
 -rw-r--r--  1 Nick  staff     27 27 Sep 09:09 fanmate/__init__.py
--rw-r--r--  1 Nick  staff  17126 29 Sep 07:45 fanmate/app.py
--rw-r--r--  1 Nick  staff   1266 29 Sep 07:49 fanmate/config.py
--rw-r--r--  1 Nick  staff  16648 29 Sep 07:43 fanmate/dialogs.py
+-rw-r--r--  1 Nick  staff  14895 30 Sep 16:45 fanmate/app.py
+-rw-r--r--  1 Nick  staff   1266 30 Sep 16:47 fanmate/config.py
+-rw-r--r--  1 Nick  staff  17630 30 Sep 16:46 fanmate/dialogs.py
 -rw-r--r--  1 Nick  staff   2289 29 Sep 07:49 fanmate/helpers.py
--rw-r--r--  1 Nick  staff   3649 28 Sep 22:15 fanmate/http_client.py
+-rw-r--r--  1 Nick  staff   3963 30 Sep 12:55 fanmate/http_client.py
 -rw-r--r--  1 Nick  staff   2248 27 Sep 10:06 fanmate/log_sync.py
 -rw-r--r--  1 Nick  staff  10314 28 Sep 22:21 fanmate/reports.py
--rw-r--r--  1 Nick  staff   1145 27 Sep 09:14 fanmate/state.py
+-rw-r--r--  1 Nick  staff   1129 30 Sep 16:45 fanmate/state.py
 -rw-r--r--  1 Nick  staff   1888 27 Sep 09:19 fanmate/weather.py
 -rw-r--r--  1 Nick  staff   6205 27 Sep 09:22 fanmate/widgets.py
 ```
@@ -335,15 +339,15 @@ device unreachable
 ## LOG FILES ON MAC
 
 ```
--rw-r--r--  1 Nick  staff  10724 29 Sep 07:15 /Users/Nick/Documents/FanMate_logs/log-4.05-20260929-0600.csv
--rw-r--r--  1 Nick  staff  10867 29 Sep 08:00 /Users/Nick/Documents/FanMate_logs/log-4.05-20260929-0700.csv
--rw-r--r--  1 Nick  staff   5730 29 Sep 08:32 /Users/Nick/Documents/FanMate_logs/log-4.06-20260929-0800.csv
--rw-r--r--  1 Nick  staff   2983 29 Sep 08:47 /Users/Nick/Documents/FanMate_logs/log-4.071-20260929-0847.csv
--rw-r--r--  1 Nick  staff   1373 29 Sep 09:00 /Users/Nick/Documents/FanMate_logs/log-4.071-20260929-0853.csv
--rw-r--r--  1 Nick  staff    374 29 Sep 09:01 /Users/Nick/Documents/FanMate_logs/log-4.071-20260929-0900.csv
--rw-r--r--  1 Nick  staff    108 29 Sep 09:06 /Users/Nick/Documents/FanMate_logs/log-4.071-20260929-0906.csv
--rw-r--r--  1 Nick  staff    243 29 Sep 09:07 /Users/Nick/Documents/FanMate_logs/log-4.08-20260929-0907.csv
--rw-r--r--  1 Nick  staff   9316 29 Sep 10:00 /Users/Nick/Documents/FanMate_logs/log-4.08-20260929-0908.csv
--rw-r--r--  1 Nick  staff  10600 29 Sep 11:21 /Users/Nick/Documents/FanMate_logs/log-4.08-20260929-1000.csv
+-rw-r--r--  1 Nick  staff   9709 30 Sep 09:51 /Users/Nick/Documents/FanMate_logs/log-4.12-20260930-0900.csv
+-rw-r--r--  1 Nick  staff   2033 30 Sep 10:00 /Users/Nick/Documents/FanMate_logs/log-4.12-20260930-0950.csv
+-rw-r--r--  1 Nick  staff   2503 30 Sep 12:50 /Users/Nick/Documents/FanMate_logs/log-4.13-20260930-1000.csv
+-rw-r--r--  1 Nick  staff   2204 30 Sep 13:00 /Users/Nick/Documents/FanMate_logs/log-4.13-20260930-1249.csv
+-rw-r--r--  1 Nick  staff   2698 30 Sep 13:13 /Users/Nick/Documents/FanMate_logs/log-4.14-20260930-1300.csv
+-rw-r--r--  1 Nick  staff   1861 30 Sep 13:22 /Users/Nick/Documents/FanMate_logs/log-4.14-20260930-1322.csv
+-rw-r--r--  1 Nick  staff   4534 30 Sep 16:00 /Users/Nick/Documents/FanMate_logs/log-4.14-20260930-1537.csv
+-rw-r--r--  1 Nick  staff   2470 30 Sep 16:12 /Users/Nick/Documents/FanMate_logs/log-4.15-20260930-1600.csv
+-rw-r--r--  1 Nick  staff    194 30 Sep 16:27 /Users/Nick/Documents/FanMate_logs/log-4.15-20260930-1614.csv
+-rw-r--r--  1 Nick  staff   7672 30 Sep 17:00 /Users/Nick/Documents/FanMate_logs/log-4.16-20260930-1700.csv
 ```
 
