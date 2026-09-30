@@ -33,6 +33,7 @@ class Bridge(QObject):
     alertChanged     = Signal()
     fwChanged        = Signal()
     outdoorChanged   = Signal()
+    roomChanged      = Signal()
     tempGear1Changed = Signal()
     tempGear2Changed = Signal()
     tempGear3Changed = Signal()
@@ -89,6 +90,8 @@ class Bridge(QObject):
             self.opalChanged.emit()
         if self._changed("outdoor_c", self._get("outdoor_c", 0.0)):
             self.outdoorChanged.emit()
+        if self._changed("room_c", self._get("room_c", -99.0)):
+            self.roomChanged.emit()
         if self._changed("temp_gear1", self._get("temp_gear1", 30.0)):
             self.tempGear1Changed.emit()
         if self._changed("temp_gear2", self._get("temp_gear2", 32.0)):
@@ -196,6 +199,10 @@ class Bridge(QObject):
     @Property(float, notify=outdoorChanged)
     def outdoor(self):
         return float(self._get("outdoor_c", 0.0))
+
+    @Property(float, notify=roomChanged)
+    def room(self):
+        return float(self._get("room_c", -99.0))
 
     @Property(float, notify=tempGear1Changed)
     def tempGear1(self):

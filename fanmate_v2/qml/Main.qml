@@ -9,7 +9,7 @@ ApplicationWindow {
     visible: true
     title: "Fan-Mate v2"
     color: "#000000"
-    property string guiVersion: "1.07"
+    property string guiVersion: "1.08"
 
     // ---------- drawer ----------
     Drawer {
@@ -175,8 +175,10 @@ ApplicationWindow {
                     font.letterSpacing: 1
                 }
                 Text {
-                    text: "--.-°C"
-                    color: "#4a5568"
+                    text: (dev.room > -90)
+                          ? dev.room.toFixed(1) + "°C"
+                          : "--.-°C"
+                    color: (dev.room > -90) ? "#cdd6f4" : "#4a5568"
                     font.family: "Menlo"
                     font.pixelSize: 14
                     font.weight: Font.Medium
