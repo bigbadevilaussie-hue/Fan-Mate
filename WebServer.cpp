@@ -185,9 +185,7 @@ static void handle_config_get() {
     json += "\"start\":" + String(config.nightStart) + ",";
     json += "\"end\":" + String(config.nightEnd) + ",";
     json += "\"nightMax\":" + String(config.nightMax);
-    json += "},";
-
-    json += "{}";
+    json += "}";
 
     json += "}";
     server.send(200, "application/json", json);
@@ -203,7 +201,7 @@ static void handle_config_post() {
     String body = server.arg("plain");
     Serial.printf("[HTTP] POST /config: %s\n", body.c_str());
 
-    StaticJsonDocument<128> check;
+    StaticJsonDocument<512> check;
     if (deserializeJson(check, body) != DeserializationError::Ok) {
         server.send(400, "text/plain", "bad json");
         return;
