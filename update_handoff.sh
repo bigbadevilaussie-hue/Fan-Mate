@@ -1,7 +1,4 @@
 #!/bin/bash
-# Fan-Mate handoff generator
-# Run before starting a new chat session.
-
 cd "$(dirname "$0")"
 
 {
@@ -14,15 +11,31 @@ cd "$(dirname "$0")"
   echo "## GIT STATE"
   echo ""
   echo '```'
-  echo "\$ git log --oneline -5"
-  git log --oneline -5
+  echo "\$ git log --oneline -10"
+  git log --oneline -10
   echo ""
   echo "\$ git status --short"
   git status --short
   echo ""
-  echo "\$ git tag -l | tail -10"
-  git tag -l | tail -10
+  echo "\$ git tag -l | tail -15"
+  git tag -l | tail -15
   echo '```'
+  echo ""
+  echo "---"
+  echo ""
+  echo "## VERSIONS"
+  echo ""
+  echo '```'
+  grep "FAN_MATE_VERSION" Config.h
+  grep "GUI_VERSION" fanmate/config.py 2>/dev/null
+  grep "guiVersion" fanmate_v2/qml/Main.qml 2>/dev/null
+  echo '```'
+  echo ""
+  echo "---"
+  echo ""
+  echo "## NOTES.md"
+  echo ""
+  cat NOTES.md
   echo ""
   echo "---"
   echo ""
@@ -40,10 +53,18 @@ cd "$(dirname "$0")"
   echo ""
   echo "---"
   echo ""
-  echo "## GUI FILES"
+  echo "## TK GUI FILES"
   echo ""
   echo '```'
   ls -la fanmate.py fanmate/*.py 2>/dev/null
+  echo '```'
+  echo ""
+  echo "---"
+  echo ""
+  echo "## QML GUI2 FILES"
+  echo ""
+  echo '```'
+  ls -la fanmate_v2/*.py fanmate_v2/qml/*.qml 2>/dev/null
   echo '```'
   echo ""
   echo "---"
@@ -66,5 +87,4 @@ cd "$(dirname "$0")"
 
 echo "HANDOFF.md updated ($(wc -l < HANDOFF.md) lines)"
 echo ""
-echo "To paste into new chat:"
-echo "  cat $(pwd)/HANDOFF.md | pbcopy"
+echo "Path: $(pwd)/HANDOFF.md"
