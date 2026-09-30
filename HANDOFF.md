@@ -68,7 +68,7 @@
 > scripts written to /tmp/ then run with python3. Never paste heredocs
 > or # comments directly.
 
-Generated: 2026-09-30 21:39:12
+Generated: 2026-10-01 07:46:41
 
 ---
 
@@ -76,6 +76,8 @@ Generated: 2026-09-30 21:39:12
 
 ```
 $ git log --oneline -10
+e02a3f6 gui-v3.89: DynaTune KPI board (6 tests) + dynatune.py module + event column parsers + room temp on plots + FANMATE_URL IP
+c98fb46 docs: regenerate handoff
 0ea9ac0 docs: log next session plan (fix Tk Settings, then port to GUI2)
 5bf135f docs: regenerate handoff at v4.18 / gui-v3.87 / gui-v2-v1.11; dump command uses IP and lists new QML
 500ecb4 docs: NOTES session log to v4.18/GUI2-v1.11; PROJECT_STATE header updated; pending items refreshed
@@ -84,8 +86,6 @@ $ git log --oneline -10
 cd7ab69 gui-v3.87: SettingsDialog None guard on fetch_config failure
 d90a6f4 v4.18: delta guard (phone-room > 5C -> gear 1 + WARN), flat PWM map (gear 1 = 25%), kick-start 400ms
 10a2963 v4.17: phonePresent extern shadow fix; Nokia jingle on sleep/wake
-55d1ac7 docs: remove FIRST.md (unused)
-4dbe9da docs: add FIRST.md — bare command file for new chat opener
 
 $ git status --short
  M HANDOFF.md
@@ -281,6 +281,69 @@ NEVER edit files by pasting shell commands directly. Always via Python script fi
 **The kill mode is three actions, not one.** (1) Firmware fires `opal_set_repeater(false)` at Critical — network drops. (2) Human acknowledges by clicking SILENCE on web dashboard → killState → OFF, but repeater stays off. (3) Human manually re-enables repeater on Opal admin, then clicks ARM → killState → AUTO. No auto-recovery at any stage. Intentional.
 
 **Fan fails safe to 100%.** With the ESP32-C3 in bootloader mode (GPIO 9 held low), GPIO 7 is undriven and the fan spins at full speed. If a 10k pull-down were added, it would fail to 0%. Fail-to-100% is the current behaviour and is deliberate — no change planned.
+
+---
+
+## DYNATUNE — KPI BOARD (planned, next session)
+
+DynaTune becomes a KPI dashboard, not just a plot viewer. Glance-readable,
+minimal prose, car-diagnostics layout.
+
+**Six KPIs, each a column:**
+
+    BOOST       COOLDOWN     DELTA      LAG       EVENTS     LOG
+    ●●●●●       ●●●○○        ●○○○○      ●●●●●     ●●●●●      ●●●●●
+    PASS        WARN         IDLE       PASS      PASS       PASS
+    ramp 4/4    rel 1/3      max 3.2    +1.5°C    0 bad      12/12
+
+Each column has:
+- 5-dot indicator (filled = PASS, partial = WARN, empty = IDLE/FAIL)
+- Status word (PASS / WARN / FAIL / IDLE)
+- Primary metric (short — one value or a ratio)
+- Small secondary text
+
+**Metric definitions:**
+
+| KPI | Metric | Notes |
+|-----|--------|-------|
+| BOOST | `ramp N/4` | Highest gear reached when rate supported gear 3+ |
+| COOLDOWN | `rel N/M` | Released-by-temp count / total cooldowns |
+| DELTA | `max X.X°` | Peak (phone - room) in window |
+| LAG | `+X.X°C` | Largest post-burst temp rise (already implemented) |
+| EVENTS | `N bad` | Count of PANIC + WDT + BROWNOUT + FAN_STALL |
+| LOG | `N/M` | Seals synced / expected seals (hours in window) |
+
+**Colour rules:** all PASS → green dots. Any WARN → amber. Any FAIL → red.
+
+**Recommendation bar:** shown only when at least one KPI is WARN/FAIL.
+One line, imperative. E.g.:
+
+    ⚠  COOLDOWN_MAX_MS 20min → 5min
+
+Blank when all PASS. Board is calm when healthy.
+
+**Graphs:** three plots (NET, FAN, TEMP) still below the board, same as now.
+
+---
+
+## DYNATUNE PHASE 2 — ACTIONABLE (future)
+
+Each WARN/FAIL KPI can carry a machine-readable recommendation. Board
+shows Apply / Dismiss buttons next to the recommendation bar.
+
+    ⚠  Cooldown running to timeout 3/3 windows.
+       Recommended: COOLDOWN_MAX_MS 20min → 5min
+       [ Apply ]  [ Dismiss ]
+
+**Applying** POSTs to `/config`. Requires:
+1. Every WARN/FAIL test has a structured recommendation: `{label, apply: {...}}`
+2. Configurable parameters must live in NVS, not `#define`. `COOLDOWN_MAX_MS`
+   is currently `#define` — needs to move to `Settings.cpp` first.
+3. Sanity floors — e.g. don't let COOLDOWN_MAX_MS go below 2 min.
+4. Undo — store previous value, offer Revert in the same UI slot.
+
+Do NOT build Phase 2 until the six KPI tests have run for several days
+and their PASS/WARN/FAIL behaviour is trusted.
 
 ---
 
@@ -740,15 +803,16 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 -rw-r--r--@ 1 Nick  staff    162 27 Sep 09:23 fanmate.py
 -rw-r--r--  1 Nick  staff     27 27 Sep 09:09 fanmate/__init__.py
 -rw-r--r--  1 Nick  staff  14895 30 Sep 16:45 fanmate/app.py
--rw-r--r--  1 Nick  staff   1266 30 Sep 20:04 fanmate/config.py
--rw-r--r--  1 Nick  staff  17801 30 Sep 20:05 fanmate/dialogs.py
+-rw-r--r--  1 Nick  staff   1265  1 Oct 07:23 fanmate/config.py
+-rw-r--r--  1 Nick  staff  18525  1 Oct 07:44 fanmate/dialogs.py
+-rw-r--r--  1 Nick  staff   7489  1 Oct 07:42 fanmate/dynatune.py
 -rw-r--r--  1 Nick  staff   2289 29 Sep 07:49 fanmate/helpers.py
 -rw-r--r--  1 Nick  staff   3963 30 Sep 12:55 fanmate/http_client.py
 -rw-r--r--  1 Nick  staff   2248 27 Sep 10:06 fanmate/log_sync.py
--rw-r--r--  1 Nick  staff  10314 28 Sep 22:21 fanmate/reports.py
+-rw-r--r--  1 Nick  staff  10668  1 Oct 07:36 fanmate/reports.py
 -rw-r--r--  1 Nick  staff   1129 30 Sep 16:45 fanmate/state.py
 -rw-r--r--  1 Nick  staff   1888 27 Sep 09:19 fanmate/weather.py
--rw-r--r--  1 Nick  staff   6205 27 Sep 09:22 fanmate/widgets.py
+-rw-r--r--  1 Nick  staff   7134  1 Oct 07:17 fanmate/widgets.py
 ```
 
 ---
@@ -779,152 +843,152 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 ```
 {
     "fw": "4.18",
-    "uptime": 4525,
+    "uptime": 40976,
     "ip": "192.168.8.242",
-    "rssi": -60,
+    "rssi": -64,
     "ssid": "StarCabin",
-    "temp": 21.12,
-    "fan": 49,
-    "rpm": 3630,
+    "temp": 28.56,
+    "fan": 0,
+    "rpm": 0,
     "phone": 1,
     "alert": 0,
     "fan_stall": 0,
-    "boost": 1,
-    "boost_lvl": 2,
+    "boost": 0,
+    "boost_lvl": 0,
     "cooling": 0,
-    "net_kbps": 30.8,
+    "net_kbps": 204.6,
     "temp_lvl": 0,
     "opal": 1,
     "host": 1,
     "host_last_seen": 0,
     "sleep": 0,
     "sleep_countdown": 0,
-    "log_size": 7931,
-    "outdoor_c": 15.1,
-    "room_c": 20.1,
+    "log_size": 9116,
+    "outdoor_c": 15.7,
+    "room_c": 27.2,
     "temp_hist": [
-        21.4,
-        21.4,
-        21.4,
-        21.4,
-        21.4,
-        21.4,
-        21.4,
-        21.4,
-        21.4,
-        21.4,
-        21.4,
-        21.4,
-        21.4,
-        21.4,
-        21.4,
-        21.4,
-        21.4,
-        21.3,
-        21.3,
-        21.4,
-        21.3,
-        21.3,
-        21.3,
-        21.3,
-        21.3,
-        21.3,
-        21.3,
-        21.3,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.2,
-        21.1,
-        21.2,
-        21.1,
-        21.1,
-        21.2,
-        21.1,
-        21.1,
-        21.1,
-        21.1,
-        21.1,
-        21.1
+        27.2,
+        27.2,
+        27.2,
+        27.2,
+        27.3,
+        27.3,
+        27.3,
+        27.4,
+        27.4,
+        27.4,
+        27.4,
+        27.4,
+        27.4,
+        27.5,
+        27.6,
+        27.6,
+        27.6,
+        27.6,
+        27.6,
+        27.6,
+        27.6,
+        27.7,
+        27.7,
+        27.8,
+        27.8,
+        27.8,
+        27.8,
+        27.9,
+        27.9,
+        27.9,
+        27.9,
+        27.9,
+        28.0,
+        28.0,
+        28.0,
+        28.0,
+        28.1,
+        28.1,
+        28.1,
+        28.1,
+        28.1,
+        28.1,
+        28.2,
+        28.2,
+        28.3,
+        28.3,
+        28.3,
+        28.3,
+        28.3,
+        28.3,
+        28.3,
+        28.4,
+        28.4,
+        28.4,
+        28.4,
+        28.4,
+        28.4,
+        28.5,
+        28.5,
+        28.5
     ],
     "net_hist": [
-        38.4,
-        38.4,
-        34.0,
-        34.0,
-        32.6,
-        32.6,
-        30.2,
-        30.2,
-        29.5,
-        32.6,
-        40.3,
-        40.3,
-        40.3,
-        30.2,
-        30.2,
-        30.8,
-        51.2,
-        51.2,
-        51.2,
-        30.3,
-        30.3,
-        31.4,
-        31.4,
-        31.5,
-        31.5,
-        31.5,
-        30.8,
-        32.1,
-        32.1,
-        34.6,
-        34.6,
-        34.6,
-        31.5,
-        36.9,
-        36.9,
-        37.4,
-        37.4,
-        37.4,
-        34.1,
-        34.1,
-        34.1,
-        32.4,
-        29.8,
-        29.8,
-        27.7,
-        30.7,
-        30.7,
-        31.2,
-        31.2,
-        36.1,
-        36.1,
-        36.1,
-        34.8,
-        34.8,
-        34.8,
-        31.7,
-        33.0,
-        33.0,
-        33.0,
-        30.8
+        4.0,
+        4.0,
+        4.0,
+        3.8,
+        118.6,
+        273.6,
+        273.6,
+        273.6,
+        214.7,
+        287.0,
+        287.0,
+        287.0,
+        281.7,
+        232.7,
+        162.4,
+        162.4,
+        9.4,
+        5.4,
+        3.1,
+        3.1,
+        1.8,
+        2.4,
+        72.1,
+        159.4,
+        159.4,
+        159.4,
+        117.8,
+        81.7,
+        93.5,
+        93.5,
+        93.5,
+        2.9,
+        2.9,
+        10.9,
+        10.9,
+        11.5,
+        244.4,
+        368.3,
+        368.3,
+        368.3,
+        277.2,
+        277.2,
+        321.6,
+        321.6,
+        321.6,
+        12.0,
+        2.0,
+        2.1,
+        2.1,
+        2.1,
+        1.1,
+        140.8,
+        140.8,
+        237.1,
+        237.1,
+        237.1,
+        178.2,
+        204.6,
+        204.6,
+        204.6
     ],
     "kill_mode": 0,
     "temp_gear1": 30.0,
@@ -943,15 +1007,15 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 ## LOG FILES ON MAC
 
 ```
--rw-r--r--  1 Nick  staff   2228 30 Sep 18:11 /Users/Nick/Documents/FanMate_logs/log-4.16-20260930-1800.csv
--rw-r--r--  1 Nick  staff    512 30 Sep 18:12 /Users/Nick/Documents/FanMate_logs/log-4.16-20260930-1811.csv
--rw-r--r--  1 Nick  staff    932 30 Sep 18:15 /Users/Nick/Documents/FanMate_logs/log-4.16-20260930-1815.csv
--rw-r--r--  1 Nick  staff    340 30 Sep 18:16 /Users/Nick/Documents/FanMate_logs/log-4.16-20260930-1816.csv
--rw-r--r--  1 Nick  staff    698 30 Sep 18:17 /Users/Nick/Documents/FanMate_logs/log-4.17-20260930-1817.csv
--rw-r--r--  1 Nick  staff    797 30 Sep 18:20 /Users/Nick/Documents/FanMate_logs/log-4.17-20260930-1820.csv
--rw-r--r--  1 Nick  staff   1728 30 Sep 18:38 /Users/Nick/Documents/FanMate_logs/log-4.17-20260930-1829.csv
--rw-r--r--  1 Nick  staff   2128 30 Sep 19:00 /Users/Nick/Documents/FanMate_logs/log-4.17-20260930-1849.csv
--rw-r--r--  1 Nick  staff   6663 30 Sep 19:35 /Users/Nick/Documents/FanMate_logs/log-4.18-20260930-1900.csv
--rw-r--r--  1 Nick  staff   5381 30 Sep 20:00 /Users/Nick/Documents/FanMate_logs/log-4.18-20260930-1935.csv
+-rw-r--r--  1 Nick  staff  12179 30 Sep 22:00 /Users/Nick/Documents/FanMate_logs/log-4.18-20260930-2100.csv
+-rw-r--r--  1 Nick  staff  11207 30 Sep 23:00 /Users/Nick/Documents/FanMate_logs/log-4.18-20260930-2200.csv
+-rw-r--r--  1 Nick  staff  11293  1 Oct 00:00 /Users/Nick/Documents/FanMate_logs/log-4.18-20260930-2300.csv
+-rw-r--r--  1 Nick  staff  11446  1 Oct 01:00 /Users/Nick/Documents/FanMate_logs/log-4.18-20261001-0000.csv
+-rw-r--r--  1 Nick  staff  11607  1 Oct 02:12 /Users/Nick/Documents/FanMate_logs/log-4.18-20261001-0100.csv
+-rw-r--r--  1 Nick  staff  11543  1 Oct 03:00 /Users/Nick/Documents/FanMate_logs/log-4.18-20261001-0200.csv
+-rw-r--r--  1 Nick  staff  11635  1 Oct 05:16 /Users/Nick/Documents/FanMate_logs/log-4.18-20261001-0300.csv
+-rw-r--r--  1 Nick  staff  11636  1 Oct 05:16 /Users/Nick/Documents/FanMate_logs/log-4.18-20261001-0400.csv
+-rw-r--r--  1 Nick  staff  11590  1 Oct 06:55 /Users/Nick/Documents/FanMate_logs/log-4.18-20261001-0500.csv
+-rw-r--r--  1 Nick  staff  12002  1 Oct 07:00 /Users/Nick/Documents/FanMate_logs/log-4.18-20261001-0600.csv
 ```
 
