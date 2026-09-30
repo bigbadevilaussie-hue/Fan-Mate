@@ -1,6 +1,22 @@
 # Fan-Mate — Chat Handoff
 
-Generated: 2026-09-30 17:37:30
+> **NEW AI — DO THIS FIRST.**
+> 
+> Do not summarise this document back to Nick.
+> Do not offer to help with a task yet.
+> 
+> Read the "GETTING THE NEXT AI UP TO SPEED" section in NOTES.md (below).
+> Ask Nick to run the dump command it contains. He will paste the output.
+> Read the source files. Only then start work.
+> 
+> Naming: GUI = Tk (fanmate/*.py), GUI2 = QML (fanmate_v2/*),
+> Web = WebPage.h (needs flash), Firmware = *.cpp/*.h/fanmate.ino.
+> 
+> Nick's shell is zsh and eats multi-line pastes. Patch via Python
+> scripts written to /tmp/ then run with python3. Never paste heredocs
+> or # comments directly.
+
+Generated: 2026-09-30 17:41:00
 
 ---
 
@@ -8,6 +24,7 @@ Generated: 2026-09-30 17:37:30
 
 ```
 $ git log --oneline -10
+0f86673 docs: regenerate handoff
 ab39347 docs: add NOTES.md, rewrite update_handoff.sh (no pbcopy)
 2ec541c docs: regenerate handoff at v4.16 / gui-v3.86
 8e96a00 v4.16 / gui-v3.86: phoneMode removed (always auto-detect via hall); Nokia tune; NTC + hall wired and verified
@@ -17,10 +34,10 @@ b43bce2 v4.13: NTC room temp — readNTC(), room_get_temp() wired, room_c in /st
 ec99b06 v4.12 / gui-v3.84: boost_lvl reports data_gear (0 during cooldown), cooling flag in /status; Tk layout rework
 3328c38 v4.11 / gui-v3.82 / gui-v2-v1.07: heat control renamed to four gear thresholds (Warm/Hot/Hotter/Critical)
 c3d05c0 docs: overhaul notes for v4.10 boost rewrite
-b50b65b gui-v2 v1.06: top strip, OTA dialog, opal/outdoor bridge wiring
 
 $ git status --short
  M HANDOFF.md
+ M update_handoff.sh
 
 $ git tag -l | tail -15
 v3.94
