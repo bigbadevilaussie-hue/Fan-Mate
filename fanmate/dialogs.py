@@ -23,6 +23,10 @@ class SettingsDialog(tk.Toplevel):
         self.grab_set()
 
         latest_config = fetch_config()
+        if latest_config is None:
+            messagebox.showerror("Settings", "Device unreachable. Try again in a moment.")
+            self.destroy()
+            return
 
         pad = 16
         root = tk.Frame(self)
