@@ -277,11 +277,17 @@ void updateFanAndAlerts(
     // ---- Kill state machine (v4.00) ----
     kill_state_machine(currentTemp);
 
-    // ---- Alert level (temperature) ----
+    // ---- Alert level (temperature OR delta) ----
     int newLevel = 0;
-    if      (currentTemp >= config.tempGear4)    newLevel = 3;
+    if      (currentTemp >= config.tempGear4)   newLevel = 3;
     else if (currentTemp >= config.tempGear3)   newLevel = 2;
-    else if (currentTemp >= config.tempGear2) newLevel = 1;
+    else if (currentTemp >= config.tempGear2)   newLevel = 1;
+    else {
+        float room_now = readNTC();
+        if (room_now > -90.0f && (currentTemp - room_now) > 5.0f) {
+            newLevel = 1;
+        }
+    }
 
     if (newLevel != alertLevel) {
         alertLevel = newLevel;
@@ -299,10 +305,23 @@ void updateFanAndAlerts(
 
     bool effectivePhone = phonePresent;
 
-    // ---- Fan gear = max(temp, boost) ----
+    // ---- Fan gear = max(heat, room-diff, boost) ----
+    // Priority: heat control > room delta > boost. Highest demand wins.
     int tempGear  = compute_temp_gear(currentTemp);
     int boostGear = auto_boost_gear();
-    int fanGear   = (tempGear > boostGear) ? tempGear : boostGear;
+
+    // Delta guard: phone > room by 5C -> floor at gear 1 (never higher)
+    int deltaGear = 0;
+    {
+        float room = readNTC();
+        if (room > -90.0f && (currentTemp - room) > 5.0f) {
+            deltaGear = 1;
+        }
+    }
+
+    int fanGear = tempGear;
+    if (boostGear > fanGear) fanGear = boostGear;
+    if (deltaGear > fanGear) fanGear = deltaGear;
 
     // ---- Beep on gear change ----
     if (fanGear != lastFanGear) {
@@ -316,7 +335,8 @@ void updateFanAndAlerts(
     // ---- Fan PWM ----
     int newPwm = 0;
     if (fanGear > 0) {
-        newPwm = map(fanGear * 25, 1, 100, PWM_MIN, 255);
+        // gear 1=25%, 2=50%, 3=75%, 4=100% -- real duty, verified on bench
+        newPwm = map(fanGear, 0, 4, 0, 255);
     }
 
     if (settings_is_night()) {
@@ -333,7 +353,7 @@ void updateFanAndAlerts(
     // Kick-start pulse when fan is stopped or nearly stopped
     if (fanGear > 0 && fanRPMLocal < 200) {
         ledcWrite(2, 200);
-        delay(350);
+        delay(400);
     }
 
     ledcWrite(2, fanPWM);
