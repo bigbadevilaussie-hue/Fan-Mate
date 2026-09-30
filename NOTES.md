@@ -159,6 +159,31 @@ NEVER edit files by pasting shell commands directly. Always via Python script fi
 
 ---
 
+## NEXT SESSION PLAN
+
+**Priority:** fix Tk GUI Settings, then port the fixed Settings to GUI2.
+
+**Step 1 — Tk Settings.**
+Reported as "settings did not work" after v3.87 None guard was added.
+Candidates, in order:
+1. `fetch_config()` returns partial dict → dialog renders with defaults but Apply sends them back unchanged
+2. `apply()` POSTs to `/config` but request fails silently (mDNS timeout, busy WebServer)
+3. POST succeeds but the change doesn't persist in NVS, or persists but the dialog re-fetches stale values
+
+Reproduce: open Tk GUI, open Settings, note values, change one field, click Apply, curl `http://192.168.8.242/config` and compare.
+
+**Step 2 — Port to GUI2.**
+Once Tk Settings works, mirror the same interaction in QML.
+Previous attempt failed (see Lessons from tonight). Do NOT use Drawer.
+Better patterns to try:
+- Rectangle overlay with NumberAnimation on x, anchored to the left or right edge
+- StackView with slide transition
+- Second page inside the existing Drawer menu
+
+The QML column-with-anchors rule still applies: no `anchors.fill`, `anchors.verticalCenter`, etc. on children of a Column. Use `TapHandler` for click handling.
+
+---
+
 ## PENDING ITEMS
 
 ### Firmware
