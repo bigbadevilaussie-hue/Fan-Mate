@@ -16,7 +16,8 @@ extern float weather_get_temp();
 // TODO(NTC): wire MF52AT 10k B=3950 to GPIO 0, replace this stub
 // Returns -99 to signal "no sensor"; log_write writes empty field
 static float room_get_temp() {
-    return -99.0f;
+    extern float readNTC();
+    return readNTC();
 }
 extern float currentTemp;
 

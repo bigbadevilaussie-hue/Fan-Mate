@@ -114,7 +114,9 @@ static void handle_status() {
     json += "\"log_size\":" + String(log_get_size()) + ",";
 
     extern float weather_get_temp();
+    extern float readNTC();
     json += "\"outdoor_c\":" + String(weather_get_temp(), 1) + ",";
+    json += "\"room_c\":" + String(readNTC(), 1) + ",";
 
     extern float webTempHist[];
     extern float webNetHist[];

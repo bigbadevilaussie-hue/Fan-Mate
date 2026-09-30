@@ -80,6 +80,21 @@ void readDS18B20(float &currentTemp) {
     }
 }
 
+float readNTC() {
+    long sum = 0;
+    for (int i = 0; i < 4; i++) {
+        sum += analogRead(NTC_PIN);
+        delayMicroseconds(50);
+    }
+    int raw = sum / 4;
+    if (raw <= 0 || raw >= 4095) return -99.0f;
+    float v_out = raw * (3.3f / 4095.0f);
+    float r_ntc = 10000.0f * (v_out / (3.3f - v_out));
+    float steinhart = log(r_ntc / 10000.0f) / 3950.0f;
+    steinhart += 1.0f / 298.15f;
+    return (1.0f / steinhart) - 273.15f;
+}
+
 void updatePhoneDetection() {
     static bool lastState = false;
     static unsigned long lastChange = 0;

@@ -6,6 +6,7 @@
 void initHardware();
 
 void readDS18B20(float &currentTemp);
+float readNTC();
 void updatePhoneDetection();
 void updateTach();
 
