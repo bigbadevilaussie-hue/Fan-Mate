@@ -51,18 +51,20 @@ class Report2H(tk.Toplevel):
         return files[-n:]
 
     def _parse(self, path):
+        """Parse a sealed CSV via csv.reader — handles quoted fields and
+        tolerates 8-column (pre-room_c) and 9-column rows."""
+        import csv
         out = []
         try:
-            with open(path) as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith("timestamp"):
+            with open(path, newline="") as f:
+                reader = csv.reader(f)
+                for parts in reader:
+                    if not parts or len(parts) < 6:
                         continue
-                    parts = line.split(",")
-                    if len(parts) < 6:
+                    if parts[0].strip() == "timestamp" or parts[0].startswith("#"):
                         continue
                     try:
-                        ts = datetime.strptime(parts[0], "%Y-%m-%d %H:%M:%S")
+                        ts = datetime.strptime(parts[0].strip(), "%Y-%m-%d %H:%M:%S")
                     except Exception:
                         continue
                     try:
@@ -83,10 +85,11 @@ class Report2H(tk.Toplevel):
                     if len(parts) > 8 and parts[8].strip():
                         try: room = float(parts[8])
                         except: pass
+                    event = parts[6].strip() if len(parts) > 6 else ""
                     out.append({
                         "t": ts, "temp": temp, "net": net,
                         "boost": boost, "fan": fan, "rpm": rpm,
-                        "room": room,
+                        "room": room, "event": event,
                     })
         except Exception as e:
             print(f"[REPORT] parse {path}: {e}")
@@ -163,7 +166,8 @@ class Report2H(tk.Toplevel):
                                     y_min=15, y_max=45,
                                     color_key="orange")
         self.temp_plot.pack(pady=(0, 12))
-        self.temp_plot.set_series(rows, "temp", "TEMP (°C)")
+        self.temp_plot.set_series(rows, "temp", "TEMP (°C) — phone (orange), room (cyan)",
+                                  key2="room", color2_key="blue")
 
         summary = tk.Frame(wrap)
         summary.pack(fill="x")

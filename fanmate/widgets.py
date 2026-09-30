@@ -96,7 +96,8 @@ class Graph(tk.Canvas):
 
 
 class ReportPlot(tk.Canvas):
-    """Simple line plot with title and x-axis time labels."""
+    """Simple line plot with title and x-axis time labels.
+    Optionally plots a second series (e.g. room temp behind phone temp)."""
 
     def __init__(self, parent, app, w, h, y_min, y_max, color_key):
         super().__init__(parent, width=w, height=h, highlightthickness=1, bd=0)
@@ -106,12 +107,20 @@ class ReportPlot(tk.Canvas):
         self.color_key = color_key
         self.pad_l, self.pad_r, self.pad_t, self.pad_b = 46, 10, 20, 26
         self.series = []
+        self.series2 = None
+        self.color2_key = None
         self.label = ""
         self._t0 = None
         self._t1 = None
 
-    def set_series(self, rows, key, label):
+    def set_series(self, rows, key, label, key2=None, color2_key=None):
         self.series = [r.get(key) for r in rows]
+        if key2 is not None:
+            self.series2 = [r.get(key2) for r in rows]
+            self.color2_key = color2_key or "blue"
+        else:
+            self.series2 = None
+            self.color2_key = None
         self.label = label
         if rows:
             self._t0 = rows[0].get("t")
@@ -141,6 +150,19 @@ class ReportPlot(tk.Canvas):
 
         self.create_text(self.pad_l, 8, text=self.label,
                          fill=t["muted"], font=("Helvetica Neue", 10, "bold"), anchor="w")
+
+        if self.series2 and self.color2_key:
+            pts2 = []
+            for i, v in enumerate(self.series2):
+                if v is None:
+                    continue
+                x = self.pad_l + (i / max(1, n - 1)) * pw
+                y = self.pad_t + ph - ((v - lo) / rng) * ph
+                pts2.extend([x, y])
+            if len(pts2) >= 4:
+                self.create_line(*pts2, fill=t[self.color2_key], width=1,
+                                 capstyle=tk.ROUND, joinstyle=tk.ROUND,
+                                 dash=(3, 2))
 
         pts = []
         for i, v in enumerate(self.series):

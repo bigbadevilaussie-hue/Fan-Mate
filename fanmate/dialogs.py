@@ -201,10 +201,7 @@ class SettingsDialog(tk.Toplevel):
 
 
 class DynaTune(tk.Toplevel):
-    """
-    Improved diagnostic view.
-    Three stacked ReportPlots (Network / Fan% / Temp) so thermal lag is obvious.
-    """
+    """KPI board — six tests against the log window + three graphs."""
 
     def __init__(self, parent, app, hours=18):
         super().__init__(parent)
@@ -231,37 +228,34 @@ class DynaTune(tk.Toplevel):
         files = sorted(p for p in glob.glob(pattern) if not p.endswith(".part"))
         if not files:
             return []
-
         cutoff = datetime.now() - timedelta(hours=hours)
         rows = []
         for path in files[-18:]:
             rows.extend(self._parse(path))
-
         rows = [r for r in rows if r["t"] >= cutoff]
         rows.sort(key=lambda r: r["t"])
         return rows
 
     def _parse(self, path):
+        """Parse via csv.reader. Tolerates 8-col (pre-room_c) and 9-col rows."""
+        import csv
         out = []
         try:
-            with open(path) as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith("timestamp"):
+            with open(path, newline="") as f:
+                reader = csv.reader(f)
+                for parts in reader:
+                    if not parts or len(parts) < 6:
                         continue
-                    parts = line.split(",")
-                    if len(parts) < 6:
+                    if parts[0].strip() == "timestamp" or parts[0].startswith("#"):
                         continue
-
                     try:
-                        ts = datetime.strptime(parts[0], "%Y-%m-%d %H:%M:%S")
+                        ts = datetime.strptime(parts[0].strip(), "%Y-%m-%d %H:%M:%S")
                     except Exception:
                         continue
                     try:
                         temp = float(parts[1])
                     except Exception:
                         continue
-
                     try: net = float(parts[2]) if parts[2].strip() else 0.0
                     except Exception: net = 0.0
                     try: boost = int(parts[3]) if parts[3].strip() else 0
@@ -276,11 +270,11 @@ class DynaTune(tk.Toplevel):
                             room = None
                     except Exception:
                         room = None
-
+                    event = parts[6].strip() if len(parts) > 6 else ""
                     out.append({
                         "t": ts, "temp": temp, "net": net,
                         "boost": boost, "fan": fan, "rpm": rpm,
-                        "room": room,
+                        "room": room, "event": event,
                     })
         except Exception as e:
             print(f"[DynaTune] parse {path}: {e}")
@@ -302,148 +296,169 @@ class DynaTune(tk.Toplevel):
         tk.Label(wrap, text=f"{len(self.rows)} samples",
                  font=("Helvetica Neue", 10)).pack(anchor="w", pady=(0, 10))
 
-        plot_w, plot_h = 620, 110
+        # --- KPI board ---
+        from .dynatune import analyse
+        try:
+            from . import state
+            b = state.latest_config.get("boost", {})
+            mode = b.get("mode", 1)
+            if mode == 2:
+                thr = int(b.get("aggr", {}).get("threshold", 700))
+            else:
+                thr = int(b.get("normal", {}).get("threshold", 700))
+        except Exception:
+            thr = 700
+
+        kpis = analyse(self.rows, boost_thr=thr)
+
+        board = tk.Frame(wrap)
+        board.pack(fill="x", pady=(0, 8))
+
+        kpi_order = [
+            ("BOOST",    "boost"),
+            ("COOLDOWN", "cooldown"),
+            ("DELTA",    "delta"),
+            ("LAG",      "lag"),
+            ("EVENTS",   "events"),
+            ("LOG",      "log"),
+        ]
+
+        for label, key in kpi_order:
+            data = kpis.get(key, {})
+            self._kpi_card(board, label, data)
+
+        # --- Recommendation bar ---
+        rec = kpis.get("recommendation", "")
+        if rec:
+            self._recommendation_bar(wrap, rec)
+
+        # --- Three graphs (shorter now) ---
+        plot_w, plot_h = 660, 90
 
         net_peak = max((r["net"] for r in self.rows), default=0)
         self.net_plot = ReportPlot(wrap, self.app, plot_w, plot_h,
                                    y_min=0, y_max=max(2048, net_peak * 1.15),
                                    color_key="blue")
-        self.net_plot.pack(pady=(0, 6))
+        self.net_plot.pack(pady=(6, 4))
         self.net_plot.set_series(self.rows, "net", "NETWORK (KB/s)")
 
         self.fan_plot = ReportPlot(wrap, self.app, plot_w, plot_h,
                                    y_min=0, y_max=100,
                                    color_key="green")
-        self.fan_plot.pack(pady=(0, 6))
+        self.fan_plot.pack(pady=(0, 4))
         self.fan_plot.set_series(self.rows, "fan", "FAN (%)")
 
         self.temp_plot = ReportPlot(wrap, self.app, plot_w, plot_h,
                                     y_min=15, y_max=45,
                                     color_key="orange")
-        self.temp_plot.pack(pady=(0, 12))
-        self.temp_plot.set_series(self.rows, "temp", "TEMP (°C)")
-
-        s = self._analyse()
-
-        summary = tk.Frame(wrap)
-        summary.pack(fill="x")
-
-        def col(label, value):
-            c = tk.Frame(summary)
-            c.pack(side="left", expand=True, fill="x", padx=6)
-            tk.Label(c, text=label, font=("Helvetica Neue", 9, "bold"),
-                     anchor="w").pack(fill="x")
-            tk.Label(c, text=value, font=("Helvetica Neue", 13, "bold"),
-                     anchor="w").pack(fill="x")
-
-        col("PEAK NET",   self._fmt_rate(s['net_peak']))
-        col("AVG NET",    self._fmt_rate(s['net_avg']))
-        col("TEMP",       f"{s['temp_start']:.1f} → {s['temp_end']:.1f}°C")
-        col("TEMP MAX",   f"{s['temp_max']:.1f}°C")
-        col("FAN ON",     f"{s['fan_on_pct']:.0f}%")
-
-        lag_frame = tk.Frame(wrap)
-        lag_frame.pack(fill="x", pady=(10, 0))
-        tk.Label(lag_frame, text=s["lag_text"],
-                 font=("Helvetica Neue", 11),
-                 anchor="w", justify="left", wraplength=600).pack(anchor="w")
+        self.temp_plot.pack(pady=(0, 8))
+        self.temp_plot.set_series(self.rows, "temp", "TEMP (°C) — phone (orange), room (cyan)",
+                                  key2="room", color2_key="blue")
 
         foot = tk.Frame(wrap)
-        foot.pack(fill="x", pady=(12, 0))
+        foot.pack(fill="x", pady=(4, 0))
         tk.Label(foot,
-                 text=f"rows: {len(self.rows)}  ·  span: {span_h:.1f} h  ·  boost thr: {s['boost_thr']} KB/s",
+                 text=f"rows: {len(self.rows)}  ·  span: {span_h:.1f} h  ·  boost thr: {thr} KB/s",
                  font=("Helvetica Neue", 10)).pack(anchor="w")
 
         tk.Button(wrap, text="Close", width=12,
                   font=("Helvetica Neue", 11),
-                  command=self.destroy).pack(pady=(14, 0))
+                  command=self.destroy).pack(pady=(10, 0))
 
     # ------------------------------------------------------------------
-    @staticmethod
-    def _fmt_rate(kbps):
-        if kbps >= 1024:
-            return f"{kbps/1024:.2f} MB/s"
-        return f"{kbps:.0f} KB/s"
+    def _kpi_card(self, parent, label, data):
+        status = data.get("status", "IDLE")
+        metric = data.get("metric", "--")
+        detail = data.get("detail", "")
+        dots   = {"PASS": 5, "WARN": 3, "FAIL": 1, "IDLE": 2}.get(status, 0)
 
-    def _boost_threshold(self):
-        try:
-            from . import state
-            b = state.latest_config.get("boost", {})
-            mode = b.get("mode", 1)
-            if mode == 1:
-                return int(b.get("normal", {}).get("threshold", 700))
-            if mode == 2:
-                return int(b.get("aggr", {}).get("threshold", 400))
-        except Exception:
-            pass
-        return 700
+        card = tk.Frame(parent, highlightthickness=1, bd=0)
+        card.pack(side="left", expand=True, fill="both", padx=3, pady=2)
 
-    def _analyse(self):
-        nets  = [r["net"] for r in self.rows]
-        fans  = [r["fan"] for r in self.rows]
-        temps = [r["temp"] for r in self.rows if r["temp"] > 0]
+        # label at top
+        tk.Label(card, text=label,
+                 font=("Helvetica Neue", 8, "bold")).pack(pady=(6, 2))
 
-        net_peak = max(nets) if nets else 0.0
-        net_avg  = sum(nets) / len(nets) if nets else 0.0
-        temp_max = max(temps) if temps else 0.0
+        # 5-dot row
+        dot_frame = tk.Frame(card)
+        dot_frame.pack(pady=(0, 3))
+        for i in range(5):
+            filled = i < dots
+            c = tk.Canvas(dot_frame, width=8, height=8,
+                          highlightthickness=0, bd=0)
+            c.pack(side="left", padx=1)
+            c.create_oval(1, 1, 7, 7, outline="",
+                          tags=("dot", "fill" if filled else "empty"))
+            c.dot_filled = filled
 
-        first = self.rows[0]["temp"]
-        last  = self.rows[-1]["temp"]
-        temp_start = first if first > 0 else (temps[0] if temps else 0.0)
-        temp_end   = last  if last  > 0 else (temps[-1] if temps else 0.0)
+        # status
+        tk.Label(card, text=status,
+                 font=("Helvetica Neue", 10, "bold")).pack(pady=(2, 0))
 
-        fan_on = sum(1 for f in fans if f > 0)
-        fan_on_pct = 100.0 * fan_on / len(fans) if fans else 0.0
+        # metric
+        tk.Label(card, text=metric,
+                 font=("Helvetica Neue", 11)).pack(pady=(0, 0))
 
-        thr = self._boost_threshold()
-        high = thr * 2.5
-        low  = thr * 0.6
+        # detail
+        if detail:
+            tk.Label(card, text=detail,
+                     font=("Helvetica Neue", 8)).pack(pady=(0, 6))
+        else:
+            tk.Label(card, text=" ",
+                     font=("Helvetica Neue", 8)).pack(pady=(0, 6))
 
-        lag_text = "No clear thermal-lag event found in this window."
-        if len(self.rows) > 40:
-            for i in range(20, len(self.rows) - 25):
-                prev  = [r["net"] for r in self.rows[i-15:i]]
-                after = [r["net"] for r in self.rows[i:i+12]]
-                if max(prev) > high and max(after) < low:
-                    t_drop = self.rows[i]["temp"]
-                    later = [r["temp"] for r in self.rows[i:i+35] if r["temp"] > 0]
-                    if later:
-                        peak = max(later)
-                        rise = peak - t_drop
-                        if rise >= 1.5:
-                            lag_text = (f"Thermal lag detected: after traffic dropped, "
-                                        f"temperature still rose {rise:.1f}°C "
-                                        f"({t_drop:.1f}° → {peak:.1f}°)")
-                            break
+        # store refs for theming
+        card._kpi_status = status
 
-        return {
-            "net_peak": net_peak,
-            "net_avg": net_avg,
-            "temp_start": temp_start,
-            "temp_end": temp_end,
-            "temp_max": temp_max,
-            "fan_on_pct": fan_on_pct,
-            "lag_text": lag_text,
-            "boost_thr": thr,
-        }
+    # ------------------------------------------------------------------
+    def _recommendation_bar(self, parent, text):
+        bar = tk.Frame(parent, highlightthickness=1, bd=0)
+        bar.pack(fill="x", pady=(4, 8))
+        tk.Label(bar, text=text,
+                 font=("Helvetica Neue", 11, "bold"),
+                 anchor="w").pack(fill="x", padx=10, pady=8)
+        bar._kpi_recommendation = True
 
     # ------------------------------------------------------------------
     def _apply_theme(self):
         t = self.app.theme
         self.configure(bg=t["bg"])
+
+        status_color = {
+            "PASS": t["green"],
+            "WARN": t["yellow"],
+            "FAIL": t["red"],
+            "IDLE": t["muted"],
+        }
+
         def walk(w):
             try:
                 cls = w.winfo_class()
-                if cls in ("Frame", "Toplevel"):
-                    w.configure(bg=t["bg"])
-                elif cls == "Label":
-                    w.configure(bg=t["bg"], fg=t["fg"])
-                elif cls == "Button":
-                    w.configure(bg=t["card"], fg=t["fg"],
-                                activebackground=t["accent"],
-                                activeforeground=t["fg"])
             except Exception:
-                pass
+                return
+            if cls in ("Frame", "Toplevel"):
+                if getattr(w, "_kpi_recommendation", False):
+                    w.configure(bg=t["yellow"], highlightbackground=t["yellow"])
+                else:
+                    w.configure(bg=t["bg"], highlightbackground=t["card_border"])
+            elif cls == "Label":
+                if getattr(w.master, "_kpi_recommendation", False):
+                    w.configure(bg=t["yellow"], fg=t["bg"])
+                else:
+                    w.configure(bg=t["bg"], fg=t["fg"])
+            elif cls == "Canvas":
+                filled = getattr(w, "dot_filled", None)
+                if filled is True:
+                    # colour matches parent's status
+                    status = getattr(w.master.master, "_kpi_status", "IDLE")
+                    w.configure(bg=t["bg"])
+                    w.itemconfig("fill", fill=status_color.get(status, t["muted"]))
+                elif filled is False:
+                    w.configure(bg=t["bg"])
+                    w.itemconfig("fill", fill=t["card_border"])
+            elif cls == "Button":
+                w.configure(bg=t["card"], fg=t["fg"],
+                            activebackground=t["accent"], activeforeground=t["fg"])
             for c in w.winfo_children():
                 walk(c)
         walk(self)

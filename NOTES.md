@@ -159,6 +159,69 @@ NEVER edit files by pasting shell commands directly. Always via Python script fi
 
 ---
 
+## DYNATUNE — KPI BOARD (planned, next session)
+
+DynaTune becomes a KPI dashboard, not just a plot viewer. Glance-readable,
+minimal prose, car-diagnostics layout.
+
+**Six KPIs, each a column:**
+
+    BOOST       COOLDOWN     DELTA      LAG       EVENTS     LOG
+    ●●●●●       ●●●○○        ●○○○○      ●●●●●     ●●●●●      ●●●●●
+    PASS        WARN         IDLE       PASS      PASS       PASS
+    ramp 4/4    rel 1/3      max 3.2    +1.5°C    0 bad      12/12
+
+Each column has:
+- 5-dot indicator (filled = PASS, partial = WARN, empty = IDLE/FAIL)
+- Status word (PASS / WARN / FAIL / IDLE)
+- Primary metric (short — one value or a ratio)
+- Small secondary text
+
+**Metric definitions:**
+
+| KPI | Metric | Notes |
+|-----|--------|-------|
+| BOOST | `ramp N/4` | Highest gear reached when rate supported gear 3+ |
+| COOLDOWN | `rel N/M` | Released-by-temp count / total cooldowns |
+| DELTA | `max X.X°` | Peak (phone - room) in window |
+| LAG | `+X.X°C` | Largest post-burst temp rise (already implemented) |
+| EVENTS | `N bad` | Count of PANIC + WDT + BROWNOUT + FAN_STALL |
+| LOG | `N/M` | Seals synced / expected seals (hours in window) |
+
+**Colour rules:** all PASS → green dots. Any WARN → amber. Any FAIL → red.
+
+**Recommendation bar:** shown only when at least one KPI is WARN/FAIL.
+One line, imperative. E.g.:
+
+    ⚠  COOLDOWN_MAX_MS 20min → 5min
+
+Blank when all PASS. Board is calm when healthy.
+
+**Graphs:** three plots (NET, FAN, TEMP) still below the board, same as now.
+
+---
+
+## DYNATUNE PHASE 2 — ACTIONABLE (future)
+
+Each WARN/FAIL KPI can carry a machine-readable recommendation. Board
+shows Apply / Dismiss buttons next to the recommendation bar.
+
+    ⚠  Cooldown running to timeout 3/3 windows.
+       Recommended: COOLDOWN_MAX_MS 20min → 5min
+       [ Apply ]  [ Dismiss ]
+
+**Applying** POSTs to `/config`. Requires:
+1. Every WARN/FAIL test has a structured recommendation: `{label, apply: {...}}`
+2. Configurable parameters must live in NVS, not `#define`. `COOLDOWN_MAX_MS`
+   is currently `#define` — needs to move to `Settings.cpp` first.
+3. Sanity floors — e.g. don't let COOLDOWN_MAX_MS go below 2 min.
+4. Undo — store previous value, offer Revert in the same UI slot.
+
+Do NOT build Phase 2 until the six KPI tests have run for several days
+and their PASS/WARN/FAIL behaviour is trusted.
+
+---
+
 ## NEXT SESSION PLAN
 
 **Priority:** fix Tk GUI Settings, then port the fixed Settings to GUI2.
