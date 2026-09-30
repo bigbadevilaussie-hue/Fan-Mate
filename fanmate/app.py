@@ -349,15 +349,11 @@ class App:
         rpm = int(d.get("rpm", 0))
         self.rpm_lbl.config(text=f"{rpm}", fg=t["green"] if rpm > 0 else t["muted"])
 
-        phone_mode = latest_config.get("phone", {}).get("mode", "off")
-        if phone_mode == "off":
-            self.phone_lbl.config(text="BENCH 🧪", fg=t["muted"])
-        else:
-            phone = bool(d.get("phone", 0))
-            self.phone_lbl.config(
-                text="YES 📱" if phone else "NO  📴",
-                fg=t["green"] if phone else t["muted"],
-            )
+        phone = bool(d.get("phone", 0))
+        self.phone_lbl.config(
+            text="YES 📱" if phone else "NO  📴",
+            fg=t["green"] if phone else t["muted"],
+        )
 
         # BOOST level name
         bl = int(d.get("boost_lvl", 0))

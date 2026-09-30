@@ -4,6 +4,7 @@
 #include "AutoBoost.h"
 #include "Logging.h"
 #include "SerialBuffer.h"
+#include "Songs.h"
 #include "OpalClient.h"
 
 #include <OneWire.h>
@@ -129,6 +130,7 @@ void updatePhoneDetection() {
                 phone_present_since = 0;
             }
             log_print("[PHONE] %s\n", present ? "detected" : "removed");
+            playNokiaSong();
         }
     }
 }
@@ -296,7 +298,7 @@ void updateFanAndAlerts(
         lastAlertStart = millis() - 120000;
     }
 
-    bool effectivePhone = (config.phoneMode == "off") ? true : phonePresent;
+    bool effectivePhone = phonePresent;
 
     // ---- Fan gear = max(temp, boost) ----
     int tempGear  = compute_temp_gear(currentTemp);
@@ -323,7 +325,7 @@ void updateFanAndAlerts(
         if (newPwm > cap) newPwm = cap;
     }
 
-    if (config.phoneMode == "auto" && !effectivePhone) {
+    if (!effectivePhone) {
         newPwm = 0;
     }
 

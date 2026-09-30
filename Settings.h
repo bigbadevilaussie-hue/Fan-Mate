@@ -31,9 +31,6 @@ struct FanMateConfig {
     int     nightEnd;
     int     nightMax;
 
-    // Phone
-    String  phoneMode;      // "off" / "auto"
-
     // Boost
     int     boostMode;      // 0=off, 1=normal, 2=aggr
     BoostProfile boostNormal;

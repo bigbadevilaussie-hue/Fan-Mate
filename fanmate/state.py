@@ -21,7 +21,6 @@ latest_config = {
         "aggr":   {"threshold": 400, "on_hold": 2, "off_hold": 8},
     },
     "night": {"start": 22, "end": 7, "nightMax": 75},
-    "phone": {"mode": "off"},
 }
 connected = False
 time_synced = False

@@ -105,11 +105,6 @@ class SettingsDialog(tk.Toplevel):
                          relief="flat", highlightthickness=1).pack(side="left")
             self._row += 1
 
-        section("📱", "PHONE")
-        self.phone_mode = tk.StringVar(
-            value=latest_config["phone"].get("mode", "off"))
-        segmented("Mode", self.phone_mode, ["off", "auto"])
-
         btns = tk.Frame(root)
         btns.grid(row=self._row, column=0, columnspan=3, pady=(18, 4))
         tk.Button(btns, text="Cancel", width=12,
@@ -177,9 +172,6 @@ class SettingsDialog(tk.Toplevel):
                     "gear4": float(self.temp_g4.get()),
                 },
 
-                "phone": {
-                    "mode": self.phone_mode.get(),
-                },
             }
         except ValueError as e:
             messagebox.showerror("Settings", f"Invalid value:\n{e}")

@@ -1,5 +1,6 @@
 #include "Settings.h"
 #include "Config.h"
+#include "SerialBuffer.h"
 
 #include <Preferences.h>
 #include <ArduinoJson.h>
@@ -19,7 +20,6 @@ static void set_defaults() {
     config.nightEnd     = 7;
     config.nightMax     = 75;
 
-    config.phoneMode    = "off";
 
     config.boostMode = 1;   // Normal
 
@@ -50,7 +50,6 @@ void settings_load() {
     config.nightEnd       = prefs.getInt  ("night.end",        config.nightEnd);
     config.nightMax       = prefs.getInt  ("night.max",        config.nightMax);
 
-    config.phoneMode      = prefs.getString("phone.mode",      config.phoneMode);
 
     config.boostMode      = prefs.getInt("boost.mode",         config.boostMode);
 
@@ -70,7 +69,6 @@ void settings_load() {
                   config.tempGear4, config.tempHysteresis);
     Serial.printf("  night %02d:00-%02d:00 max=%d%%\n",
                   config.nightStart, config.nightEnd, config.nightMax);
-    Serial.printf("  phone.mode=%s\n", config.phoneMode.c_str());
     const char* bm = (config.boostMode == 0) ? "off"
                    : (config.boostMode == 2) ? "aggr" : "normal";
     Serial.printf("  boost.mode=%s normal(%d/%d) aggr(%d/%d)\n", bm,
@@ -91,7 +89,6 @@ void settings_save() {
     prefs.putInt  ("night.end",        config.nightEnd);
     prefs.putInt  ("night.max",        config.nightMax);
 
-    prefs.putString("phone.mode",      config.phoneMode);
 
     prefs.putInt("boost.mode",             config.boostMode);
     prefs.putInt("boost.normal.threshold", config.boostNormal.threshold);
@@ -137,11 +134,6 @@ void settings_apply_json(const char* json) {
         if (n.containsKey("start"))    config.nightStart = n["start"].as<int>();
         if (n.containsKey("end"))      config.nightEnd   = n["end"].as<int>();
         if (n.containsKey("nightMax")) config.nightMax   = n["nightMax"].as<int>();
-    }
-
-    if (doc.containsKey("phone")) {
-        JsonObject p = doc["phone"];
-        if (p.containsKey("mode")) config.phoneMode = p["mode"].as<String>();
     }
 
     if (doc.containsKey("boost")) {

@@ -187,9 +187,7 @@ static void handle_config_get() {
     json += "\"nightMax\":" + String(config.nightMax);
     json += "},";
 
-    json += "\"phone\":{";
-    json += "\"mode\":\"" + config.phoneMode + "\"";
-    json += "}";
+    json += "{}";
 
     json += "}";
     server.send(200, "application/json", json);

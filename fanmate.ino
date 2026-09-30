@@ -201,19 +201,16 @@ void loop() {
     updateTach();
     readDS18B20(currentTemp);
 
-    bool phone_now = (config.phoneMode == "off") ? true : phonePresent;
+    bool phone_now = phonePresent;
 
     if (sys_state == STATE_ACTIVE) {
-        if (config.phoneMode != "off" &&
-            !phone_now &&
+        if (!phone_now &&
             phone_absent_since > 0 &&
             now - phone_absent_since >= PHONE_SLEEP_DELAY_MS) {
             enter_sleep();
         }
     } else if (sys_state == STATE_LIGHT_SLEEP) {
-        if (config.phoneMode == "off") {
-            exit_sleep();
-        } else if (phone_now &&
+        if (phone_now &&
                    phone_present_since > 0 &&
                    now - phone_present_since >= PHONE_WAKE_DELAY_MS) {
             exit_sleep();
