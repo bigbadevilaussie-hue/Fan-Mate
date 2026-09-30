@@ -9,6 +9,7 @@
 #include "Logging.h"
 #include "WeatherClient.h"
 #include "SerialBuffer.h"
+#include "Songs.h"
 
 extern void ntp_loop();
 
@@ -48,6 +49,7 @@ void enter_sleep() {
     opal_pause();
     clearDisplay();
     digitalWrite(LED_PIN, LOW);
+    playNokiaSong();
     log_print("[SLEEP] entered\n");
 }
 
@@ -61,6 +63,7 @@ void exit_sleep() {
     opal_resume();
     wakeDisplay();
     digitalWrite(LED_PIN, HIGH);
+    playNokiaSong();
     log_print("[SLEEP] awake\n");
 }
 

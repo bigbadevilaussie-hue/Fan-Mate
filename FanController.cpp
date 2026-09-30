@@ -17,7 +17,7 @@ static int  fanPWM       = 0;
 static int  fanPctLocal  = 0;
 static int  fanRPMLocal  = 0;
 static int  alertLevel   = 0;
-static bool phonePresent = false;
+extern bool phonePresent;
 
 static volatile unsigned long tachPulses   = 0;
 static unsigned long          lastTachRead = 0;
@@ -130,7 +130,6 @@ void updatePhoneDetection() {
                 phone_present_since = 0;
             }
             log_print("[PHONE] %s\n", present ? "detected" : "removed");
-            playNokiaSong();
         }
     }
 }
