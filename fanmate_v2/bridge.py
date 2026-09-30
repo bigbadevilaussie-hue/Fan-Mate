@@ -28,6 +28,9 @@ class Bridge(QObject):
     rpmChanged       = Signal()
     boostChanged     = Signal()
     boostLvlChanged  = Signal()
+    tempLvlChanged   = Signal()
+    killModeChanged  = Signal()
+    fanStallChanged  = Signal()
     netChanged       = Signal()
     phoneChanged     = Signal()
     alertChanged     = Signal()
@@ -78,6 +81,12 @@ class Bridge(QObject):
             self.boostChanged.emit()
         if self._changed("boost_lvl", self._get("boost_lvl", 0)):
             self.boostLvlChanged.emit()
+        if self._changed("temp_lvl", self._get("temp_lvl", 0)):
+            self.tempLvlChanged.emit()
+        if self._changed("kill_mode", self._get("kill_mode", 0)):
+            self.killModeChanged.emit()
+        if self._changed("fan_stall", self._get("fan_stall", 0)):
+            self.fanStallChanged.emit()
         if self._changed("net_kbps", self._get("net_kbps", 0.0)):
             self.netChanged.emit()
         if self._changed("phone", self._get("phone", 0)):
@@ -175,6 +184,18 @@ class Bridge(QObject):
     @Property(int, notify=boostLvlChanged)
     def boostLvl(self):
         return int(self._get("boost_lvl", 0))
+
+    @Property(int, notify=tempLvlChanged)
+    def tempLvl(self):
+        return int(self._get("temp_lvl", 0))
+
+    @Property(int, notify=killModeChanged)
+    def killMode(self):
+        return int(self._get("kill_mode", 0))
+
+    @Property(int, notify=fanStallChanged)
+    def fanStall(self):
+        return int(self._get("fan_stall", 0))
 
     @Property(float, notify=netChanged)
     def netKbps(self):

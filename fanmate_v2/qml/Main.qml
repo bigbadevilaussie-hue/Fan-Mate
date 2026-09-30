@@ -4,12 +4,12 @@ import QtQuick.Controls
 
 ApplicationWindow {
     id: root
-    width: 820
-    height: 400
+    width: 900
+    height: 440
     visible: true
     title: "Fan-Mate v2"
     color: "#000000"
-    property string guiVersion: "1.08"
+    property string guiVersion: "1.11"
 
     // ---------- drawer ----------
     Drawer {
@@ -106,172 +106,33 @@ ApplicationWindow {
                 onClicked: menu.opened ? menu.close() : menu.open()
             }
         }
-
-        // Top info strip
-        Item {
-            id: topStrip
+        // (top info strip removed — content moved to bottom row)
+        // Three dials
+        StatusLamps {
             anchors.horizontalCenter: parent.horizontalCenter
-            y: 18
-            width: parent.width - 80
-            height: 40
-
-            // LED row (left)
-            Row {
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 12
-
-                Rectangle { width: 10; height: 10; radius: 5
-                    color: dev.alert == 0 ? "#50e890" : "#0a1a0f"
-                    border.color: "#50e890"; border.width: 1; antialiasing: true }
-                Rectangle { width: 10; height: 10; radius: 5
-                    color: dev.alert == 1 ? "#ffd23f" : "#1a1608"
-                    border.color: "#ffd23f"; border.width: 1; antialiasing: true }
-                Rectangle { width: 10; height: 10; radius: 5
-                    color: dev.alert == 2 ? "#ff8a30" : "#1a0e05"
-                    border.color: "#ff8a30"; border.width: 1; antialiasing: true }
-                Rectangle { width: 10; height: 10; radius: 5
-                    color: dev.alert == 3 ? "#ff304f" : "#1a050a"
-                    border.color: "#ff304f"; border.width: 1; antialiasing: true }
-            }
-
-            // Outdoor temp
-            Column {
-                anchors.left: parent.left
-                anchors.leftMargin: 90
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 0
-                Text {
-                    text: "OUTDOOR"
-                    color: "#4a5568"
-                    font.family: "Helvetica Neue"
-                    font.pixelSize: 8
-                    font.weight: Font.Bold
-                    font.letterSpacing: 1
-                }
-                Text {
-                    text: (dev.outdoor > -90)
-                          ? dev.outdoor.toFixed(1) + "°C"
-                          : "--.-°C"
-                    color: "#cdd6f4"
-                    font.family: "Menlo"
-                    font.pixelSize: 14
-                    font.weight: Font.Medium
-                }
-            }
-
-            // Room temp (placeholder until NTC wired)
-            Column {
-                anchors.left: parent.left
-                anchors.leftMargin: 200
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 0
-                Text {
-                    text: "ROOM"
-                    color: "#4a5568"
-                    font.family: "Helvetica Neue"
-                    font.pixelSize: 8
-                    font.weight: Font.Bold
-                    font.letterSpacing: 1
-                }
-                Text {
-                    text: (dev.room > -90)
-                          ? dev.room.toFixed(1) + "°C"
-                          : "--.-°C"
-                    color: (dev.room > -90) ? "#cdd6f4" : "#4a5568"
-                    font.family: "Menlo"
-                    font.pixelSize: 14
-                    font.weight: Font.Medium
-                }
-            }
-
-            // Time
-            Column {
-                anchors.left: parent.left
-                anchors.leftMargin: 300
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 0
-                Text {
-                    text: "TIME"
-                    color: "#4a5568"
-                    font.family: "Helvetica Neue"
-                    font.pixelSize: 8
-                    font.weight: Font.Bold
-                    font.letterSpacing: 1
-                }
-                Text {
-                    id: timeText
-                    color: "#cdd6f4"
-                    font.family: "Menlo"
-                    font.pixelSize: 14
-                    font.weight: Font.Medium
-                    Timer {
-                        interval: 1000
-                        running: true
-                        repeat: true
-                        triggeredOnStart: true
-                        onTriggered: {
-                            var d = new Date()
-                            var h = d.getHours()
-                            var m = d.getMinutes()
-                            var ampm = h >= 12 ? "PM" : "AM"
-                            h = h % 12; if (h === 0) h = 12
-                            timeText.text = (h < 10 ? " " : "") + h + ":" +
-                                            (m < 10 ? "0" + m : m) + " " + ampm
-                        }
-                    }
-                }
-            }
-
-            // Status (right)
-            Column {
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 0
-                Text {
-                    anchors.right: parent.right
-                    text: "STATUS"
-                    color: "#4a5568"
-                    font.family: "Helvetica Neue"
-                    font.pixelSize: 8
-                    font.weight: Font.Bold
-                    font.letterSpacing: 1
-                }
-                Text {
-                    id: statusText
-                    anchors.right: parent.right
-                    font.family: "Helvetica Neue"
-                    font.pixelSize: 14
-                    font.weight: Font.Bold
-                    text: {
-                        if (dev.fan_stall) return "FAN STALL"
-                        if (dev.sleep)     return "SLEEPING"
-                        if (dev.alert >= 3) return "KILL"
-                        if (dev.alert == 2) return "OH SHIT"
-                        if (dev.alert == 1) return "WARNING"
-                        if (dev.boost)      return "BOOSTING"
-                        if (!dev.opal)      return "OPAL DOWN"
-                        return "NONE"
-                    }
-                    color: {
-                        if (dev.fan_stall) return "#e74c3c"
-                        if (dev.alert >= 3) return "#e74c3c"
-                        if (dev.alert == 2) return "#e74c3c"
-                        if (dev.alert == 1) return "#e67e22"
-                        if (dev.boost)      return "#2ecc71"
-                        return "#7a8194"
-                    }
-                }
-            }
+            y: 62
+            width: 320
+            height: 44
+            boostLvl: dev.boostLvl || 0
+            tempLvl: dev.tempLvl || 0
+            opal: dev.opal || 0
+            killMode: dev.killMode || 0
         }
 
-        // Three dials
         BoostBar {
-            x: 30
-            y: 100
-            width: 48
+            x: 24
+            y: 90
+            width: 72
             height: 260
             gear: dev.boostLvl || 0
+        }
+
+        TempBar {
+            x: 800
+            y: 90
+            width: 72
+            height: 260
+            level: dev.tempLvl || 0
         }
 
         TrafficGauge {
@@ -310,6 +171,124 @@ ApplicationWindow {
             tempGear2: dev.tempGear2 || 32.0
             tempGear3: dev.tempGear3 || 34.0
             tempGear4: dev.tempGear4 || 36.0
+        }
+
+        // bottom info row
+        Item {
+            id: bottomRow
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 28
+            width: 560
+            height: 36
+
+            Row {
+                anchors.centerIn: parent
+                spacing: 56
+
+                Column {
+                    spacing: 1
+                    anchors.verticalCenter: parent.verticalCenter
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "🌤️ OUT"
+                        color: "#4a5568"
+                        font.family: "Helvetica Neue"
+                        font.pixelSize: 8
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1
+                    }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: (dev.outdoor > -90) ? dev.outdoor.toFixed(1) + "°C" : "--.-°C"
+                        color: "#cdd6f4"
+                        font.family: "Menlo"
+                        font.pixelSize: 14
+                        font.weight: Font.Medium
+                    }
+                }
+
+                Column {
+                    spacing: 1
+                    anchors.verticalCenter: parent.verticalCenter
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "🏠 ROOM"
+                        color: "#4a5568"
+                        font.family: "Helvetica Neue"
+                        font.pixelSize: 8
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1
+                    }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: (dev.room > -90) ? dev.room.toFixed(1) + "°C" : "--.-°C"
+                        color: "#cdd6f4"
+                        font.family: "Menlo"
+                        font.pixelSize: 14
+                        font.weight: Font.Medium
+                    }
+                }
+
+                Column {
+                    spacing: 1
+                    anchors.verticalCenter: parent.verticalCenter
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "🕐 TIME"
+                        color: "#4a5568"
+                        font.family: "Helvetica Neue"
+                        font.pixelSize: 8
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1
+                    }
+                    Text {
+                        id: bottomTimeText
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        color: "#cdd6f4"
+                        font.family: "Menlo"
+                        font.pixelSize: 14
+                        font.weight: Font.Medium
+                        Timer {
+                            interval: 1000
+                            running: true
+                            repeat: true
+                            triggeredOnStart: true
+                            onTriggered: {
+                                var d = new Date()
+                                var h = d.getHours()
+                                var m = d.getMinutes()
+                                var ampm = h >= 12 ? "PM" : "AM"
+                                h = h % 12; if (h === 0) h = 12
+                                bottomTimeText.text = (h < 10 ? " " : "") + h + ":" +
+                                                      (m < 10 ? "0" + m : m) + " " + ampm
+                            }
+                        }
+                    }
+                }
+
+                Column {
+                    spacing: 1
+                    anchors.verticalCenter: parent.verticalCenter
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "📱 PHONE"
+                        color: "#4a5568"
+                        font.family: "Helvetica Neue"
+                        font.pixelSize: 8
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1
+                    }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: dev.phone ? "YES" : "NO"
+                        color: dev.phone ? "#2ecc71" : "#7a8194"
+                        font.family: "Menlo"
+                        font.pixelSize: 14
+                        font.weight: Font.Medium
+                    }
+                }
+            }
         }
 
         // footer
