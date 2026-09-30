@@ -1,13 +1,64 @@
 # Fan-Mate — Chat Handoff
 
-> **NEW AI — DO THIS FIRST.**
+> **NEW AI — YOUR FIRST RESPONSE MUST BE TO ASK NICK TO RUN THE DUMP COMMAND.**
 > 
-> Do not summarise this document back to Nick.
-> Do not offer to help with a task yet.
+> Do NOT summarise this document back to Nick.
+> Do NOT offer to help with a task.
+> Do NOT ask what he wants to work on.
+> Just ask him to run the dump command below. That is your entire first reply.
 > 
-> Read the "GETTING THE NEXT AI UP TO SPEED" section in NOTES.md (below).
-> Ask Nick to run the dump command it contains. He will paste the output.
-> Read the source files. Only then start work.
+> When he pastes the output, read the source files. Only then start work.
+> 
+> The dump command:
+> 
+>     cd ~/Documents/Arduino/fanmate
+>     {
+>       echo "===== GIT STATE ====="
+>       git fetch --all --tags 2>&1
+>       git log --oneline -15
+>       git status --short
+>       git tag -l | tail -20
+>       echo
+>       echo "===== VERSIONS ====="
+>       grep FAN_MATE_VERSION Config.h
+>       grep GUI_VERSION fanmate/config.py
+>       grep guiVersion fanmate_v2/qml/Main.qml 2>/dev/null
+>       echo
+>       echo "===== DOCS ====="
+>       for f in HANDOFF.md NOTES.md PROJECT_STATE.md FILES.md README.md; do
+>         echo "########## $f ##########"; cat "$f" 2>&1; echo
+>       done
+>       echo "===== FIRMWARE ====="
+>       for f in Config.h fanmate.ino AutoBoost.h AutoBoost.cpp \
+>                FanController.h FanController.cpp DisplayManager.h DisplayManager.cpp \
+>                WiFiManager.h WiFiManager.cpp WebServer.h WebServer.cpp WebPage.h \
+>                OpalClient.h OpalClient.cpp Logging.h Logging.cpp \
+>                SerialBuffer.h SerialBuffer.cpp Settings.h Settings.cpp \
+>                WeatherClient.h WeatherClient.cpp Songs.h Songs.cpp; do
+>         echo "########## $f ##########"; cat "$f" 2>&1; echo
+>       done
+>       echo "===== TK GUI ====="
+>       for f in fanmate.py fanmate/__init__.py fanmate/config.py fanmate/state.py \
+>                fanmate/helpers.py fanmate/http_client.py fanmate/log_sync.py \
+>                fanmate/weather.py fanmate/widgets.py fanmate/dialogs.py \
+>                fanmate/reports.py fanmate/app.py; do
+>         echo "########## $f ##########"; cat "$f" 2>&1; echo
+>       done
+>       echo "===== QML GUI2 ====="
+>       for f in fanmate_v2/__init__.py fanmate_v2/bridge.py fanmate_v2/main.py \
+>                fanmate_v2/qml/Main.qml fanmate_v2/qml/TempGauge.qml \
+>                fanmate_v2/qml/RpmGauge.qml fanmate_v2/qml/TrafficGauge.qml \
+>                fanmate_v2/qml/BoostBar.qml fanmate_v2/qml/MenuButton.qml \
+>                fanmate_v2/qml/OtaDialog.qml fanmate_v2/qml/Bar.qml; do
+>         echo "########## $f ##########"; cat "$f" 2>&1; echo
+>       done
+>       echo "===== LIVE DEVICE ====="
+>       curl -s --max-time 5 http://fan-mate.local/status 2>&1 | python3 -m json.tool 2>&1 | head -50
+>       curl -s --max-time 5 http://fan-mate.local/config 2>&1 | python3 -m json.tool 2>&1
+>       echo "===== LOGS ====="
+>       ls -la ~/Documents/FanMate_logs/*.csv 2>/dev/null | tail -5
+>     } > ~/Desktop/fanmate-dump.txt 2>&1
+>     wc -l ~/Desktop/fanmate-dump.txt
 > 
 > Naming: GUI = Tk (fanmate/*.py), GUI2 = QML (fanmate_v2/*),
 > Web = WebPage.h (needs flash), Firmware = *.cpp/*.h/fanmate.ino.
@@ -16,7 +67,7 @@
 > scripts written to /tmp/ then run with python3. Never paste heredocs
 > or # comments directly.
 
-Generated: 2026-09-30 17:41:00
+Generated: 2026-09-30 17:43:27
 
 ---
 
@@ -24,6 +75,8 @@ Generated: 2026-09-30 17:41:00
 
 ```
 $ git log --oneline -10
+24a8bec docs: regenerate handoff
+95ae390 docs: handoff puts AI instructions at the top
 0f86673 docs: regenerate handoff
 ab39347 docs: add NOTES.md, rewrite update_handoff.sh (no pbcopy)
 2ec541c docs: regenerate handoff at v4.16 / gui-v3.86
@@ -32,8 +85,6 @@ ab39347 docs: add NOTES.md, rewrite update_handoff.sh (no pbcopy)
 d056123 v4.14: NTC +6.0 offset, fan kick-start, interrupt-safe tach; gui-v3.85 room column + footer
 b43bce2 v4.13: NTC room temp — readNTC(), room_get_temp() wired, room_c in /status
 ec99b06 v4.12 / gui-v3.84: boost_lvl reports data_gear (0 during cooldown), cooling flag in /status; Tk layout rework
-3328c38 v4.11 / gui-v3.82 / gui-v2-v1.07: heat control renamed to four gear thresholds (Warm/Hot/Hotter/Critical)
-c3d05c0 docs: overhaul notes for v4.10 boost rewrite
 
 $ git status --short
  M HANDOFF.md
