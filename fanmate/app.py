@@ -312,6 +312,13 @@ class App:
         self.root.after(60_000, self.theme_check)
 
     def tick(self):
+        try:
+            self._tick_body()
+        except Exception as e:
+            print(f"[TICK] exception: {e}")
+        self.root.after(250, self.tick)
+
+    def _tick_body(self):
         t = self.theme
         d = latest
 
@@ -357,12 +364,14 @@ class App:
 
         # BOOST level name
         bl = int(d.get("boost_lvl", 0))
+        bl = max(0, min(4, bl))
         boost_names  = ["Parked", "Cruising", "Fast", "Racing", "Nitro"]
         boost_colors = [t["muted"], t["green"], t["yellow"], t["orange"], t["red"]]
         self.boost_lbl.config(text=boost_names[bl], fg=boost_colors[bl])
 
         # TEMP level name
         tl = int(d.get("temp_lvl", 0))
+        tl = max(0, min(4, tl))
         temp_names  = ["Normal", "Warm", "Hot", "Hotter", "Critical"]
         temp_colors = [t["green"], t["yellow"], t["orange"], t["orange"], t["red"]]
         self.temp_level_lbl.config(text=temp_names[tl], fg=temp_colors[tl])
@@ -391,7 +400,7 @@ class App:
         self.footer_lbl.config(
             text=f"GUI v{GUI_VERSION}  ·  FW {d.get('fv', '?')}"
         )
-        self.temp_graph.trigger = latest_config.get("temp", {}).get("warning", None)
+        self.temp_graph.trigger = latest_config.get("temp", {}).get("gear1", None)
         self.temp_graph.set_data(temp_hist)
 
         boost_mode = latest_config.get("boost", {}).get("mode", 1)
@@ -403,6 +412,4 @@ class App:
             thr = None
         self.data_graph.trigger = thr
         self.data_graph.set_data(download_hist)
-
-        self.root.after(250, self.tick)
 

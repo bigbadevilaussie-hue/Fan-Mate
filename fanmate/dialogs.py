@@ -70,11 +70,11 @@ class SettingsDialog(tk.Toplevel):
 
         section("🌡️", "HEAT CONTROL")
         self.temp_g1 = tk.StringVar(value=str(latest_config["temp"].get("gear1", 30.0)))
-        field("Warm (36%)", self.temp_g1)
+        field("Warm (25%)", self.temp_g1)
         self.temp_g2 = tk.StringVar(value=str(latest_config["temp"].get("gear2", 32.0)))
-        field("Hot (57%)", self.temp_g2)
+        field("Hot (50%)", self.temp_g2)
         self.temp_g3 = tk.StringVar(value=str(latest_config["temp"].get("gear3", 34.0)))
-        field("Hotter (78%)", self.temp_g3)
+        field("Hotter (75%)", self.temp_g3)
         self.temp_g4 = tk.StringVar(value=str(latest_config["temp"].get("gear4", 36.0)))
         field("Critical (100%)", self.temp_g4)
 
@@ -181,8 +181,6 @@ class SettingsDialog(tk.Toplevel):
             messagebox.showerror("Settings", f"Invalid value:\n{e}")
             return
 
-        self.destroy()
-
         threading.Thread(
             target=self._apply_worker,
             args=(payload,),
@@ -195,6 +193,8 @@ class SettingsDialog(tk.Toplevel):
             if r.status_code != 200:
                 msg = f"HTTP {r.status_code}"
                 self.app.root.after(0, lambda m=msg: messagebox.showerror("Settings", m))
+            else:
+                self.app.root.after(0, self.destroy)
         except Exception as e:
             msg = str(e)
             self.app.root.after(0, lambda m=msg: messagebox.showerror("Settings", f"Failed:\n{m}"))

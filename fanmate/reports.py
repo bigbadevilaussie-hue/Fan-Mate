@@ -41,7 +41,7 @@ class Report2H(tk.Toplevel):
         self._apply_theme()
 
     def _find_files(self):
-        return self._find_recent_files(2)
+        return self._find_files_since(2)
 
     def _find_recent_files(self, n):
         import glob
@@ -49,6 +49,35 @@ class Report2H(tk.Toplevel):
         files = [p for p in glob.glob(pattern) if not p.endswith(".part")]
         files.sort()
         return files[-n:]
+
+    def _find_files_since(self, hours):
+        """Walk back from newest until cumulative coverage >= hours."""
+        import glob
+        from datetime import datetime, timedelta
+        pattern = os.path.join(LOG_DIR, "log-*.csv")
+        files = sorted(p for p in glob.glob(pattern)
+                       if not p.endswith(".part"))
+        if not files:
+            return []
+        # Parse the date-time from each filename (after firmware prefix)
+        out = []
+        cutoff = datetime.now() - timedelta(hours=hours)
+        for p in reversed(files):
+            out.append(p)
+            # Try to derive start time from filename
+            try:
+                base = os.path.basename(p).rsplit(".", 1)[0]
+                parts = base.split("-")
+                # log-<fw>-<YYYYMMDD>-<HHMM>.csv
+                date_s = parts[-2]
+                time_s = parts[-1]
+                t = datetime.strptime(date_s + time_s, "%Y%m%d%H%M")
+                if t <= cutoff:
+                    break
+            except Exception:
+                break
+        out.sort()
+        return out
 
     def _parse(self, path):
         """Parse a sealed CSV via csv.reader — handles quoted fields and
@@ -107,7 +136,17 @@ class Report2H(tk.Toplevel):
         start = rows[0]["t"]
         end = rows[-1]["t"]
         span_min = (end - start).total_seconds() / 60.0
-        expected = int(round(span_min * 60 / 15))
+
+        # Expected rows: 15s cadence, minus gaps where the device was
+        # asleep or the log was paused. Count actual gaps > 30s.
+        expected = 0
+        if len(rows) >= 2:
+            for i in range(1, len(rows)):
+                dt = (rows[i]["t"] - rows[i-1]["t"]).total_seconds()
+                if dt <= 30:
+                    expected += max(1, int(round(dt / 15)))
+                else:
+                    expected += 1
         missing = max(0, expected - len(rows))
 
         gear0  = sum(1 for b in boosts if b == 0)
