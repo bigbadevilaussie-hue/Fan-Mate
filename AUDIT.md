@@ -21,7 +21,7 @@ tracks fix status.
 | # | Finding | File | AIs | Status |
 |---|---------|------|-----|--------|
 | 1 | Kick-start pulse ignores phone-absent override — fan pulses 78% every loop when phone off mount | FanController.cpp | 1/5 | open |
-| 2 | Six NVS boost keys exceed 15-char limit — silently fail, revert to defaults every reboot | Settings.cpp | 1/5 | open |
+| 2 | Six NVS boost keys exceed 15-char limit — silently fail, revert to defaults every reboot | Settings.cpp | 1/5 | **fixed v4.22** |
 | 3 | `log_evict_oldest()` isn't actually oldest — LittleFS iteration isn't sorted | Logging.cpp | 4/5 | open |
 | 4 | `log_resume()` truncates live file unconditionally — wake can wipe rows if seal failed | Logging.cpp | 2/5 | open |
 | 5 | Opal rate = sum of LAN clients, not WAN — Mac/other devices inflate boost | OpalClient.cpp | 1/5 | open |
