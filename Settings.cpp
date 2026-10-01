@@ -44,7 +44,7 @@ void settings_load() {
                         prefs.getFloat("temp.kill",    config.tempGear3));
     config.tempGear4 = prefs.getFloat("temp.gear4",
                         prefs.getFloat("temp.kill",    config.tempGear4));
-    config.tempHysteresis = prefs.getFloat("temp.hysteresis", config.tempHysteresis);
+    config.tempHysteresis = prefs.getFloat("t.hyst", config.tempHysteresis);
 
     config.nightStart     = prefs.getInt  ("night.start",      config.nightStart);
     config.nightEnd       = prefs.getInt  ("night.end",        config.nightEnd);
@@ -53,13 +53,13 @@ void settings_load() {
 
     config.boostMode      = prefs.getInt("boost.mode",         config.boostMode);
 
-    config.boostNormal.threshold = prefs.getInt("boost.normal.threshold", config.boostNormal.threshold);
-    config.boostNormal.on_hold   = prefs.getInt("boost.normal.on_hold",   config.boostNormal.on_hold);
-    config.boostNormal.off_hold  = prefs.getInt("boost.normal.off_hold",  config.boostNormal.off_hold);
+    config.boostNormal.threshold = prefs.getInt("b.n.thr", config.boostNormal.threshold);
+    config.boostNormal.on_hold   = prefs.getInt("b.n.on",   config.boostNormal.on_hold);
+    config.boostNormal.off_hold  = prefs.getInt("b.n.off",  config.boostNormal.off_hold);
 
-    config.boostAggr.threshold = prefs.getInt("boost.aggr.threshold", config.boostAggr.threshold);
-    config.boostAggr.on_hold   = prefs.getInt("boost.aggr.on_hold",   config.boostAggr.on_hold);
-    config.boostAggr.off_hold  = prefs.getInt("boost.aggr.off_hold",  config.boostAggr.off_hold);
+    config.boostAggr.threshold = prefs.getInt("b.a.thr", config.boostAggr.threshold);
+    config.boostAggr.on_hold   = prefs.getInt("b.a.on",   config.boostAggr.on_hold);
+    config.boostAggr.off_hold  = prefs.getInt("b.a.off",  config.boostAggr.off_hold);
 
     prefs.end();
 
@@ -83,7 +83,7 @@ void settings_save() {
     prefs.putFloat("temp.gear2",       config.tempGear2);
     prefs.putFloat("temp.gear3",       config.tempGear3);
     prefs.putFloat("temp.gear4",       config.tempGear4);
-    prefs.putFloat("temp.hysteresis",  config.tempHysteresis);
+    prefs.putFloat("t.hyst",  config.tempHysteresis);
 
     prefs.putInt  ("night.start",      config.nightStart);
     prefs.putInt  ("night.end",        config.nightEnd);
@@ -91,12 +91,12 @@ void settings_save() {
 
 
     prefs.putInt("boost.mode",             config.boostMode);
-    prefs.putInt("boost.normal.threshold", config.boostNormal.threshold);
-    prefs.putInt("boost.normal.on_hold",   config.boostNormal.on_hold);
-    prefs.putInt("boost.normal.off_hold",  config.boostNormal.off_hold);
-    prefs.putInt("boost.aggr.threshold",   config.boostAggr.threshold);
-    prefs.putInt("boost.aggr.on_hold",     config.boostAggr.on_hold);
-    prefs.putInt("boost.aggr.off_hold",    config.boostAggr.off_hold);
+    prefs.putInt("b.n.thr", config.boostNormal.threshold);
+    prefs.putInt("b.n.on",   config.boostNormal.on_hold);
+    prefs.putInt("b.n.off",  config.boostNormal.off_hold);
+    prefs.putInt("b.a.thr",   config.boostAggr.threshold);
+    prefs.putInt("b.a.on",     config.boostAggr.on_hold);
+    prefs.putInt("b.a.off",    config.boostAggr.off_hold);
 
     prefs.end();
     Serial.println("[CFG] saved");
