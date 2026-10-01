@@ -222,6 +222,58 @@ and their PASS/WARN/FAIL behaviour is trusted.
 
 ---
 
+## ROADMAP — firmware & Tk stabilisation, then QML
+
+**Rule:** No QML work until firmware and Tk are frozen. QML ports
+frozen behaviour; it does not chase moving targets.
+
+### Session 1 — Firmware v4.24
+
+High impact:
+1. Log actual gear 0-4 in boost column, not binary 0/1
+2. Cap Opal rate at 10240 KB/s in tick_15s to reject tick-stretch artefacts
+3. Kick-start: non-blocking state machine, no delay(400) in loop
+4. Kick-start: gate on phonePresent so phone-absent doesn't pulse the fan
+
+Medium — data loss:
+5. log_resume: don't overwrite if pre-sleep seal failed
+6. log_evict_oldest: sort by filename before deleting
+7. Seal filename collisions: append counter if name exists
+
+Lower:
+8. /status: escape SSID and IP quotes in JSON
+9. settings_apply_json: validate gear ordering, night range, boost mode
+10. Settings.cpp legacy fallback: don't map temp.kill into both gear3 and gear4
+
+Not doing:
+- Kill repeater re-enable (deliberate)
+- Night cap removal (feature decision)
+- Panic/kill quiet hours (arguable)
+
+### Session 2 — Tk GUI v3.92
+
+1. Settings dialog: move fetch_config to background thread
+2. fetch_config refresh every 5 min (not just on connect)
+3. Remove retired alarm/phone sections from fetch_config
+4. _find_files_since: use newest file timestamp, not Mac clock
+5. Report window: manual Refresh button
+6. is_night_now: read from latest_config, not hardcoded 22/7
+7. DynaTune cooldown KPI: leave as-is (log limitation)
+
+### Session 3+ — stabilise
+
+Run for a week. Watch reports. Fix what breaks.
+
+### Session 4 (later) — QML GUI2 v1.12
+
+Only after firmware and Tk are frozen:
+1. Settings panel (Rectangle overlay, not Drawer)
+2. Kill banner (SILENCE/ARM)
+3. Delta lamp
+4. Bridge URLs use IP not .local
+
+---
+
 ## NEXT SESSION PLAN
 
 **Priority:** fix Tk GUI Settings, then port the fixed Settings to GUI2.
