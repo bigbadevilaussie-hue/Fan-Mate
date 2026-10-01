@@ -236,6 +236,13 @@ void log_flush_seal() {
 void log_resume() {
     _logging_paused = false;
     time_t now = time(nullptr);
+    if (LittleFS.exists(LOG_FILE) && log_count_live_rows() > 0) {
+        char rec[64];
+        snprintf(rec, sizeof(rec), "/recovered-%lu.csv",
+                 (unsigned long)(now ? now : millis()/1000));
+        LittleFS.rename(LOG_FILE, rec);
+        log_print("[LOG] preserved orphan as %s\n", rec);
+    }
     open_fresh_live(now);
     log_print("[LOG] resumed\n");
 }
@@ -356,7 +363,16 @@ static bool log_evict_oldest() {
         log_print("[LOG] evict: only %u sealed, keeping all\n", (unsigned)n);
         return false;
     }
-    // names are sorted by filesystem iteration; delete first (oldest)
+    // Sort by filename. Filenames are log-<fw>-<YYYYMMDD>-<HHMM>.csv;
+    // lexicographic order is chronological within a firmware version.
+    for (size_t i = 1; i < n; i++) {
+        for (size_t j = i; j > 0 && strcmp(names[j-1], names[j]) > 0; j--) {
+            char tmp[48];
+            strncpy(tmp, names[j-1], 48);
+            strncpy(names[j-1], names[j], 48);
+            strncpy(names[j], tmp, 48);
+        }
+    }
     char p[80];
     snprintf(p, sizeof(p), "/%s", names[0]);
     bool ok = LittleFS.remove(p);

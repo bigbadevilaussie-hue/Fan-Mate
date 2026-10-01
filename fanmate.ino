@@ -157,6 +157,7 @@ static void tick_15s() {
     if (peak_hist[1] > kbps_smooth) kbps_smooth = peak_hist[1];
     if (peak_hist[2] > kbps_smooth) kbps_smooth = peak_hist[2];
 
+    if (kbps_smooth > 10240.0f) kbps_smooth = lastNetKbps;
     lastNetKbps = kbps_smooth;
 
     webTempHist[webHistIdx] = currentTemp;
@@ -167,7 +168,7 @@ static void tick_15s() {
 
     if (currentTemp > 0.0) {
         log_write(currentTemp, kbps_smooth,
-                  auto_boost_gear() > 0 ? 1 : 0,
+                  auto_boost_gear(),
                   fanPct, fanRPM);
     }
 
@@ -177,7 +178,7 @@ static void tick_15s() {
 #if DEBUG_VERBOSE
     log_print("[TICK] temp=%.1f fan=%d%% net=%.1f KB/s boost=%d rpm=%d\n",
               currentTemp, fanPct, kbps_smooth,
-              auto_boost_gear() > 0 ? 1 : 0, fanRPM);
+              auto_boost_gear(), fanRPM);
 #endif
 }
 

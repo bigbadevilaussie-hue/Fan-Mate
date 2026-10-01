@@ -379,11 +379,20 @@ void updateFanAndAlerts(
 
     fanPWM = newPwm;
 
-    // Kick-start pulse when fan is stopped or nearly stopped
-    if (fanGear > 0 && fanRPMLocal < 200) {
-        ledcWrite(2, 200);
-        delay(400);
+    // Kick-start pulse on cold start (0 -> N transition), phone present.
+    // Non-blocking: set a deadline, hold the pulse until it expires.
+    static int           prevFanGearForKick = 0;
+    static unsigned long kick_until_ms      = 0;
+    unsigned long now_ms = millis();
+    if (fanGear > 0 && prevFanGearForKick == 0 && fanRPMLocal < 200 && effectivePhone) {
+        kick_until_ms = now_ms + 400;
     }
+    prevFanGearForKick = fanGear;
+    if (kick_until_ms > 0 && now_ms < kick_until_ms) {
+        ledcWrite(2, 200);
+        return;
+    }
+    kick_until_ms = 0;
 
     ledcWrite(2, fanPWM);
     fanPctLocal = map(fanPWM, 0, 255, 0, 100);
