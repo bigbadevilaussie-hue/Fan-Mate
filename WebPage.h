@@ -161,6 +161,11 @@ canvas {
   </div>
 
   <div class="card">
+    <div class="lbl">🏠 Room</div>
+    <div class="val big" id="room-temp">--.-°</div>
+  </div>
+
+  <div class="card">
     <div class="lbl">🌡️ Phone Temperature</div>
     <div class="val big" id="temp">--.-°C</div>
   </div>
@@ -356,6 +361,12 @@ function render(data) {
     el('outdoor-temp').textContent = data.outdoor_c.toFixed(1) + '°';
   }
 
+  if (data.room_c !== undefined && data.room_c > -90) {
+    el('room-temp').textContent = data.room_c.toFixed(1) + '°';
+  } else {
+    el('room-temp').textContent = '--.-°';
+  }
+
   const temp = data.temp;
   if (temp !== null && temp !== undefined) {
     el('temp').textContent = temp.toFixed(1) + '°C  ' + emojiFor(temp);
@@ -396,7 +407,7 @@ function render(data) {
   if (data.temp_warning) tempWarning = data.temp_warning;
   if (data.boost_threshold) threshold = data.boost_threshold;
 
-  drawGraph('net-graph', netHist, 0, 2048, '#1e66f5', '#cfe0ff', threshold, ['-15m', '-7m', 'now']);
+  drawGraph('net-graph', netHist, 0, 8192, '#1e66f5', '#cfe0ff', threshold, ['-15m', '-7m', 'now']);
   drawGraph('temp-graph', tempHist, 15, 45, '#1e66f5', '#cfe0ff', tempWarning, ['-15m', '-7m', 'now']);
 
 
