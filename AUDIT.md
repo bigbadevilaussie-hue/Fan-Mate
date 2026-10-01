@@ -25,8 +25,8 @@ tracks fix status.
 | 3 | `log_evict_oldest()` isn't actually oldest — LittleFS iteration isn't sorted | Logging.cpp | 4/5 | open |
 | 4 | `log_resume()` truncates live file unconditionally — wake can wipe rows if seal failed | Logging.cpp | 2/5 | open |
 | 5 | Opal rate = sum of LAN clients, not WAN — Mac/other devices inflate boost | OpalClient.cpp | 1/5 | open |
-| 6 | Heat gear lacks hysteresis on gears 2/3/4 — flaps at thresholds | FanController.cpp | 5/5 | open |
-| 7 | Delta guard has no exit band — sawtooth at 5°C | FanController.cpp | 5/5 | open |
+| 6 | Heat gear lacks hysteresis on gears 2/3/4 — flaps at thresholds | FanController.cpp | 5/5 | **fixed v4.21** |
+| 7 | Delta guard has no exit band — sawtooth at 5°C | FanController.cpp | 5/5 | **fixed v4.21** |
 | 8 | Gear→% is 24/49/74/100 not 25/50/75/100 — stall check can't fire at gear 1 | FanController.cpp | 2/5 | open |
 | 9 | `COOLDOWN_MARGIN_C = 0.3` too tight — cooldown almost always times out | AutoBoost.cpp | 5/5 | open |
 | 10 | Cooldown defeated after any timeout — next burst captures hot phone as `cold_temp` | AutoBoost.cpp | 2/5 | open |
@@ -93,16 +93,16 @@ tracks fix status.
 
 | # | Finding | File | AIs | Status |
 |---|---------|------|-----|--------|
-| 60 | `PWM_MIN` unused in production | Config.h | 5/5 | open |
-| 61 | `TEMP_ON/FULL/WARNING/PANIC` dead, contradict real thresholds | Config.h | 2/5 | open |
-| 62 | `BOOST_DEFAULT_*` dead — real defaults in `set_defaults()` | Config.h | 2/5 | open |
-| 63 | `LOG_TICK_MS`, `OPAL_POLL_INTERVAL_MS` unused | Config.h | 2/5 | open |
-| 64 | `// TODO(NTC)` above working `readNTC()` | Logging.cpp | 5/5 | open |
+| 60 | `PWM_MIN` unused in production | Config.h | 5/5 | **fixed v4.21** |
+| 61 | `TEMP_ON/FULL/WARNING/PANIC` dead, contradict real thresholds | Config.h | 2/5 | **fixed v4.21** |
+| 62 | `BOOST_DEFAULT_*` dead — real defaults in `set_defaults()` | Config.h | 2/5 | **fixed v4.21** |
+| 63 | `LOG_TICK_MS`, `OPAL_POLL_INTERVAL_MS` unused | Config.h | 2/5 | **fixed v4.21** |
+| 64 | `// TODO(NTC)` above working `readNTC()` | Logging.cpp | 5/5 | **fixed v4.21** |
 | 65 | Unused vars: `lastGoodTemp`, `lastTempGear`, `opal_last_rx`, `opal_have_baseline`, `sleep_start_ms` | multiple | 3/5 | open |
 | 66 | Settings dialog labels 36/57/78% — actual 24/49/74 | dialogs.py | 5/5 | open |
 | 67 | Settings dialog can't edit hysteresis or night settings | dialogs.py | 2/5 | open |
 | 68 | `GUI_VERSION` drift 3.87 vs 3.89 | config.py | 5/5 | open |
-| 69 | Settings.h header says "V3.73" | Settings.h | 2/5 | open |
+| 69 | Settings.h header says "V3.73" | Settings.h | 2/5 | **fixed v4.21** |
 | 70 | Duplicate `FONT_*` imports in app.py | app.py | 2/5 | open |
 | 71 | `status_msg`/`status_lock` imported but unused | app.py | 1/5 | open |
 | 72 | `rpm`/`phonePresent` params unused in `updateDisplay()` | DisplayManager.cpp | 1/5 | open |
@@ -111,7 +111,7 @@ tracks fix status.
 | 75 | `sleep_countdown` permanently 0 | WebServer.cpp | 4/5 | open |
 | 76 | "Atkinsons Dam" typo (should be "Atkinson Dam") | WebPage.h | 1/5 | open |
 | 77 | Weather thread in Tk redundant — outdoor comes from `/status` | weather.py | 2/5 | open |
-| 78 | Stale comment `// 7.0 was board heat` above +6.0 offset | FanController.cpp | 1/5 | open |
+| 78 | Stale comment `// 7.0 was board heat` above +6.0 offset | FanController.cpp | 1/5 | **fixed v4.21** |
 | 79 | TZ set in five places | multiple | 1/5 | open |
 | 80 | `secrets.example.h` — `OPAL_CRYPT_HASH` missing, `OPAL_PASSWORD` unused | secrets.example.h | 1/5 | open |
 | 81 | Dead branch in `opal_set_repeater(true)` — nothing calls it | OpalClient.cpp | 1/5 | open |
@@ -122,7 +122,7 @@ tracks fix status.
 | 86 | Dashboard `DISABLE` in AUTO does nothing | WebPage.h | 1/5 | open |
 | 87 | Unauthenticated destructive endpoints | WebServer.cpp | 2/5 | open |
 | 88 | Net graph axis fixed 0–2048 — 4 MB/s plots off-chart | WebPage.h | 1/5 | open |
-| 89 | `ntp_synced()` means clock valid, not SNTP state | WiFiManager.cpp | 1/5 | open |
+| 89 | `ntp_synced()` means clock valid, not SNTP state | WiFiManager.cpp | 1/5 | **fixed v4.21** |
 | 90 | `boost_threshold` falls back to magic 700 in mode 0 | WebServer.cpp | 1/5 | open |
 | 91 | `fetch_config` asks for retired `alarm`/`phone` sections | http_client.py | 2/5 | open |
 | 92 | Tk disconnected state has no visible indicator | app.py | 2/5 | open |
