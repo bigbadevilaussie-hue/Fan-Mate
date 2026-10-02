@@ -12,20 +12,20 @@ One entry per file. Purpose / Key items / Notes.
 
 ### Config.h
 - **Purpose:** Single source of truth — pins, constants, version.
-- **Key defines:** FAN_MATE_VERSION, DEBUG_VERBOSE, GPIO pins, PWM, buzzer, HTTP, Opal, AutoBoost, logging.
-- **Notes:** Version 3.80.
+- **Key defines:** FAN_MATE_VERSION, DEBUG_VERBOSE, GPIO pins, PWM, buzzer timings, HTTP, PHONE_SLEEP_DELAY_MS, PHONE_WAKE_DELAY_MS, log schema constants.
+- **Notes:** Version 4.24. Runtime-tunable defaults live in `Settings.cpp::set_defaults()`, not here. Only pins, timings, and version string.
 
 ### Settings.cpp / .h
 - **Purpose:** Config load/save via NVS Preferences, JSON apply.
 - **Key vars:** config (FanMateConfig struct), NVS "fanmate" namespace.
 - **Key funcs:** settings_load, settings_save, settings_reset, settings_apply_json, settings_is_night.
-- **Notes:** All temp/boost/night/phone settings live here.
+- **Notes:** All temp/boost/night settings live here. NVS keys must be ≤15 chars. `phoneMode` removed in v4.16.
 
 ### FanController.cpp / .h
 - **Purpose:** DS18B20 read, hall sensor, fan PWM, tach, buzzer, alert levels, stall detection.
 - **Key vars:** fanPWM, fanPctLocal, fanRPMLocal, alertLevel, beep state, temp gear state, lastFanGear.
 - **Key funcs:** readDS18B20, updatePhoneDetection, updateFanAndAlerts, updateTach, initHardware, silenceFanAndAlerts, fan_stall_active.
-- **Notes:** Fan stall alarm gated by FAN_STALL_ENABLED. Beep sequence has gap-timer fix.
+- **Notes:** Fan stall alarm gated by FAN_STALL_ENABLED. Delta guard + heat gear hysteresis live here. Non-blocking kick-start (v4.24).
 
 ### DisplayManager.cpp / .h
 - **Purpose:** OLED rendering.
@@ -67,7 +67,7 @@ One entry per file. Purpose / Key items / Notes.
 - **Purpose:** CSV log write, hourly rotation, seal, boot recovery, time-jump guard.
 - **Key vars:** _live_file_start_epoch (NVS persisted).
 - **Key funcs:** log_init, log_write, log_write_event, log_rotate_check, log_boot_recovery, log_clear, log_list_sealed, log_delete_sealed, log_rotation_paused, log_get_size.
-- **Notes:** Schema 8 columns + outdoor_c. Boot skips seal if clock unset. Time-jump resets epoch instead of refusing forever.
+- **Notes:** Schema 9 columns: timestamp, temp_c, net_kbps, boost, fan, rpm, event, outdoor_c, room_c. Boot skips seal if clock unset. Time-jump resets epoch instead of refusing forever.
 
 ### SerialBuffer.cpp / .h
 - **Purpose:** Ring buffer feeding /serial web page.
@@ -79,9 +79,21 @@ One entry per file. Purpose / Key items / Notes.
 - **Key funcs:** weather_init, weather_loop, weather_get_temp.
 - **Notes:** 15-minute refresh. Returns -99 if not yet fetched.
 
+### Songs.cpp / .h
+- **Purpose:** Nokia "Grande Valse" jingle, played on sleep/wake transitions.
+- **Notes:** Uses `tone()` on BUZZER_PIN. Blocking (~1.5s). Quiet hours not respected.
+
 ### WebPage.h
 - **Purpose:** Embedded responsive HTML dashboard as PROGMEM string.
-- **Notes:** Served at /. Light theme only. Uses /status + history arrays. 5s poll. Threshold lines drawn on graphs.
+- **Notes:** Served at /. Light theme only. Uses /status + history arrays. 5s poll. Room card + net graph axis 8192 as of v4.23. Threshold lines drawn on graphs.
+
+### hwtest/hwtest.ino
+- **Purpose:** Bench verification sketch — fan ramp, NTC, hall, buzzer, LED.
+- **Notes:** Uses old PWM_MIN mapping, not production-equivalent. For bench only.
+
+### 3mf/
+- **Purpose:** 3D print files for the fan shroud and mount assembly.
+- **Notes:** Contains the phone assembly 3MF.
 
 ---
 
@@ -135,6 +147,11 @@ One entry per file. Purpose / Key items / Notes.
 - **Classes:** Report2H, ReportDaily, ReportWeekly.
 - **Notes:** All subclass Report2H, override _find_files() and _HEADER. Plot x-axis time labels, gear counts.
 
+### fanmate/dynatune.py
+- **Purpose:** KPI board test module. Six tests against a window of log rows.
+- **Key funcs:** analyse, _test_boost, _test_cooldown, _test_delta, _test_lag, _test_events, _test_log.
+- **Notes:** Pure Python, no GUI. Called by DynaTune window in dialogs.py. Boost KPI infers gear from fan % with 24/49/74/100 thresholds (matches firmware).
+
 ### fanmate/app.py
 - **Purpose:** Main App class, window, menu, tick loop.
 - **Key funcs:** menu_settings, menu_report_2h/daily/weekly, menu_dyna_tune, menu_ota, tick, apply_theme, theme_check.
@@ -142,25 +159,61 @@ One entry per file. Purpose / Key items / Notes.
 
 ---
 
+## QML GUI2 (package `fanmate_v2/`)
+
+### fanmate_v2/main.py
+- **Purpose:** QML launcher.
+- **Notes:** Run via venv: `~/fanmate-venv-test/bin/python3 -m fanmate_v2.main`.
+
+### fanmate_v2/bridge.py
+- **Purpose:** Python <-> QML bridge. Exposes /status fields as properties.
+- **Notes:** Reuses fanmate/ backend for polling and config.
+
+### fanmate_v2/qml/Main.qml
+- **Purpose:** Root window, drawer menu, gauge layout.
+- **Notes:** v1.11. Lamps, BoostBar, TempBar, three gauges, bottom info row.
+
+### fanmate_v2/qml/*.qml
+- **Gauges:** TempGauge, RpmGauge, TrafficGauge, BoostGauge
+- **Bars:** BoostBar, TempBar, Bar
+- **Lamps:** StatusLamps
+- **Dialogs:** OtaDialog
+- **Menu:** MenuButton
+
+**Note:** QML is parked (v1.11). Port frozen Tk behaviour once monitor
+phase completes. No QML work until TODONEXT says otherwise.
+
+---
+
 ## Docs
 
+### TODONEXT.md
+**Current phase — read this first.** Monitor v4.24/v3.95 for ~7 days,
+then port to QML. Open items, partition scheme, rules.
+
+### NOTES.md
+Session log, working rules, environment, behavioural constraints,
+naming convention. The "why" behind the code.
+
+### AUDIT.md
+Five-AI desk check of the codebase (2026-10-01). 97 findings ranked
+by consensus and severity. Status column tracks fixes.
+
 ### PROJECT_STATE.md
-Project snapshot — versions, hardware, pin map, features, known issues, next steps.
+Project snapshot — versions, hardware, pin map, features, known issues.
 
 ### FILES.md (this file)
 One entry per file.
 
 ### HANDOFF.md
-Generated by update_handoff.sh. Git state + PROJECT_STATE + file list + live /status + log list.
+Generated by update_handoff.sh. Git state + TODONEXT + NOTES +
+PROJECT_STATE + file list + live /status + log list.
 
 ### README.md
 Public-facing intro.
 
 ### update_handoff.sh
 Regenerates HANDOFF.md.
-
-### PROJECT.md
-Legacy doc (stale, says v3.44). Superseded by PROJECT_STATE.md.
 
 ---
 

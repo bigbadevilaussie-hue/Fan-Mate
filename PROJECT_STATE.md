@@ -1,9 +1,9 @@
 # Fan-Mate — Project State
 
-Snapshot date: 2026-09-29
-Latest firmware: V4.18 (tag v4.18)
-Latest GUI: Tk v3.87 (tag gui-v3.87) — workhorse, primary
-Latest GUI2: QML v1.11 (tag gui-v2-v1.11) — in progress, target
+Snapshot date: 2026-10-02
+Latest firmware: **V4.24** (tag v4.24)
+Latest GUI: Tk **v3.95** (tag gui-v3.95) — workhorse, primary
+Latest GUI2: QML **v1.11** (tag gui-v2-v1.11) — parked until monitor phase completes
 
 **Hardware is 100% complete and installed.** Fan shroud printed, mounted on Quad Lock adapter, phone docked, all sensors wired and verified on-bench and in-place.
 Repo: https://github.com/bigbadevilaussie-hue/Fan-Mate
@@ -22,22 +22,22 @@ Rule 4 — Fuck it lmao
 ## HARDWARE
 
 ### Current bench
-- ESP32-C3 SuperMini
+- ESP32-C3 SuperMini — mounted on perfboard in printed enclosure
 - External 72x40 SSD1306 OLED
-- DS18B20 waterproof probe (1m cable, 6mm tube) — currently on phone back
-- 40mm 4-wire PWM fan — currently on desk, testing
-- NTC 10k MF52AT B=3950 thermistor — **on order, in customs**
-- A3144 hall sensor (10 pack) — **on order, in transit**
+- DS18B20 waterproof probe — inside Quad Lock socket, contacting phone back
+- 40mm 4-wire PWM fan — in printed shroud, mounted on Quad Lock adapter
+- NTC 10k MF52AT B=3950 thermistor — on board, room reading
+- A3144 hall sensor — detecting phone presence via Quad Lock magnet
 - Buzzer, LEDs
 
 ### Room environment
 - Donga, Queensland
 - Ambient ~29°C (no A/C running)
 
-### Planned
-- 3D printed Quad Lock mount (STL in progress)
-- Room temp card on web page once NTC arrives
-- Beep reminder when room ≥ 30°C
+### Installed
+- Fan shroud printed, mounted on Quad Lock adapter, docked to phone
+- Hardware 100% complete — sensors wired, verified on-bench and in-place
+- Mount position fixed by RF: 10cm off the spot and mobile drops from 36 to 5 Mbps
 
 ---
 
@@ -45,7 +45,7 @@ Rule 4 — Fuck it lmao
 
 | GPIO | Function | Notes |
 |------|----------|-------|
-| 0 | Thermistor (NTC) | **planned — free** |
+| 0 | Thermistor (NTC) | 10k MF52AT, +6.0 offset |
 | 1 | Hall sensor (phone detect) | A3144, INPUT_PULLUP, LOW = present |
 | 2 | (free) | strapping, avoid |
 | 3 | Fan tach | INPUT_PULLUP, falling edge IRQ |
@@ -78,6 +78,7 @@ Rule 4 — Fuck it lmao
 | Logging.cpp/.h | Log rotation, seal, boot recovery, time-jump guard |
 | SerialBuffer.cpp/.h | Ring buffer for /serial web page |
 | WeatherClient.cpp/.h | Open-Meteo fetch (cached in NVS) |
+| Songs.cpp/.h | Nokia jingle on sleep/wake |
 | WebPage.h | Embedded responsive HTML dashboard |
 
 ### Version history (recent)
@@ -100,6 +101,11 @@ Rule 4 — Fuck it lmao
 | V4.16 | `phoneMode` removed entirely — always auto-detect via hall sensor |
 | V4.17 | `phonePresent` made `extern` in `FanController.cpp` (was `static`, shadowing global); jingle moved to sleep/wake |
 | V4.18 | **Delta guard** (`phone-room > 5` → gear 1 floor), delta alert branch, **flat PWM map** (`map(gear, 0, 4, 0, 255)` = real 25/50/75/100), kick-start 400ms |
+| V4.20 | `/config` GET valid JSON again (stray `{}` + trailing comma removed since v4.16) |
+| V4.21 | Delta guard exit band (5.0→4.0), heat gear hysteresis per gear, cosmetic cleanup |
+| V4.22 | NVS boost keys shortened to ≤15 chars — boost config now persists across reboot |
+| V4.23 | Web dashboard room card, net graph axis 2048→8192 |
+| V4.24 | Rate cap 10 MB/s, log actual gear 0–4 not binary, non-blocking kick-start, kick-start phone gate, log_resume preserves orphan, log_evict_oldest sorts by name |
 
 ---
 
@@ -120,17 +126,17 @@ Rule 4 — Fuck it lmao
 | fanmate/weather.py | Weather thread |
 | fanmate/widgets.py | Card, Graph, ReportPlot |
 | fanmate/dialogs.py | SettingsDialog, DynaTune |
+| fanmate/dynatune.py | Six KPI tests for DynaTune |
 | fanmate/reports.py | Report2H, ReportDaily, ReportWeekly |
 | fanmate/app.py | App class |
 
 ### Features
-- Live telemetry every 10s
+- Live telemetry every 10s (IP-based, bypasses mDNS 3–5s tax)
 - Weather card (Atkinsons Dam, Open-Meteo)
 - Temperature and network-rate graphs
-- TURBO badge when boost active
-- Settings dialog (Heat / Boost / Night / Phone)
-- Reports: Last 2 Hours, Daily, Weekly
-- DynaTune health check (Fan + Turbo scoring)
+- Settings dialog (Heat / Boost / Night)
+- Reports: Last 2 Hours, Daily, Weekly (room temp overlay)
+- DynaTune KPI board (6 tests: boost, cooldown, delta, lag, events, log)
 - OTA updates via HTTP multipart
 - Log sync via /log/list, /log/file, /log/ack with CRC32 verification
 - Day/night theme toggle
@@ -138,23 +144,23 @@ Rule 4 — Fuck it lmao
 
 ---
 
-## WEB DASHBOARD (new in V3.80, current V4.08)
+## WEB DASHBOARD (new in V3.80, current V4.23)
 
 Served directly by the ESP32. Open `http://fan-mate.local/` from iPhone, iPad, iMac.
 
 - Read-only, portrait layout, 420px max-width
 - Live refresh every 5s
-- Same cards as Tk GUI: weather, phone temp, fan/RPM, phone/status, clock, network graph, temperature graph
-- Threshold lines drawn on graphs (temp warning, boost threshold)
+- Cards: outdoor, room, phone temp, fan/RPM, phone/status, clock, network graph, temperature graph
+- Net graph axis 0–8192 KB/s; boost threshold line at config value
 - Auto-dims when disconnected
 
 ---
 
 ## LOG FORMAT
 
-**Schema (v4.08):**
-
-**Planned v3.81:**
+**Schema (v4.24):** `timestamp, temp_c, net_kbps, boost, fan, rpm, event, outdoor_c, room_c`
+- `boost` column is now the actual gear (0–4), not binary, since v4.24
+- Older files (pre-v4.24) have binary 0/1 in that column
 
 **Rotation:** Hourly. Files named `log-v{X.YY}-YYYYMMDD-HHMM.csv` where HHMM is start of content window.
 
@@ -191,36 +197,55 @@ Served directly by the ESP32. Open `http://fan-mate.local/` from iPhone, iPad, i
 
 ## WHAT'S NEXT
 
-### Firmware (V3.81)
-- NTC room temp on GPIO 0 (MF52AT 10k B=3950)
-- Beep reminder when room ≥ 30°C
-- Web page room temp card
-- 9th log column `room_c`
-- `FAN_STALL_ENABLED 1` once fan is permanently mounted
+**See TODONEXT.md — that's the authoritative current phase doc.**
 
-### GUI
-- Refinements as needed
+Summary as of 2026-10-02:
 
-### Later
-- Auto-AC via Alexa + Meross (separate project)
-- HANDOFF.md / FILES.md docs (this file is part of that)
+**Current phase: MONITOR.** Firmware v4.24 and Tk v3.95 frozen and running
+under real conditions for ~7 days before any further work.
+
+After the monitor week:
+1. Read the week's reports
+2. Freeze firmware and Tk if stable
+3. Then port to QML GUI2 — translation only
+
+**Open firmware items (low priority):**
+- F7 seal filename collisions
+- F8 `/status` SSID quote escape
+- F9 `settings_apply_json` validation
+- F10 legacy NVS fallback
+
+**Open Tk items:** none critical.
+
+**QML work:** deferred until firmware + Tk frozen.
+
+**Later / separate project:** Auto-AC via Alexa + Meross.
 
 ---
 
 ## KNOWN ISSUES
 
 - **No auto-AC yet.** Room hits 30°C, user turns AC on manually.
-- **Fan is on the desk** — not permanently mounted yet.
-- **NTC not wired** — on order.
-- **Hall sensor not wired** — on order.
-- **Mount STL in progress** — Quad Lock plate + vented slab + arm.
-- **Probe on phone back** reads phone temp; room temp card waiting on NTC.
+- **Summer tuning pending.** Thresholds currently fixed (33/35/37/39); will
+  need adjustment when ambient climbs. Adaptive (room-relative) thresholds
+  designed but not built.
+- **Cooling tends to timeout, not release on temp.** `cold_temp` captured
+  once per boost; morning captures from overnight cool don't track the
+  phone's actual temperature by the time cooldown runs. Known.
+- **Five-AI audit:** 97 findings in AUDIT.md. 26 closed. Remaining are
+  cosmetic, low-priority, or design decisions.
 
 ---
 
 ## QUICK REFERENCE
 
 **Build:**
+    cd ~/Documents/Arduino/fanmate
+    rm -rf build
+    arduino-cli compile --fqbn esp32:esp32:esp32c3 --export-binaries .
+    # binary: build/esp32.esp32.esp32c3/fanmate.ino.bin
+    # Fan-Mate uses the DEFAULT partition.
+    # Bike-Mate needs :PartitionScheme=min_spiffs — do not mix.
 
 **OTA:**
 GUI menu → 📡 Update Firmware → Y/N prompt

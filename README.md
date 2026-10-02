@@ -22,7 +22,7 @@ The iPhone is the sole internet uplink (weak signal, rural Queensland). Every by
 
 | GPIO | Function |
 |------|----------|
-| 0 | Thermistor (NTC room temp, planned) |
+| 0 | Thermistor (NTC 10k, room temp) |
 | 1 | Hall sensor (phone presence) |
 | 3 | Fan tach |
 | 4 | DS18B20 |
@@ -46,6 +46,10 @@ If the router becomes unreachable mid-session, boost gears freeze but the cooldo
 
 **Hourly log rotation.** Log sealed every hour, streamed to the Mac over WiFi, CRC32 verified, then deleted from the ESP32. Files named `log-vX.YY-YYYYMMDD-HHMM.csv`.
 
+**Delta guard.** If the phone is 5°C above room temperature — sun on the mount, heavy modem load, or an external heat source — the fan floor rises to gear 1 even when boost and heat rules are idle. Exit band at 3°C to prevent sawtooth. Phone temp floor at 24°C so a cold phone in a cold corner doesn't trigger it.
+
+**Heat control.** Four absolute thresholds (Warm / Hot / Hotter / Critical, defaults 33/35/37/39°C) drive fan gears 1–4. Each gear has entry and exit hysteresis so the fan doesn't flap at the threshold. Critical drives the **kill mode** state machine — the fan runs at 100%, the buzzer beeps every 30 s until acknowledged, and the router's WiFi repeater is cut to stop downloads feeding the phone's heat.
+
 **OTA over HTTP.** Compiled binary uploaded from the Mac GUI. Device reboots into new firmware.
 
 **Autonomous.** ESP32 keeps cooling and logging whether the Mac is on or off. Sleeps when the phone is absent, wakes when it returns.
@@ -54,7 +58,7 @@ If the router becomes unreachable mid-session, boost gears freeze but the cooldo
 
 ## Firmware
 
-Current version: **V4.10**
+Current version: **V4.24**
 
 ### HTTP API
 
@@ -87,7 +91,7 @@ Open `http://fan-mate.local/` from any browser on the same network — iPhone, i
 
 - Portrait layout, 420px max-width
 - Live refresh every 5s
-- Cards: weather, phone temp, fan/RPM, phone/status, clock
+- Cards: weather, room, phone temp, fan/RPM, phone/status, clock
 - Graphs: network rate, temperature history (15 min)
 - Threshold lines drawn on graphs
 
@@ -100,9 +104,9 @@ Read-only. For settings, use the Tk GUI.
 Python 3 on the Mac. Full control.
 
 - Live telemetry every 10s
-- Settings dialog (Heat / Boost / Night / Phone)
-- Reports: Last 2 Hours, Daily, Weekly
-- DynaTune health check
+- Settings dialog (Heat / Boost / Night)
+- Reports: Last 2 Hours, Daily, Weekly (with room temp overlay)
+- DynaTune KPI board — six diagnostic tests (boost, cooldown, delta, lag, events, log)
 - OTA updates
 - Log sync
 - Weather card
