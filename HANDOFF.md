@@ -68,7 +68,7 @@
 > scripts written to /tmp/ then run with python3. Never paste heredocs
 > or # comments directly.
 
-Generated: 2026-10-02 10:14:59
+Generated: 2026-10-02 10:17:25
 
 ---
 
@@ -76,6 +76,9 @@ Generated: 2026-10-02 10:14:59
 
 ```
 $ git log --oneline -10
+5121964 docs: NOTES session log through v4.24 / v3.95 + five-AI audit
+547c987 docs: AUDIT.md — mark 25 findings fixed in v4.21-v4.24 / gui-v3.90-v3.95
+200c9ec docs: regenerate handoff at v4.24 / gui-v3.95
 c03fc02 gui-v3.95: version string was stuck at 3.90 through four commits
 1dbacbf gui-v3.94: periodic config refresh, report timestamp cutoff, refresh button
 0222985 gui-v3.93: remove retired alarm/phone from fetch_config; is_night_now reads device config
@@ -83,9 +86,6 @@ c03fc02 gui-v3.95: version string was stuck at 3.90 through four commits
 de3f3dd v4.24: rate cap 10MB/s, log actual gear, non-blocking kick-start, orphan preserve, evict sort
 d8e7273 docs: roadmap — firmware v4.24, Tk v3.92, QML deferred until frozen
 35e2fea gui-v3.91: DynaTune fixes (7), GUI robustness (5), reports fixes (2) — KPI board now honest
-4abbbbf gui-v3.90: correct version drift — code was still 3.87 while gui-v3.89 tag existed
-c802614 v4.23: web dashboard room temp card + net graph axis 2048 to 8192
-d728450 docs: AUDIT.md — #2 NVS key length fixed in v4.22
 
 $ git status --short
  M HANDOFF.md
@@ -263,6 +263,57 @@ NEVER edit files by pasting shell commands directly. Always via Python script fi
 - `fanStallChanged` / `fanStall`
 
 ---
+
+### 2026-10-01/02 — v4.18 → v4.24, Tk v3.87 → v3.95, five-AI audit
+
+**Five-AI desk check.** Gemini, ChatGPT, Copilot, Claude, Mistral all read the
+same dump. Consolidated into AUDIT.md — 97 findings, ranked by severity and
+consensus. Claude and Mistral found the deepest items (NVS key length, log_resume
+truncation, DS18B20 85°C gap). All reports preserved in the audit doc as
+attributions.
+
+**Firmware v4.19 → v4.24:**
+- v4.20 — `/config` GET was returning invalid JSON since v4.16 (stray `{}` and
+  trailing comma after the night block). Fixed. This was why the Tk Settings
+  dialog kept failing with "Device unreachable".
+- v4.21 — delta guard exit band (5.0→4.0), heat gear exit band per gear,
+  cosmetic cleanup (dead `Config.h` macros removed, stale comments fixed,
+  unused vars removed)
+- v4.22 — NVS boost keys shortened to fit 15-char limit. This was silent data
+  loss — six keys 18-22 chars, `putInt`/`getInt` silently failed both
+  directions, boost config reverted to defaults on every reboot. Fixed.
+- v4.23 — WebPage.h room temp card, net graph axis 2048→8192
+- v4.24 — Opal rate cap at 10240 KB/s (kills 4.7 GB/s phantom from
+  tick-stretch), log writes actual gear 0-4 not binary, kick-start
+  non-blocking + phone gate, log_resume preserves orphan, log_evict_oldest
+  sorts by name
+
+**Tk GUI v3.87 → v3.95:**
+- v3.88 — FANMATE_URL uses IP not mDNS (Catalina resolves .local in 3-5s)
+- v3.89 — KPI board (six tests, dynatune.py module)
+- v3.90 — version drift correction (code said 3.87 while gui-v3.89 tag existed)
+- v3.91 — DynaTune fixes (7): boost clamp, thresholds, cooldown signature,
+  delta exit band, events include KILL, log seals exclude sleep, lag uses
+  timestamps. GUI robustness (5): tick try/except, level clamps, temp_graph
+  trigger, settings labels, Apply-wait-for-response. Reports fixes (2):
+  _find_files_since span walk, missing heuristic uses real gaps
+- v3.92 — SettingsDialog fetches config off main thread (no 10s freeze)
+- v3.93 — retired alarm/phone sections removed; is_night_now reads device config
+- v3.94 — periodic config refresh (5 min); report timestamp cutoff uses
+  newest file not Mac clock; Refresh button on report windows
+- v3.95 — version string catch-up (was stuck at 3.90 through four commits)
+
+**Five-AI audit findings fixed:** 25 of 97. Remaining are logged in AUDIT.md.
+The highest remaining priorities are firmware (log sealing edge cases, /status
+escaping, settings validation) and reports (DynaTune cooldown KPI needs
+firmware log change to be accurate).
+
+**Rule learned (again):** version bump is part of every patch. Multiple commits
+this session skipped the GUI_VERSION bump. Handoff and tags got out of sync
+with what the code reported.
+
+**Rule learned:** QML work deferred until firmware and Tk are frozen. QML ports
+frozen behaviour; it does not chase moving targets.
 
 ### Lessons from tonight
 
@@ -895,11 +946,11 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 ```
 {
     "fw": "4.24",
-    "uptime": 1317,
+    "uptime": 1462,
     "ip": "192.168.8.242",
-    "rssi": -55,
+    "rssi": -56,
     "ssid": "StarCabin",
-    "temp": 30.75,
+    "temp": 30.81,
     "fan": 0,
     "rpm": 0,
     "phone": 1,
@@ -908,22 +959,17 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
     "boost": 0,
     "boost_lvl": 0,
     "cooling": 0,
-    "net_kbps": 78.0,
+    "net_kbps": 165.9,
     "temp_lvl": 0,
     "opal": 1,
     "host": 1,
     "host_last_seen": 0,
     "sleep": 0,
     "sleep_countdown": 0,
-    "log_size": 2968,
+    "log_size": 3436,
     "outdoor_c": 21.9,
     "room_c": 28.7,
     "temp_hist": [
-        31.0,
-        31.0,
-        31.0,
-        30.9,
-        31.0,
         30.9,
         30.9,
         30.9,
@@ -937,11 +983,16 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
         30.9,
         30.9,
         30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
         30.8,
         30.8,
         30.8,
@@ -981,16 +1032,6 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
         30.8
     ],
     "net_hist": [
-        3.3,
-        2.6,
-        1.5,
-        80.8,
-        89.7,
-        89.7,
-        89.7,
-        78.1,
-        78.1,
-        79.4,
         97.4,
         97.4,
         97.4,
@@ -1040,7 +1081,17 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
         86.2,
         86.2,
         78.5,
-        78.0
+        78.0,
+        78.0,
+        72.0,
+        21.7,
+        3.6,
+        4.0,
+        4.0,
+        5.9,
+        31.0,
+        165.9,
+        165.9
     ],
     "kill_mode": 0,
     "temp_gear1": 33.0,
