@@ -71,7 +71,7 @@
 > Partition: Fan-Mate uses the DEFAULT partition (no FQBN suffix).
 > Bike-Mate uses :PartitionScheme=min_spiffs. Do not mix them up.
 
-Generated: 2026-10-02 10:22:09
+Generated: 2026-10-02 10:29:24
 
 ---
 
@@ -79,6 +79,8 @@ Generated: 2026-10-02 10:22:09
 
 ```
 $ git log --oneline -10
+1f4b9f7 docs: README, FILES, PROJECT_STATE updated to v4.24 / gui-v3.95
+9398bf0 docs: partition scheme note in TODONEXT and handoff top block
 a376c51 docs: regenerate handoff
 5121964 docs: NOTES session log through v4.24 / v3.95 + five-AI audit
 547c987 docs: AUDIT.md — mark 25 findings fixed in v4.21-v4.24 / gui-v3.90-v3.95
@@ -87,13 +89,9 @@ c03fc02 gui-v3.95: version string was stuck at 3.90 through four commits
 1dbacbf gui-v3.94: periodic config refresh, report timestamp cutoff, refresh button
 0222985 gui-v3.93: remove retired alarm/phone from fetch_config; is_night_now reads device config
 9bab623 gui-v3.92: SettingsDialog fetches config off main thread — no more 10s freeze
-de3f3dd v4.24: rate cap 10MB/s, log actual gear, non-blocking kick-start, orphan preserve, evict sort
-d8e7273 docs: roadmap — firmware v4.24, Tk v3.92, QML deferred until frozen
 
 $ git status --short
  M HANDOFF.md
- M update_handoff.sh
-?? TODONEXT.md
 
 $ git tag -l | tail -15
 v4.08
@@ -622,10 +620,10 @@ https://github.com/bigbadevilaussie-hue/Fan-Mate
 
 # Fan-Mate — Project State
 
-Snapshot date: 2026-09-29
-Latest firmware: V4.18 (tag v4.18)
-Latest GUI: Tk v3.87 (tag gui-v3.87) — workhorse, primary
-Latest GUI2: QML v1.11 (tag gui-v2-v1.11) — in progress, target
+Snapshot date: 2026-10-02
+Latest firmware: **V4.24** (tag v4.24)
+Latest GUI: Tk **v3.95** (tag gui-v3.95) — workhorse, primary
+Latest GUI2: QML **v1.11** (tag gui-v2-v1.11) — parked until monitor phase completes
 
 **Hardware is 100% complete and installed.** Fan shroud printed, mounted on Quad Lock adapter, phone docked, all sensors wired and verified on-bench and in-place.
 Repo: https://github.com/bigbadevilaussie-hue/Fan-Mate
@@ -644,22 +642,22 @@ Rule 4 — Fuck it lmao
 ## HARDWARE
 
 ### Current bench
-- ESP32-C3 SuperMini
+- ESP32-C3 SuperMini — mounted on perfboard in printed enclosure
 - External 72x40 SSD1306 OLED
-- DS18B20 waterproof probe (1m cable, 6mm tube) — currently on phone back
-- 40mm 4-wire PWM fan — currently on desk, testing
-- NTC 10k MF52AT B=3950 thermistor — **on order, in customs**
-- A3144 hall sensor (10 pack) — **on order, in transit**
+- DS18B20 waterproof probe — inside Quad Lock socket, contacting phone back
+- 40mm 4-wire PWM fan — in printed shroud, mounted on Quad Lock adapter
+- NTC 10k MF52AT B=3950 thermistor — on board, room reading
+- A3144 hall sensor — detecting phone presence via Quad Lock magnet
 - Buzzer, LEDs
 
 ### Room environment
 - Donga, Queensland
 - Ambient ~29°C (no A/C running)
 
-### Planned
-- 3D printed Quad Lock mount (STL in progress)
-- Room temp card on web page once NTC arrives
-- Beep reminder when room ≥ 30°C
+### Installed
+- Fan shroud printed, mounted on Quad Lock adapter, docked to phone
+- Hardware 100% complete — sensors wired, verified on-bench and in-place
+- Mount position fixed by RF: 10cm off the spot and mobile drops from 36 to 5 Mbps
 
 ---
 
@@ -667,7 +665,7 @@ Rule 4 — Fuck it lmao
 
 | GPIO | Function | Notes |
 |------|----------|-------|
-| 0 | Thermistor (NTC) | **planned — free** |
+| 0 | Thermistor (NTC) | 10k MF52AT, +6.0 offset |
 | 1 | Hall sensor (phone detect) | A3144, INPUT_PULLUP, LOW = present |
 | 2 | (free) | strapping, avoid |
 | 3 | Fan tach | INPUT_PULLUP, falling edge IRQ |
@@ -700,6 +698,7 @@ Rule 4 — Fuck it lmao
 | Logging.cpp/.h | Log rotation, seal, boot recovery, time-jump guard |
 | SerialBuffer.cpp/.h | Ring buffer for /serial web page |
 | WeatherClient.cpp/.h | Open-Meteo fetch (cached in NVS) |
+| Songs.cpp/.h | Nokia jingle on sleep/wake |
 | WebPage.h | Embedded responsive HTML dashboard |
 
 ### Version history (recent)
@@ -722,6 +721,11 @@ Rule 4 — Fuck it lmao
 | V4.16 | `phoneMode` removed entirely — always auto-detect via hall sensor |
 | V4.17 | `phonePresent` made `extern` in `FanController.cpp` (was `static`, shadowing global); jingle moved to sleep/wake |
 | V4.18 | **Delta guard** (`phone-room > 5` → gear 1 floor), delta alert branch, **flat PWM map** (`map(gear, 0, 4, 0, 255)` = real 25/50/75/100), kick-start 400ms |
+| V4.20 | `/config` GET valid JSON again (stray `{}` + trailing comma removed since v4.16) |
+| V4.21 | Delta guard exit band (5.0→4.0), heat gear hysteresis per gear, cosmetic cleanup |
+| V4.22 | NVS boost keys shortened to ≤15 chars — boost config now persists across reboot |
+| V4.23 | Web dashboard room card, net graph axis 2048→8192 |
+| V4.24 | Rate cap 10 MB/s, log actual gear 0–4 not binary, non-blocking kick-start, kick-start phone gate, log_resume preserves orphan, log_evict_oldest sorts by name |
 
 ---
 
@@ -742,17 +746,17 @@ Rule 4 — Fuck it lmao
 | fanmate/weather.py | Weather thread |
 | fanmate/widgets.py | Card, Graph, ReportPlot |
 | fanmate/dialogs.py | SettingsDialog, DynaTune |
+| fanmate/dynatune.py | Six KPI tests for DynaTune |
 | fanmate/reports.py | Report2H, ReportDaily, ReportWeekly |
 | fanmate/app.py | App class |
 
 ### Features
-- Live telemetry every 10s
+- Live telemetry every 10s (IP-based, bypasses mDNS 3–5s tax)
 - Weather card (Atkinsons Dam, Open-Meteo)
 - Temperature and network-rate graphs
-- TURBO badge when boost active
-- Settings dialog (Heat / Boost / Night / Phone)
-- Reports: Last 2 Hours, Daily, Weekly
-- DynaTune health check (Fan + Turbo scoring)
+- Settings dialog (Heat / Boost / Night)
+- Reports: Last 2 Hours, Daily, Weekly (room temp overlay)
+- DynaTune KPI board (6 tests: boost, cooldown, delta, lag, events, log)
 - OTA updates via HTTP multipart
 - Log sync via /log/list, /log/file, /log/ack with CRC32 verification
 - Day/night theme toggle
@@ -760,23 +764,23 @@ Rule 4 — Fuck it lmao
 
 ---
 
-## WEB DASHBOARD (new in V3.80, current V4.08)
+## WEB DASHBOARD (new in V3.80, current V4.23)
 
 Served directly by the ESP32. Open `http://fan-mate.local/` from iPhone, iPad, iMac.
 
 - Read-only, portrait layout, 420px max-width
 - Live refresh every 5s
-- Same cards as Tk GUI: weather, phone temp, fan/RPM, phone/status, clock, network graph, temperature graph
-- Threshold lines drawn on graphs (temp warning, boost threshold)
+- Cards: outdoor, room, phone temp, fan/RPM, phone/status, clock, network graph, temperature graph
+- Net graph axis 0–8192 KB/s; boost threshold line at config value
 - Auto-dims when disconnected
 
 ---
 
 ## LOG FORMAT
 
-**Schema (v4.08):**
-
-**Planned v3.81:**
+**Schema (v4.24):** `timestamp, temp_c, net_kbps, boost, fan, rpm, event, outdoor_c, room_c`
+- `boost` column is now the actual gear (0–4), not binary, since v4.24
+- Older files (pre-v4.24) have binary 0/1 in that column
 
 **Rotation:** Hourly. Files named `log-v{X.YY}-YYYYMMDD-HHMM.csv` where HHMM is start of content window.
 
@@ -813,36 +817,55 @@ Served directly by the ESP32. Open `http://fan-mate.local/` from iPhone, iPad, i
 
 ## WHAT'S NEXT
 
-### Firmware (V3.81)
-- NTC room temp on GPIO 0 (MF52AT 10k B=3950)
-- Beep reminder when room ≥ 30°C
-- Web page room temp card
-- 9th log column `room_c`
-- `FAN_STALL_ENABLED 1` once fan is permanently mounted
+**See TODONEXT.md — that's the authoritative current phase doc.**
 
-### GUI
-- Refinements as needed
+Summary as of 2026-10-02:
 
-### Later
-- Auto-AC via Alexa + Meross (separate project)
-- HANDOFF.md / FILES.md docs (this file is part of that)
+**Current phase: MONITOR.** Firmware v4.24 and Tk v3.95 frozen and running
+under real conditions for ~7 days before any further work.
+
+After the monitor week:
+1. Read the week's reports
+2. Freeze firmware and Tk if stable
+3. Then port to QML GUI2 — translation only
+
+**Open firmware items (low priority):**
+- F7 seal filename collisions
+- F8 `/status` SSID quote escape
+- F9 `settings_apply_json` validation
+- F10 legacy NVS fallback
+
+**Open Tk items:** none critical.
+
+**QML work:** deferred until firmware + Tk frozen.
+
+**Later / separate project:** Auto-AC via Alexa + Meross.
 
 ---
 
 ## KNOWN ISSUES
 
 - **No auto-AC yet.** Room hits 30°C, user turns AC on manually.
-- **Fan is on the desk** — not permanently mounted yet.
-- **NTC not wired** — on order.
-- **Hall sensor not wired** — on order.
-- **Mount STL in progress** — Quad Lock plate + vented slab + arm.
-- **Probe on phone back** reads phone temp; room temp card waiting on NTC.
+- **Summer tuning pending.** Thresholds currently fixed (33/35/37/39); will
+  need adjustment when ambient climbs. Adaptive (room-relative) thresholds
+  designed but not built.
+- **Cooling tends to timeout, not release on temp.** `cold_temp` captured
+  once per boost; morning captures from overnight cool don't track the
+  phone's actual temperature by the time cooldown runs. Known.
+- **Five-AI audit:** 97 findings in AUDIT.md. 26 closed. Remaining are
+  cosmetic, low-priority, or design decisions.
 
 ---
 
 ## QUICK REFERENCE
 
 **Build:**
+    cd ~/Documents/Arduino/fanmate
+    rm -rf build
+    arduino-cli compile --fqbn esp32:esp32:esp32c3 --export-binaries .
+    # binary: build/esp32.esp32.esp32c3/fanmate.ino.bin
+    # Fan-Mate uses the DEFAULT partition.
+    # Bike-Mate needs :PartitionScheme=min_spiffs — do not mix.
 
 **OTA:**
 GUI menu → 📡 Update Firmware → Y/N prompt
@@ -951,11 +974,11 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 ```
 {
     "fw": "4.24",
-    "uptime": 1747,
+    "uptime": 2182,
     "ip": "192.168.8.242",
-    "rssi": -54,
+    "rssi": -59,
     "ssid": "StarCabin",
-    "temp": 30.88,
+    "temp": 30.94,
     "fan": 0,
     "rpm": 0,
     "phone": 1,
@@ -964,16 +987,16 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
     "boost": 0,
     "boost_lvl": 0,
     "cooling": 0,
-    "net_kbps": 7.0,
+    "net_kbps": 72.3,
     "temp_lvl": 0,
     "opal": 1,
     "host": 1,
     "host_last_seen": 0,
     "sleep": 0,
     "sleep_countdown": 0,
-    "log_size": 4336,
+    "log_size": 5709,
     "outdoor_c": 22.3,
-    "room_c": 28.7,
+    "room_c": 28.9,
     "temp_hist": [
         30.8,
         30.8,
@@ -998,74 +1021,45 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
         30.8,
         30.8,
         30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
         30.9,
         30.9,
         30.9,
         30.8,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
         30.9,
         30.9,
         30.9,
         30.9
     ],
     "net_hist": [
-        9.5,
-        107.8,
-        107.8,
-        107.8,
-        105.7,
-        129.0,
-        129.0,
-        129.0,
-        115.4,
-        115.4,
-        56.7,
-        87.9,
-        87.9,
-        99.2,
-        99.2,
-        99.2,
-        56.4,
-        47.2,
-        15.7,
-        4.0,
-        3.4,
-        2.1,
-        2.1,
-        1.6,
-        148.0,
-        148.0,
-        148.0,
-        86.2,
-        86.2,
         78.5,
         78.0,
         78.0,
@@ -1096,7 +1090,36 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
         74.5,
         74.5,
         28.3,
-        7.0
+        7.0,
+        7.0,
+        3.3,
+        470.7,
+        470.7,
+        470.7,
+        137.8,
+        137.8,
+        137.8,
+        112.6,
+        112.6,
+        115.2,
+        115.2,
+        115.2,
+        112.2,
+        66.0,
+        65.4,
+        65.4,
+        63.5,
+        86.8,
+        86.8,
+        86.8,
+        71.6,
+        71.6,
+        75.6,
+        75.6,
+        75.6,
+        73.3,
+        73.3,
+        72.3
     ],
     "kill_mode": 0,
     "temp_gear1": 33.0,
