@@ -97,7 +97,7 @@ def fetch_config():
         if r.status_code != 200:
             return None
         d = r.json()
-        for sec in ("temp", "boost", "alarm", "night", "phone"):
+        for sec in ("temp", "boost", "night"):
             if sec in d:
                 latest_config.setdefault(sec, {}).update(d[sec])
         if "temp" not in latest_config:
