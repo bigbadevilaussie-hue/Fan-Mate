@@ -23,6 +23,9 @@ void silenceFanAndAlerts();
 // Stall detection — true when fan commanded on but tach reads zero
 bool fan_stall_active();
 
+// Current heat gear state (0-4), stateful with hysteresis
+int heat_get_gear();
+
 void beep_once_update();
 
 extern unsigned long phone_absent_since;

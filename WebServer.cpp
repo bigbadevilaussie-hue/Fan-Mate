@@ -98,12 +98,9 @@ static void handle_status() {
     json += "\"boost_lvl\":" + String(boostGear) + ",";
     json += "\"cooling\":" + String(auto_boost_cooling() ? 1 : 0) + ",";
     json += "\"net_kbps\":" + String(lastNetKbps, 1) + ",";
-    int tempGear = 0;
-    if (currentTemp >= config.tempGear4)      tempGear = 4;
-    else if (currentTemp >= config.tempGear3) tempGear = 3;
-    else if (currentTemp >= config.tempGear2) tempGear = 2;
-    else if (currentTemp >= config.tempGear1 - config.tempHysteresis) tempGear = 1;
-    json += "\"temp_lvl\":" + String(tempGear) + ",";
+    // Read the actual heat gear state (stateful, matches the fan decision)
+    extern int heat_get_gear();
+    json += "\"temp_lvl\":" + String(heat_get_gear()) + ",";
     json += "\"opal\":" + String(opal_logged_in() ? 1 : 0) + ",";
     unsigned long since_host = (host_last_ms > 0) ? (millis() - host_last_ms) : 999999;
     int host_alive = (since_host < 60000) ? 1 : 0;

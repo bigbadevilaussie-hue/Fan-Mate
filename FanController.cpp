@@ -284,6 +284,8 @@ static void kill_state_machine(float currentTemp) {
 }
 
 // ------------------------------------------------------------
+int heat_get_gear() { return heat_gear_state; }
+
 bool fan_stall_active() { return fan_stall_alarm; }
 
 // ------------------------------------------------------------
