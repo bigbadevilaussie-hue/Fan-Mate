@@ -139,6 +139,57 @@ NEVER edit files by pasting shell commands directly. Always via Python script fi
 
 ---
 
+### 2026-10-01/02 — v4.18 → v4.24, Tk v3.87 → v3.95, five-AI audit
+
+**Five-AI desk check.** Gemini, ChatGPT, Copilot, Claude, Mistral all read the
+same dump. Consolidated into AUDIT.md — 97 findings, ranked by severity and
+consensus. Claude and Mistral found the deepest items (NVS key length, log_resume
+truncation, DS18B20 85°C gap). All reports preserved in the audit doc as
+attributions.
+
+**Firmware v4.19 → v4.24:**
+- v4.20 — `/config` GET was returning invalid JSON since v4.16 (stray `{}` and
+  trailing comma after the night block). Fixed. This was why the Tk Settings
+  dialog kept failing with "Device unreachable".
+- v4.21 — delta guard exit band (5.0→4.0), heat gear exit band per gear,
+  cosmetic cleanup (dead `Config.h` macros removed, stale comments fixed,
+  unused vars removed)
+- v4.22 — NVS boost keys shortened to fit 15-char limit. This was silent data
+  loss — six keys 18-22 chars, `putInt`/`getInt` silently failed both
+  directions, boost config reverted to defaults on every reboot. Fixed.
+- v4.23 — WebPage.h room temp card, net graph axis 2048→8192
+- v4.24 — Opal rate cap at 10240 KB/s (kills 4.7 GB/s phantom from
+  tick-stretch), log writes actual gear 0-4 not binary, kick-start
+  non-blocking + phone gate, log_resume preserves orphan, log_evict_oldest
+  sorts by name
+
+**Tk GUI v3.87 → v3.95:**
+- v3.88 — FANMATE_URL uses IP not mDNS (Catalina resolves .local in 3-5s)
+- v3.89 — KPI board (six tests, dynatune.py module)
+- v3.90 — version drift correction (code said 3.87 while gui-v3.89 tag existed)
+- v3.91 — DynaTune fixes (7): boost clamp, thresholds, cooldown signature,
+  delta exit band, events include KILL, log seals exclude sleep, lag uses
+  timestamps. GUI robustness (5): tick try/except, level clamps, temp_graph
+  trigger, settings labels, Apply-wait-for-response. Reports fixes (2):
+  _find_files_since span walk, missing heuristic uses real gaps
+- v3.92 — SettingsDialog fetches config off main thread (no 10s freeze)
+- v3.93 — retired alarm/phone sections removed; is_night_now reads device config
+- v3.94 — periodic config refresh (5 min); report timestamp cutoff uses
+  newest file not Mac clock; Refresh button on report windows
+- v3.95 — version string catch-up (was stuck at 3.90 through four commits)
+
+**Five-AI audit findings fixed:** 25 of 97. Remaining are logged in AUDIT.md.
+The highest remaining priorities are firmware (log sealing edge cases, /status
+escaping, settings validation) and reports (DynaTune cooldown KPI needs
+firmware log change to be accurate).
+
+**Rule learned (again):** version bump is part of every patch. Multiple commits
+this session skipped the GUI_VERSION bump. Handoff and tags got out of sync
+with what the code reported.
+
+**Rule learned:** QML work deferred until firmware and Tk are frozen. QML ports
+frozen behaviour; it does not chase moving targets.
+
 ### Lessons from tonight
 
 **QML `Column` + anchors don't mix.** Any child of a `Column` cannot use `anchors.verticalCenter`, `anchors.fill`, `anchors.top`, etc. — Column manages vertical positioning and Qt errors out with `QML Column: Cannot specify top, bottom, verticalCenter, fill or centerIn anchors for items inside Column.` Use `TapHandler` for click handling inside Columns, not `MouseArea`.
