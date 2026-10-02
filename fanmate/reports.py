@@ -51,7 +51,9 @@ class Report2H(tk.Toplevel):
         return files[-n:]
 
     def _find_files_since(self, hours):
-        """Walk back from newest until cumulative coverage >= hours."""
+        """Walk back from newest until cumulative coverage >= hours.
+        Uses the newest file's own timestamp as 'now', so a wrong Mac
+        clock doesn't skew the window."""
         import glob
         from datetime import datetime, timedelta
         pattern = os.path.join(LOG_DIR, "log-*.csv")
@@ -59,22 +61,32 @@ class Report2H(tk.Toplevel):
                        if not p.endswith(".part"))
         if not files:
             return []
-        # Parse the date-time from each filename (after firmware prefix)
-        out = []
-        cutoff = datetime.now() - timedelta(hours=hours)
-        for p in reversed(files):
-            out.append(p)
-            # Try to derive start time from filename
+
+        def file_time(path):
+            base = os.path.basename(path).rsplit(".", 1)[0]
+            parts = base.split("-")
+            date_s, time_s = parts[-2], parts[-1]
+            return datetime.strptime(date_s + time_s, "%Y%m%d%H%M")
+
+        newest = None
+        for path in reversed(files):
             try:
-                base = os.path.basename(p).rsplit(".", 1)[0]
-                parts = base.split("-")
-                # log-<fw>-<YYYYMMDD>-<HHMM>.csv
-                date_s = parts[-2]
-                time_s = parts[-1]
-                t = datetime.strptime(date_s + time_s, "%Y%m%d%H%M")
-                if t <= cutoff:
-                    break
+                newest = file_time(path)
+                break
             except Exception:
+                continue
+        if newest is None:
+            return files[-2:]
+
+        cutoff = newest - timedelta(hours=hours)
+        out = []
+        for path in reversed(files):
+            try:
+                t = file_time(path)
+            except Exception:
+                continue
+            out.append(path)
+            if t <= cutoff:
                 break
         out.sort()
         return out
@@ -252,9 +264,31 @@ class Report2H(tk.Toplevel):
                        f"3-4: {s['gear34_count']}"),
                  font=("Helvetica Neue", 10)).pack(anchor="w")
 
-        tk.Button(wrap, text="Close", width=12,
+        btns = tk.Frame(wrap)
+        btns.pack(pady=(14, 0))
+        tk.Button(btns, text="Refresh", width=12,
                   font=("Helvetica Neue", 11),
-                  command=self.destroy).pack(pady=(14, 0))
+                  command=self._refresh).pack(side="left", padx=6)
+        tk.Button(btns, text="Close", width=12,
+                  font=("Helvetica Neue", 11),
+                  command=self.destroy).pack(side="left", padx=6)
+
+    def _refresh(self):
+        for w in self.winfo_children():
+            w.destroy()
+        files = self._find_files()
+        if not files:
+            tk.Label(self, text="No log files found",
+                     font=("Helvetica Neue", 13), padx=30, pady=30).pack()
+            tk.Button(self, text="Close", command=self.destroy).pack(pady=20)
+            self._apply_theme()
+            return
+        rows = []
+        for path in files:
+            rows.extend(self._parse(path))
+        summary = self._summarise(rows, files)
+        self._build_ui(rows, summary)
+        self._apply_theme()
 
     def _apply_theme(self):
         t = self.app.theme

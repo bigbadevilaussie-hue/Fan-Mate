@@ -13,6 +13,7 @@ from .helpers import set_status
 
 def http_poll_loop():
     poll_count = 0
+    last_config_fetch = 0.0
     while True:
         poll_count += 1
         try:
@@ -57,8 +58,12 @@ def http_poll_loop():
                         state._http_ever_connected = True
                         print(f"[HTTP] connected {FANMATE_URL}")
                     fetch_config()
+                    last_config_fetch = time.time()
                     if not state.time_synced:
                         sync_time_once()
+                elif time.time() - last_config_fetch >= 300:
+                    fetch_config()
+                    last_config_fetch = time.time()
 
                 set_status("connected")
             else:
