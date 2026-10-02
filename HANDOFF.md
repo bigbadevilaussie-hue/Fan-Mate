@@ -68,7 +68,7 @@
 > scripts written to /tmp/ then run with python3. Never paste heredocs
 > or # comments directly.
 
-Generated: 2026-10-01 07:46:41
+Generated: 2026-10-02 10:14:59
 
 ---
 
@@ -76,26 +76,21 @@ Generated: 2026-10-01 07:46:41
 
 ```
 $ git log --oneline -10
-e02a3f6 gui-v3.89: DynaTune KPI board (6 tests) + dynatune.py module + event column parsers + room temp on plots + FANMATE_URL IP
-c98fb46 docs: regenerate handoff
-0ea9ac0 docs: log next session plan (fix Tk Settings, then port to GUI2)
-5bf135f docs: regenerate handoff at v4.18 / gui-v3.87 / gui-v2-v1.11; dump command uses IP and lists new QML
-500ecb4 docs: NOTES session log to v4.18/GUI2-v1.11; PROJECT_STATE header updated; pending items refreshed
-1b12561 gui-v2-v1.11: lamp bars (BoostBar/TempBar) + 4 status lamps + bottom info row; top strip + STATUS removed
-98c24fe gui-v2-v1.08: QML room temp wired to bridge (room_c from /status)
-cd7ab69 gui-v3.87: SettingsDialog None guard on fetch_config failure
-d90a6f4 v4.18: delta guard (phone-room > 5C -> gear 1 + WARN), flat PWM map (gear 1 = 25%), kick-start 400ms
-10a2963 v4.17: phonePresent extern shadow fix; Nokia jingle on sleep/wake
+c03fc02 gui-v3.95: version string was stuck at 3.90 through four commits
+1dbacbf gui-v3.94: periodic config refresh, report timestamp cutoff, refresh button
+0222985 gui-v3.93: remove retired alarm/phone from fetch_config; is_night_now reads device config
+9bab623 gui-v3.92: SettingsDialog fetches config off main thread — no more 10s freeze
+de3f3dd v4.24: rate cap 10MB/s, log actual gear, non-blocking kick-start, orphan preserve, evict sort
+d8e7273 docs: roadmap — firmware v4.24, Tk v3.92, QML deferred until frozen
+35e2fea gui-v3.91: DynaTune fixes (7), GUI robustness (5), reports fixes (2) — KPI board now honest
+4abbbbf gui-v3.90: correct version drift — code was still 3.87 while gui-v3.89 tag existed
+c802614 v4.23: web dashboard room temp card + net graph axis 2048 to 8192
+d728450 docs: AUDIT.md — #2 NVS key length fixed in v4.22
 
 $ git status --short
  M HANDOFF.md
 
 $ git tag -l | tail -15
-v4.00-firmware
-v4.01
-v4.02
-v4.03
-v4.05
 v4.08
 v4.09
 v4.10
@@ -106,6 +101,11 @@ v4.14
 v4.16
 v4.17
 v4.18
+v4.20
+v4.21
+v4.22
+v4.23
+v4.24
 ```
 
 ---
@@ -113,8 +113,8 @@ v4.18
 ## VERSIONS
 
 ```
-#define FAN_MATE_VERSION "4.18"
-GUI_VERSION = "3.87"
+#define FAN_MATE_VERSION "4.24"
+GUI_VERSION = "3.95"
     property string guiVersion: "1.11"
             text: "GUI v" + root.guiVersion + "  ·  FW " + dev.fw
 ```
@@ -344,6 +344,58 @@ shows Apply / Dismiss buttons next to the recommendation bar.
 
 Do NOT build Phase 2 until the six KPI tests have run for several days
 and their PASS/WARN/FAIL behaviour is trusted.
+
+---
+
+## ROADMAP — firmware & Tk stabilisation, then QML
+
+**Rule:** No QML work until firmware and Tk are frozen. QML ports
+frozen behaviour; it does not chase moving targets.
+
+### Session 1 — Firmware v4.24
+
+High impact:
+1. Log actual gear 0-4 in boost column, not binary 0/1
+2. Cap Opal rate at 10240 KB/s in tick_15s to reject tick-stretch artefacts
+3. Kick-start: non-blocking state machine, no delay(400) in loop
+4. Kick-start: gate on phonePresent so phone-absent doesn't pulse the fan
+
+Medium — data loss:
+5. log_resume: don't overwrite if pre-sleep seal failed
+6. log_evict_oldest: sort by filename before deleting
+7. Seal filename collisions: append counter if name exists
+
+Lower:
+8. /status: escape SSID and IP quotes in JSON
+9. settings_apply_json: validate gear ordering, night range, boost mode
+10. Settings.cpp legacy fallback: don't map temp.kill into both gear3 and gear4
+
+Not doing:
+- Kill repeater re-enable (deliberate)
+- Night cap removal (feature decision)
+- Panic/kill quiet hours (arguable)
+
+### Session 2 — Tk GUI v3.92
+
+1. Settings dialog: move fetch_config to background thread
+2. fetch_config refresh every 5 min (not just on connect)
+3. Remove retired alarm/phone sections from fetch_config
+4. _find_files_since: use newest file timestamp, not Mac clock
+5. Report window: manual Refresh button
+6. is_night_now: read from latest_config, not hardcoded 22/7
+7. DynaTune cooldown KPI: leave as-is (log limitation)
+
+### Session 3+ — stabilise
+
+Run for a week. Watch reports. Fix what breaks.
+
+### Session 4 (later) — QML GUI2 v1.12
+
+Only after firmware and Tk are frozen:
+1. Settings panel (Rectangle overlay, not Drawer)
+2. Kill banner (SILENCE/ARM)
+3. Delta lamp
+4. Bridge URLs use IP not .local
 
 ---
 
@@ -768,29 +820,29 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 ```
 -rw-r--r--@ 1 Nick  staff   5701 30 Sep 09:46 AutoBoost.cpp
 -rw-r--r--@ 1 Nick  staff   1610 30 Sep 09:46 AutoBoost.h
--rw-r--r--@ 1 Nick  staff   2224 30 Sep 19:30 Config.h
+-rw-r--r--@ 1 Nick  staff   1900  2 Oct 09:45 Config.h
 -rw-r--r--@ 1 Nick  staff   5501 27 Sep 18:00 DisplayManager.cpp
 -rw-r--r--@ 1 Nick  staff    422 26 Sep 10:16 DisplayManager.h
--rw-r--r--@ 1 Nick  staff  13243 30 Sep 19:30 FanController.cpp
+-rw-r--r--@ 1 Nick  staff  14553  2 Oct 09:48 FanController.cpp
 -rw-r--r--@ 1 Nick  staff    748 30 Sep 12:46 FanController.h
--rw-r--r--@ 1 Nick  staff  14104 30 Sep 12:46 Logging.cpp
+-rw-r--r--@ 1 Nick  staff  14870  2 Oct 09:49 Logging.cpp
 -rw-r--r--@ 1 Nick  staff    647 29 Sep 08:06 Logging.h
--rw-r--r--@ 1 Nick  staff   8513 28 Sep 23:36 OpalClient.cpp
+-rw-r--r--@ 1 Nick  staff   8397  1 Oct 09:33 OpalClient.cpp
 -rw-r--r--@ 1 Nick  staff    343 28 Sep 21:16 OpalClient.h
 -rw-r--r--@ 1 Nick  staff    779 26 Sep 22:04 SerialBuffer.cpp
 -rw-r--r--@ 1 Nick  staff    170 26 Sep 22:03 SerialBuffer.h
--rw-r--r--@ 1 Nick  staff   6978 30 Sep 16:45 Settings.cpp
--rw-r--r--@ 1 Nick  staff   1266 30 Sep 16:44 Settings.h
+-rw-r--r--@ 1 Nick  staff   6800  1 Oct 10:04 Settings.cpp
+-rw-r--r--@ 1 Nick  staff   1254  1 Oct 09:28 Settings.h
 -rw-r--r--  1 Nick  staff    734 30 Sep 16:02 Songs.cpp
 -rw-r--r--  1 Nick  staff     85 30 Sep 16:02 Songs.h
 -rw-r--r--@ 1 Nick  staff   1716 28 Sep 22:42 WeatherClient.cpp
 -rw-r--r--@ 1 Nick  staff    185 26 Sep 16:33 WeatherClient.h
--rw-r--r--@ 1 Nick  staff  12499 30 Sep 09:00 WebPage.h
--rw-r--r--@ 1 Nick  staff  15926 30 Sep 16:44 WebServer.cpp
+-rw-r--r--@ 1 Nick  staff  12801  2 Oct 08:54 WebPage.h
+-rw-r--r--@ 1 Nick  staff  15906  1 Oct 08:17 WebServer.cpp
 -rw-r--r--@ 1 Nick  staff    142 27 Sep 17:39 WebServer.h
--rw-r--r--@ 1 Nick  staff   3533 30 Sep 16:05 WiFiManager.cpp
+-rw-r--r--@ 1 Nick  staff   3533  1 Oct 09:28 WiFiManager.cpp
 -rw-r--r--@ 1 Nick  staff    315 26 Sep 17:54 WiFiManager.h
--rw-r--r--  1 Nick  staff   5971 30 Sep 18:07 fanmate.ino
+-rw-r--r--  1 Nick  staff   6007  2 Oct 09:46 fanmate.ino
 -rw-r--r--@ 1 Nick  staff    669 25 Sep 15:31 secrets.example.h
 -rw-r--r--@ 1 Nick  staff    770 25 Sep 16:48 secrets.h
 ```
@@ -802,14 +854,14 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 ```
 -rw-r--r--@ 1 Nick  staff    162 27 Sep 09:23 fanmate.py
 -rw-r--r--  1 Nick  staff     27 27 Sep 09:09 fanmate/__init__.py
--rw-r--r--  1 Nick  staff  14895 30 Sep 16:45 fanmate/app.py
--rw-r--r--  1 Nick  staff   1265  1 Oct 07:23 fanmate/config.py
--rw-r--r--  1 Nick  staff  18525  1 Oct 07:44 fanmate/dialogs.py
--rw-r--r--  1 Nick  staff   7489  1 Oct 07:42 fanmate/dynatune.py
--rw-r--r--  1 Nick  staff   2289 29 Sep 07:49 fanmate/helpers.py
--rw-r--r--  1 Nick  staff   3963 30 Sep 12:55 fanmate/http_client.py
+-rw-r--r--@ 1 Nick  staff  15101  2 Oct 09:31 fanmate/app.py
+-rw-r--r--  1 Nick  staff   1265  2 Oct 10:12 fanmate/config.py
+-rw-r--r--@ 1 Nick  staff  19519  2 Oct 10:03 fanmate/dialogs.py
+-rw-r--r--  1 Nick  staff   8602  2 Oct 09:34 fanmate/dynatune.py
+-rw-r--r--  1 Nick  staff   2437  2 Oct 10:06 fanmate/helpers.py
+-rw-r--r--  1 Nick  staff   4173  2 Oct 10:08 fanmate/http_client.py
 -rw-r--r--  1 Nick  staff   2248 27 Sep 10:06 fanmate/log_sync.py
--rw-r--r--  1 Nick  staff  10668  1 Oct 07:36 fanmate/reports.py
+-rw-r--r--  1 Nick  staff  13212  2 Oct 10:08 fanmate/reports.py
 -rw-r--r--  1 Nick  staff   1129 30 Sep 16:45 fanmate/state.py
 -rw-r--r--  1 Nick  staff   1888 27 Sep 09:19 fanmate/weather.py
 -rw-r--r--  1 Nick  staff   7134  1 Oct 07:17 fanmate/widgets.py
@@ -842,12 +894,12 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 
 ```
 {
-    "fw": "4.18",
-    "uptime": 40976,
+    "fw": "4.24",
+    "uptime": 1317,
     "ip": "192.168.8.242",
-    "rssi": -64,
+    "rssi": -55,
     "ssid": "StarCabin",
-    "temp": 28.56,
+    "temp": 30.75,
     "fan": 0,
     "rpm": 0,
     "phone": 1,
@@ -856,149 +908,149 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
     "boost": 0,
     "boost_lvl": 0,
     "cooling": 0,
-    "net_kbps": 204.6,
+    "net_kbps": 78.0,
     "temp_lvl": 0,
     "opal": 1,
     "host": 1,
     "host_last_seen": 0,
     "sleep": 0,
     "sleep_countdown": 0,
-    "log_size": 9116,
-    "outdoor_c": 15.7,
-    "room_c": 27.2,
+    "log_size": 2968,
+    "outdoor_c": 21.9,
+    "room_c": 28.7,
     "temp_hist": [
-        27.2,
-        27.2,
-        27.2,
-        27.2,
-        27.3,
-        27.3,
-        27.3,
-        27.4,
-        27.4,
-        27.4,
-        27.4,
-        27.4,
-        27.4,
-        27.5,
-        27.6,
-        27.6,
-        27.6,
-        27.6,
-        27.6,
-        27.6,
-        27.6,
-        27.7,
-        27.7,
-        27.8,
-        27.8,
-        27.8,
-        27.8,
-        27.9,
-        27.9,
-        27.9,
-        27.9,
-        27.9,
-        28.0,
-        28.0,
-        28.0,
-        28.0,
-        28.1,
-        28.1,
-        28.1,
-        28.1,
-        28.1,
-        28.1,
-        28.2,
-        28.2,
-        28.3,
-        28.3,
-        28.3,
-        28.3,
-        28.3,
-        28.3,
-        28.3,
-        28.4,
-        28.4,
-        28.4,
-        28.4,
-        28.4,
-        28.4,
-        28.5,
-        28.5,
-        28.5
+        31.0,
+        31.0,
+        31.0,
+        30.9,
+        31.0,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.9,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8,
+        30.8
     ],
     "net_hist": [
-        4.0,
-        4.0,
-        4.0,
-        3.8,
-        118.6,
-        273.6,
-        273.6,
-        273.6,
-        214.7,
-        287.0,
-        287.0,
-        287.0,
-        281.7,
-        232.7,
-        162.4,
-        162.4,
-        9.4,
-        5.4,
-        3.1,
-        3.1,
-        1.8,
-        2.4,
-        72.1,
-        159.4,
-        159.4,
-        159.4,
-        117.8,
-        81.7,
-        93.5,
-        93.5,
-        93.5,
+        3.3,
+        2.6,
+        1.5,
+        80.8,
+        89.7,
+        89.7,
+        89.7,
+        78.1,
+        78.1,
+        79.4,
+        97.4,
+        97.4,
+        97.4,
+        46.0,
+        46.0,
+        55.0,
+        55.0,
+        55.0,
+        43.8,
+        43.8,
+        43.8,
+        36.6,
+        36.6,
+        36.6,
+        4.4,
+        4.4,
         2.9,
-        2.9,
-        10.9,
-        10.9,
-        11.5,
-        244.4,
-        368.3,
-        368.3,
-        368.3,
-        277.2,
-        277.2,
-        321.6,
-        321.6,
-        321.6,
-        12.0,
-        2.0,
+        3.2,
+        3.2,
+        9.5,
+        107.8,
+        107.8,
+        107.8,
+        105.7,
+        129.0,
+        129.0,
+        129.0,
+        115.4,
+        115.4,
+        56.7,
+        87.9,
+        87.9,
+        99.2,
+        99.2,
+        99.2,
+        56.4,
+        47.2,
+        15.7,
+        4.0,
+        3.4,
         2.1,
         2.1,
-        2.1,
-        1.1,
-        140.8,
-        140.8,
-        237.1,
-        237.1,
-        237.1,
-        178.2,
-        204.6,
-        204.6,
-        204.6
+        1.6,
+        148.0,
+        148.0,
+        148.0,
+        86.2,
+        86.2,
+        78.5,
+        78.0
     ],
     "kill_mode": 0,
-    "temp_gear1": 30.0,
-    "temp_gear2": 32.0,
-    "temp_gear3": 34.0,
-    "temp_gear4": 36.0,
-    "temp_warning": 32.0,
-    "temp_panic": 34.0,
-    "temp_kill": 36.0,
-    "boost_threshold": 700
+    "temp_gear1": 33.0,
+    "temp_gear2": 35.0,
+    "temp_gear3": 37.0,
+    "temp_gear4": 39.0,
+    "temp_warning": 35.0,
+    "temp_panic": 37.0,
+    "temp_kill": 39.0,
+    "boost_threshold": 900
 }
 ```
 
@@ -1007,15 +1059,15 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 ## LOG FILES ON MAC
 
 ```
--rw-r--r--  1 Nick  staff  12179 30 Sep 22:00 /Users/Nick/Documents/FanMate_logs/log-4.18-20260930-2100.csv
--rw-r--r--  1 Nick  staff  11207 30 Sep 23:00 /Users/Nick/Documents/FanMate_logs/log-4.18-20260930-2200.csv
--rw-r--r--  1 Nick  staff  11293  1 Oct 00:00 /Users/Nick/Documents/FanMate_logs/log-4.18-20260930-2300.csv
--rw-r--r--  1 Nick  staff  11446  1 Oct 01:00 /Users/Nick/Documents/FanMate_logs/log-4.18-20261001-0000.csv
--rw-r--r--  1 Nick  staff  11607  1 Oct 02:12 /Users/Nick/Documents/FanMate_logs/log-4.18-20261001-0100.csv
--rw-r--r--  1 Nick  staff  11543  1 Oct 03:00 /Users/Nick/Documents/FanMate_logs/log-4.18-20261001-0200.csv
--rw-r--r--  1 Nick  staff  11635  1 Oct 05:16 /Users/Nick/Documents/FanMate_logs/log-4.18-20261001-0300.csv
--rw-r--r--  1 Nick  staff  11636  1 Oct 05:16 /Users/Nick/Documents/FanMate_logs/log-4.18-20261001-0400.csv
--rw-r--r--  1 Nick  staff  11590  1 Oct 06:55 /Users/Nick/Documents/FanMate_logs/log-4.18-20261001-0500.csv
--rw-r--r--  1 Nick  staff  12002  1 Oct 07:00 /Users/Nick/Documents/FanMate_logs/log-4.18-20261001-0600.csv
+-rw-r--r--  1 Nick  staff  11341  2 Oct 02:00 /Users/Nick/Documents/FanMate_logs/log-4.22-20261002-0100.csv
+-rw-r--r--  1 Nick  staff  11649  2 Oct 03:00 /Users/Nick/Documents/FanMate_logs/log-4.22-20261002-0200.csv
+-rw-r--r--  1 Nick  staff  11625  2 Oct 04:00 /Users/Nick/Documents/FanMate_logs/log-4.22-20261002-0300.csv
+-rw-r--r--  1 Nick  staff  11406  2 Oct 05:00 /Users/Nick/Documents/FanMate_logs/log-4.22-20261002-0400.csv
+-rw-r--r--  1 Nick  staff  11304  2 Oct 06:00 /Users/Nick/Documents/FanMate_logs/log-4.22-20261002-0500.csv
+-rw-r--r--  1 Nick  staff  11452  2 Oct 07:00 /Users/Nick/Documents/FanMate_logs/log-4.22-20261002-0600.csv
+-rw-r--r--  1 Nick  staff  11504  2 Oct 08:00 /Users/Nick/Documents/FanMate_logs/log-4.22-20261002-0700.csv
+-rw-r--r--  1 Nick  staff  11434  2 Oct 09:00 /Users/Nick/Documents/FanMate_logs/log-4.22-20261002-0800.csv
+-rw-r--r--  1 Nick  staff   3009  2 Oct 09:15 /Users/Nick/Documents/FanMate_logs/log-4.23-20261002-0900.csv
+-rw-r--r--  1 Nick  staff   1561  2 Oct 10:00 /Users/Nick/Documents/FanMate_logs/log-4.24-20261002-0953.csv
 ```
 
