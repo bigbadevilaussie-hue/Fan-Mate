@@ -23,3 +23,7 @@
 #define OPAL_PASSWORD   "your-router-password"
 
 #endif
+
+// Google Drive upload endpoint (Apps Script web app URL)
+// Keep secret — anyone with this URL can write to your Drive.
+#define DRIVE_URL "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec"

@@ -6,6 +6,7 @@
 #include "AutoBoost.h"
 
 #include <LittleFS.h>
+#include <HTTPClient.h>
 #include <Preferences.h>
 #include <time.h>
 #include <sys/time.h>
@@ -115,6 +116,76 @@ static void open_fresh_live(time_t start_epoch) {
     save_start_epoch(start_epoch);
 }
 
+// ------------------------------------------------------------
+//  Google Drive upload — POST sealed log to Apps Script
+//  HTTP 302 is treated as success (Apps Script redirect pattern).
+// ------------------------------------------------------------
+static bool upload_to_drive(const char* sealed_path, const char* name) {
+    File f = LittleFS.open(sealed_path, "r");
+    if (!f) {
+        log_print("[DRIVE] cannot open %s\n", sealed_path);
+        return false;
+    }
+
+    size_t fileSize = f.size();
+    if (fileSize == 0) {
+        log_print("[DRIVE] %s empty, skipping\n", name);
+        f.close();
+        return true;
+    }
+
+    String body;
+    body.reserve(fileSize * 3 + 128);
+    body = "filename=";
+
+    for (const char* q = name; *q; q++) {
+        char c = *q;
+        if (isalnum((unsigned char)c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            body += c;
+        } else {
+            char buf[4];
+            snprintf(buf, sizeof(buf), "%%%02X", (unsigned char)c);
+            body += buf;
+        }
+    }
+    body += "&data=";
+
+    while (f.available()) {
+        char c = (char)f.read();
+        if (isalnum((unsigned char)c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            body += c;
+        } else {
+            char buf[4];
+            snprintf(buf, sizeof(buf), "%%%02X", (unsigned char)c);
+            body += buf;
+        }
+    }
+    f.close();
+
+    log_print("[DRIVE] POST %s size=%u body=%u\n",
+              name, (unsigned)fileSize, (unsigned)body.length());
+
+    HTTPClient http;
+    http.setReuse(false);
+    http.setTimeout(DRIVE_UPLOAD_TIMEOUT_MS);
+    http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+
+    int code = -1;
+    for (int attempt = 1; attempt <= 2; attempt++) {
+        http.begin(DRIVE_URL);
+        http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+        code = http.POST((uint8_t*)body.c_str(), body.length());
+        if (code > 0) break;
+        http.end();
+        delay(500);
+    }
+
+    bool ok = (code == 302 || code == 200);
+    log_print("[DRIVE] %s %s http=%d\n", name, ok ? "OK" : "FAIL", code);
+    http.end();
+    return ok;
+}
+
 static bool seal_live(time_t name_epoch) {
     if (!LittleFS.exists(LOG_FILE)) return false;
 
@@ -135,6 +206,9 @@ static bool seal_live(time_t name_epoch) {
     }
 
     log_print("[LOG] sealed %s\n", sealed_path);
+
+    // Upload to Drive (best-effort, non-fatal)
+    upload_to_drive(sealed_path, sealed);
 
     time_t now = time(nullptr);
     open_fresh_live(now);

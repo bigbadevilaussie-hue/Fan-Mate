@@ -15,7 +15,7 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "4.24"
+#define FAN_MATE_VERSION "4.25"
 
 #define QUIET_START_HOUR 22
 #define QUIET_END_HOUR   7
@@ -69,6 +69,8 @@ extern unsigned long phone_absent_since;
 #define LOG_FILE_LIVE            "/log.csv"
 #define LOG_MAX_SEALED           64
 #define LOG_KEEP_MIN             8
+
+#define DRIVE_UPLOAD_TIMEOUT_MS  15000
 
 #define NVS_LOG_NS               "log"
 #define NVS_LOG_START_KEY        "live_start"
