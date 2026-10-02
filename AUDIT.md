@@ -20,22 +20,22 @@ tracks fix status.
 
 | # | Finding | File | AIs | Status |
 |---|---------|------|-----|--------|
-| 1 | Kick-start pulse ignores phone-absent override — fan pulses 78% every loop when phone off mount | FanController.cpp | 1/5 | open |
+| 1 | Kick-start pulse ignores phone-absent override — fan pulses 78% every loop when phone off mount | FanController.cpp | 1/5 | **fixed v4.24** |
 | 2 | Six NVS boost keys exceed 15-char limit — silently fail, revert to defaults every reboot | Settings.cpp | 1/5 | **fixed v4.22** |
-| 3 | `log_evict_oldest()` isn't actually oldest — LittleFS iteration isn't sorted | Logging.cpp | 4/5 | open |
-| 4 | `log_resume()` truncates live file unconditionally — wake can wipe rows if seal failed | Logging.cpp | 2/5 | open |
-| 5 | Opal rate = sum of LAN clients, not WAN — Mac/other devices inflate boost | OpalClient.cpp | 1/5 | open |
+| 3 | `log_evict_oldest()` isn't actually oldest — LittleFS iteration isn't sorted | Logging.cpp | 4/5 | **fixed v4.24** |
+| 4 | `log_resume()` truncates live file unconditionally — wake can wipe rows if seal failed | Logging.cpp | 2/5 | **fixed v4.24** |
+| 5 | Opal rate = sum of LAN clients, not WAN — Mac/other devices inflate boost | OpalClient.cpp | 1/5 | **fixed v4.24** |
 | 6 | Heat gear lacks hysteresis on gears 2/3/4 — flaps at thresholds | FanController.cpp | 5/5 | **fixed v4.21** |
 | 7 | Delta guard has no exit band — sawtooth at 5°C | FanController.cpp | 5/5 | **fixed v4.21** |
-| 8 | Gear→% is 24/49/74/100 not 25/50/75/100 — stall check can't fire at gear 1 | FanController.cpp | 2/5 | open |
+| 8 | Gear→% is 24/49/74/100 not 25/50/75/100 — stall check can't fire at gear 1 | FanController.cpp | 2/5 | **fixed v4.24** |
 | 9 | `COOLDOWN_MARGIN_C = 0.3` too tight — cooldown almost always times out | AutoBoost.cpp | 5/5 | open |
 | 10 | Cooldown defeated after any timeout — next burst captures hot phone as `cold_temp` | AutoBoost.cpp | 2/5 | open |
 | 11 | WeatherClient retries every loop with no backoff — WAN down = 3s block every pass | WeatherClient.cpp | 2/5 | open |
-| 12 | `_test_cooldown` can never detect a cooldown — log's `boost` is 1 during hold | dynatune.py | 3/5 | open |
-| 13 | `_test_boost` under-reports every gear by one (24/49/74 issue) | dynatune.py | 2/5 | open |
+| 12 | `_test_cooldown` can never detect a cooldown — log's `boost` is 1 during hold | dynatune.py | 3/5 | **fixed v3.91** |
+| 13 | `_test_boost` under-reports every gear by one (24/49/74 issue) | dynatune.py | 2/5 | **fixed v3.91** |
 | 14 | Gear ordering not validated in firmware or GUI | Settings.cpp | 5/5 | open |
 | 15 | Kill display keys off `alertState==3` not `killState` — OLED lies | DisplayManager.cpp | 2/5 | open |
-| 16 | 400ms kick-start + 200ms stall delays block main loop | FanController.cpp | 4/5 | open |
+| 16 | 400ms kick-start + 200ms stall delays block main loop | FanController.cpp | 4/5 | **fixed v4.24** |
 | 17 | `OPAL_LOGIN_REFRESH_MS` defined twice — 50min vs 4min, second wins | OpalClient.cpp | 4/5 | open |
 | 18 | Version-prefixed filenames break lexical sort | Logging.cpp | 3/5 | open |
 | 19 | `/log/list` caps at 32 but `LOG_MAX_SEALED` is 64 | WebServer.cpp | 2/5 | open |
@@ -47,11 +47,11 @@ tracks fix status.
 
 | # | Finding | File | AIs | Status |
 |---|---------|------|-----|--------|
-| 21 | Boost freezes at last state when Opal unreachable | fanmate.ino | 3/5 | open |
+| 21 | Boost freezes at last state when Opal unreachable | fanmate.ino | 3/5 | **fixed v4.24** |
 | 22 | `reset_all()` doesn't clear `force_active` — sleep doesn't cancel a forced gear | AutoBoost.cpp | 3/5 | open |
 | 23 | 15s tick gated on `server_ready` — never starts if WiFi fails | fanmate.ino | 1/5 | open |
 | 24 | `readNTC()` called 2× per loop pass, not per tick | FanController.cpp | 5/5 | open |
-| 25 | `temp_graph.trigger` looks for `temp.warning` — never matches | app.py | 3/5 | open |
+| 25 | `temp_graph.trigger` looks for `temp.warning` — never matches | app.py | 3/5 | **fixed v3.91** |
 | 26 | NTP flag reset on WiFi drop — reports disagree on whether it works | WiFiManager.cpp | 3/5 | open |
 | 27 | Stale globals in sleep — `/status` shows old fan/RPM/alert while asleep | fanmate.ino | 1/5 | open |
 | 28 | `/boost/gear` is GET that mutates state; `/reboot`, `/log/clear` unauthenticated | WebServer.cpp | 1/5 | open |
@@ -70,20 +70,20 @@ tracks fix status.
 | 41 | DS18B20 85.0°C power-on-reset passes validation — above kill threshold | FanController.cpp | 1/5 | open |
 | 42 | Setup blocks 20–30s at boot with fan PWM at 0 | fanmate.ino | 2/5 | open |
 | 43 | NTC +6 offset calibrated at ~27°C — may be wrong at 15°C and 35°C | FanController.cpp | 2/5 | open |
-| 44 | `tick()` in Tk reschedules as last statement — exception kills loop | app.py | 1/5 | open |
-| 45 | Settings dialog blocks Tk thread on `fetch_config()` up to 10s | dialogs.py | 2/5 | open |
-| 46 | Apply closes dialog before POST succeeds | dialogs.py | 1/5 | open |
-| 47 | `_find_recent_files(2)` — last two by name, not two hours | reports.py | 5/5 | open |
-| 48 | `missing` heuristic assumes 1 row / 15s | reports.py | 5/5 | open |
+| 44 | `tick()` in Tk reschedules as last statement — exception kills loop | app.py | 1/5 | **fixed v3.91** |
+| 45 | Settings dialog blocks Tk thread on `fetch_config()` up to 10s | dialogs.py | 2/5 | **fixed v3.92** |
+| 46 | Apply closes dialog before POST succeeds | dialogs.py | 1/5 | **fixed v3.91** |
+| 47 | `_find_recent_files(2)` — last two by name, not two hours | reports.py | 5/5 | **fixed v3.91** |
+| 48 | `missing` heuristic assumes 1 row / 15s | reports.py | 5/5 | **fixed v3.91** |
 | 49 | `uptime:N` timestamped rows dropped silently by both parsers | Logging.cpp | 2/5 | open |
-| 50 | `_test_events` doesn't count KILL | dynatune.py | 1/5 | open |
-| 51 | `_test_log` counts SEALs but sleep seals inflate count | dynatune.py | 2/5 | open |
-| 52 | `_test_lag` uses row counts as time | dynatune.py | 2/5 | open |
-| 53 | `_test_boost` associates independent maxes (net + fan) | dynatune.py | 1/5 | open |
+| 50 | `_test_events` doesn't count KILL | dynatune.py | 1/5 | **fixed v3.91** |
+| 51 | `_test_log` counts SEALs but sleep seals inflate count | dynatune.py | 2/5 | **fixed v3.91** |
+| 52 | `_test_lag` uses row counts as time | dynatune.py | 2/5 | **fixed v3.91** |
+| 53 | `_test_boost` associates independent maxes (net + fan) | dynatune.py | 1/5 | **fixed v3.91** |
 | 54 | Cooldown KPI recommendation can never fire | dynatune.py | 1/5 | open |
 | 55 | `DynaTune._load_recent_rows(hours=18)` takes 18 files then filters | dialogs.py | 1/5 | open |
-| 56 | Reports use current config threshold, not one in force at log time | dynatune.py | 1/5 | open |
-| 57 | `_summarise` returns `{}` on empty files — `_build_ui` KeyError | reports.py | 1/5 | open |
+| 56 | Reports use current config threshold, not one in force at log time | dynatune.py | 1/5 | **fixed v3.91** |
+| 57 | `_summarise` returns `{}` on empty files — `_build_ui` KeyError | reports.py | 1/5 | **fixed v3.91** |
 | 58 | ReportPlot x-axis labels assume linear time | widgets.py | 1/5 | open |
 | 59 | `fetch_config` runs only on connect — changes invisible to live GUI | app.py | 1/5 | open |
 
@@ -99,9 +99,9 @@ tracks fix status.
 | 63 | `LOG_TICK_MS`, `OPAL_POLL_INTERVAL_MS` unused | Config.h | 2/5 | **fixed v4.21** |
 | 64 | `// TODO(NTC)` above working `readNTC()` | Logging.cpp | 5/5 | **fixed v4.21** |
 | 65 | Unused vars: `lastGoodTemp`, `lastTempGear`, `opal_last_rx`, `opal_have_baseline`, `sleep_start_ms` | multiple | 3/5 | open |
-| 66 | Settings dialog labels 36/57/78% — actual 24/49/74 | dialogs.py | 5/5 | open |
+| 66 | Settings dialog labels 36/57/78% — actual 24/49/74 | dialogs.py | 5/5 | **fixed v3.91** |
 | 67 | Settings dialog can't edit hysteresis or night settings | dialogs.py | 2/5 | open |
-| 68 | `GUI_VERSION` drift 3.87 vs 3.89 | config.py | 5/5 | open |
+| 68 | `GUI_VERSION` drift 3.87 vs 3.89 | config.py | 5/5 | **fixed v3.90** |
 | 69 | Settings.h header says "V3.73" | Settings.h | 2/5 | **fixed v4.21** |
 | 70 | Duplicate `FONT_*` imports in app.py | app.py | 2/5 | open |
 | 71 | `status_msg`/`status_lock` imported but unused | app.py | 1/5 | open |
@@ -109,7 +109,7 @@ tracks fix status.
 | 73 | `drawFwStartScreen`, `drawOtaScreen`, `drawRebootScreen` never called | DisplayManager.cpp | 2/5 | open |
 | 74 | `wakeDisplay()` log says "restored" but blanks panel | DisplayManager.cpp | 2/5 | open |
 | 75 | `sleep_countdown` permanently 0 | WebServer.cpp | 4/5 | open |
-| 76 | "Atkinsons Dam" typo (should be "Atkinson Dam") | WebPage.h | 1/5 | open |
+| 76 | "Atkinsons Dam" typo (should be "Atkinson Dam") | WebPage.h | 1/5 | **not-a-bug** |
 | 77 | Weather thread in Tk redundant — outdoor comes from `/status` | weather.py | 2/5 | open |
 | 78 | Stale comment `// 7.0 was board heat` above +6.0 offset | FanController.cpp | 1/5 | **fixed v4.21** |
 | 79 | TZ set in five places | multiple | 1/5 | open |
@@ -121,10 +121,10 @@ tracks fix status.
 | 85 | `log_time_string` calls `setenv`/`tzset` per row | Logging.cpp | 2/5 | open |
 | 86 | Dashboard `DISABLE` in AUTO does nothing | WebPage.h | 1/5 | open |
 | 87 | Unauthenticated destructive endpoints | WebServer.cpp | 2/5 | open |
-| 88 | Net graph axis fixed 0–2048 — 4 MB/s plots off-chart | WebPage.h | 1/5 | open |
+| 88 | Net graph axis fixed 0–2048 — 4 MB/s plots off-chart | WebPage.h | 1/5 | **fixed v4.23** |
 | 89 | `ntp_synced()` means clock valid, not SNTP state | WiFiManager.cpp | 1/5 | **fixed v4.21** |
 | 90 | `boost_threshold` falls back to magic 700 in mode 0 | WebServer.cpp | 1/5 | open |
-| 91 | `fetch_config` asks for retired `alarm`/`phone` sections | http_client.py | 2/5 | open |
+| 91 | `fetch_config` asks for retired `alarm`/`phone` sections | http_client.py | 2/5 | **fixed v3.93** |
 | 92 | Tk disconnected state has no visible indicator | app.py | 2/5 | open |
 | 93 | `hwtest.ino` uses old PWM map | hwtest/hwtest.ino | 2/5 | open |
 | 94 | `is_night_now()` uses hardcoded constants, not device NVS | helpers.py | 1/5 | open |
