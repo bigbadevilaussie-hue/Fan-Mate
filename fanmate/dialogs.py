@@ -22,15 +22,38 @@ class SettingsDialog(tk.Toplevel):
         self.transient(parent)
         self.grab_set()
 
+        # Open immediately with a placeholder; fetch_config runs in a
+        # background thread so the main loop isn't blocked.
+        self._container = tk.Frame(self)
+        self._container.pack(fill="both", expand=True, padx=16, pady=16)
+        self._status = tk.Label(self._container,
+                                text="Loading settings...",
+                                font=("Helvetica Neue", 12))
+        self._status.pack(pady=20)
+        self._apply_theme()
+
+        threading.Thread(target=self._fetch_and_build,
+                         daemon=True).start()
+
+    def _fetch_and_build(self):
         latest_config = fetch_config()
+        self.app.root.after(0, lambda: self._build(latest_config))
+
+    def _build(self, latest_config):
+        # Wipe the placeholder and build the real content.
+        for w in self._container.winfo_children():
+            w.destroy()
+
         if latest_config is None:
-            messagebox.showerror("Settings", "Device unreachable. Try again in a moment.")
-            self.destroy()
+            self._status = tk.Label(self._container,
+                                    text="Device unreachable. Try again in a moment.",
+                                    font=("Helvetica Neue", 12))
+            self._status.pack(pady=20)
+            self._apply_theme()
             return
 
         pad = 16
-        root = tk.Frame(self)
-        root.pack(fill="both", expand=True, padx=pad, pady=pad)
+        root = self._container
 
         self._row = 0
 
