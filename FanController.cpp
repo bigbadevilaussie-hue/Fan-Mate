@@ -354,11 +354,13 @@ void updateFanAndAlerts(
     if (boostGear > fanGear) fanGear = boostGear;
     if (deltaGear > fanGear) fanGear = deltaGear;
 
-    // ---- Beep on gear change ----
+    // ---- Beep on gear change (only when 2+ is involved) ----
     if (fanGear != lastFanGear) {
         if (lastFanGear >= 0) {
             log_print("[FAN] gear %d -> %d\n", lastFanGear, fanGear);
-            beep_once();
+            if (fanGear >= 2 && lastFanGear >= 2) {
+                beep_once();
+            }
         }
         lastFanGear = fanGear;
     }
@@ -428,8 +430,6 @@ void updateFanAndAlerts(
         runBeepSequence(KILL_BEEPS, KILL_BEEP_MS, KILL_GAP_MS, KILL_INTERVAL_MS);
     } else if (alertLevel == 2) {
         runBeepSequence(PANIC_BEEPS, PANIC_BEEP_MS, PANIC_GAP_MS, PANIC_INTERVAL_MS);
-    } else if (alertLevel == 1 && !quiet_hours()) {
-        runBeepSequence(WARNING_BEEPS, WARNING_BEEP_MS, WARNING_GAP_MS, WARNING_INTERVAL_MS);
     } else {
         noTone(BUZZER_PIN);
     }
