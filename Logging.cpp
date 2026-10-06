@@ -230,7 +230,6 @@ static bool seal_live(time_t name_epoch) {
 }
 
 void log_rotate_check() {
-    if (!ntp_synced()) return;
     time_t now = time(nullptr);
     if (now < 1700000000UL || now > 4102444800UL) return;
 
@@ -272,14 +271,25 @@ void log_boot_recovery() {
     bool time_ok = (now > 1700000000UL && now < 4102444800UL);
 
     size_t rows = log_count_live_rows();
-    if (rows < LOG_SEAL_MIN_ROWS || !time_ok) {
-        log_print("[LOG] boot: %u rows, time_ok=%d — discarding\n",
-                  (unsigned)rows, time_ok ? 1 : 0);
+    if (rows < LOG_SEAL_MIN_ROWS) {
+        log_print("[LOG] boot: %u rows (below min) — discarding\n", (unsigned)rows);
         LittleFS.remove(LOG_FILE);
         clear_start_epoch();
         write_header_if_new();
         _live_file_start_epoch = time_ok ? now : 0;
         if (time_ok) save_start_epoch(_live_file_start_epoch);
+        return;
+    }
+    if (!time_ok) {
+        // v4.29: preserve rows under recovery name; don't lose data
+        char rec[48];
+        snprintf(rec, sizeof(rec), "/recovered-%lu.csv", (unsigned long)(millis()/1000));
+        LittleFS.rename(LOG_FILE, rec);
+        log_print("[LOG] boot: %u rows, no clock — preserved as %s\n",
+                  (unsigned)rows, rec);
+        write_header_if_new();
+        _live_file_start_epoch = 0;
+        clear_start_epoch();
         return;
     }
 

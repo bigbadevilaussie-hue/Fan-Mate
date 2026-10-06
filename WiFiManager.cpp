@@ -5,6 +5,8 @@
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <time.h>
+#include <HTTPClient.h>
+#include <sys/time.h>
 
 static bool          wifi_inited        = false;
 static unsigned long wifi_connect_start = 0;
@@ -12,7 +14,6 @@ static unsigned long wifi_last_attempt  = 0;
 static unsigned long wifi_connected_at  = 0;
 static bool          mdns_started       = false;
 static bool          ntp_started        = false;
-static bool          _ntp_synced_flag   = false;
 
 void wifi_setup() {
     if (wifi_inited) return;
@@ -48,36 +49,95 @@ static void start_mdns() {
     mdns_started = true;
 }
 
-static void start_ntp() {
-    if (ntp_started) return;
+static bool          _clock_synced_flag = false;
+static unsigned long _last_clock_sync   = (unsigned long)-CLOCK_SYNC_INTERVAL_MS;
+static const char* MONTHS[] = {"Jan","Feb","Mar","Apr","May","Jun",
+                               "Jul","Aug","Sep","Oct","Nov","Dec"};
+
+// Howard Hinnant days_from_civil
+static long _days_from_civil(int y, int m, int d) {
+    y -= m <= 2;
+    long era = (y >= 0 ? y : y - 399) / 400;
+    unsigned yoe = (unsigned)(y - era * 400);
+    unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+    unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + (long)doe - 719468;
+}
+
+// Parse "Tue, 06 Oct 2026 08:00:25 GMT" -> epoch, or 0 on failure
+static time_t _parse_http_date(const char* s) {
+    if (!s) return 0;
+    int day, year, hh, mm, ss;
+    char mon[4] = {0};
+    // skip weekday
+    const char* p = strchr(s, ',');
+    if (!p) return 0;
+    p++;
+    while (*p == ' ') p++;
+    if (sscanf(p, "%d %3s %d %d:%d:%d", &day, mon, &year, &hh, &mm, &ss) != 6)
+        return 0;
+    int m = 0;
+    for (int i = 0; i < 12; i++) {
+        if (strncmp(mon, MONTHS[i], 3) == 0) { m = i + 1; break; }
+    }
+    if (m == 0) return 0;
+    long days = _days_from_civil(year, m, day);
+    return (time_t)days * 86400L + hh * 3600L + mm * 60L + ss;
+}
+
+void clock_sync() {
+    if (WiFi.status() != WL_CONNECTED) return;
+    if (millis() - _last_clock_sync < CLOCK_SYNC_INTERVAL_MS) return;
+    _last_clock_sync = millis();
+
+    IPAddress gw = WiFi.gatewayIP();
+    char url[32];
+    snprintf(url, sizeof(url), "http://%u.%u.%u.%u/",
+             gw[0], gw[1], gw[2], gw[3]);
+
+    log_print("[CLOCK] querying %s\n", url);
+
+    HTTPClient http;
+    http.setTimeout(CLOCK_HTTP_TIMEOUT_MS);
+    if (!http.begin(url)) {
+        log_print("[CLOCK] http.begin failed\n");
+        return;
+    }
+    const char* hdrs[] = {"Date"};
+    http.collectHeaders(hdrs, 1);
+    int code = http.GET();
+    log_print("[CLOCK] HTTP %d\n", code);
+    if (code != 200) {
+        http.end();
+        return;
+    }
+    String dateHdr = http.header("Date");
+    http.end();
+
+    time_t epoch = _parse_http_date(dateHdr.c_str());
+    if (epoch < 1700000000UL) {
+        log_print("[CLOCK] bad Date: %s\n", dateHdr.c_str());
+        return;
+    }
+
+    struct timeval tv;
+    tv.tv_sec  = epoch;
+    tv.tv_usec = 0;
+    settimeofday(&tv, nullptr);
     setenv("TZ", "AEST-10", 1);
     tzset();
-    configTime(10 * 3600, 0, "pool.ntp.org", "time.nist.gov", "time.google.com");
-    Serial.println("[NTP] sync requested");
-    ntp_started = true;
+
+    _clock_synced_flag = true;
+    log_print("[CLOCK] %s -> %lu\n", dateHdr.c_str(), (unsigned long)epoch);
 }
 
-bool ntp_synced() { return _ntp_synced_flag; }
-
-void ntp_loop() {
-    if (_ntp_synced_flag) return;
-    if (WiFi.status() != WL_CONNECTED) return;
-    time_t now = time(nullptr);
-    if (now > 1700000000UL && now < 4102444800UL) {
-        _ntp_synced_flag = true;
-        log_print("[NTP] synced: %lu\n", (unsigned long)now);
-    }
-}
+bool clock_synced() { return _clock_synced_flag; }
+bool ntp_synced()   { return _clock_synced_flag; }
 
 void wifi_loop() {
     if (!wifi_inited) return;
 
     wl_status_t status = WiFi.status();
-
-    // Reset NTP flag if WiFi drops — require fresh sync on reconnect
-    if (status != WL_CONNECTED) {
-        _ntp_synced_flag = false;
-    }
 
     if (status == WL_CONNECTED) {
         if (wifi_connected_at == 0) {
@@ -86,7 +146,7 @@ void wifi_loop() {
             log_print("[WIFI] IP:   %s\n", WiFi.localIP().toString().c_str());
             log_print("[WIFI] RSSI: %d dBm\n", WiFi.RSSI());
             start_mdns();
-            start_ntp();
+            clock_sync();
         }
         return;
     }

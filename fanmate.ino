@@ -11,8 +11,6 @@
 #include "SerialBuffer.h"
 #include "Songs.h"
 
-extern void ntp_loop();
-
 #include <esp_arduino_version.h>
 
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
@@ -111,16 +109,16 @@ void setup() {
 
     wifi_setup();
 
-    // Wait up to 15s for NTP before boot recovery
+    // v4.29: wait up to 3s for LAN clock before boot recovery
     {
         unsigned long wait_start = millis();
-        while (!ntp_synced() && millis() - wait_start < 15000) {
+        while (!clock_synced() && millis() - wait_start < 5000) {
             wifi_loop();
-            ntp_loop();
-            delay(100);
+            clock_sync();
+            delay(200);
         }
-        log_print("[BOOT] NTP wait done (%s)\n",
-                  ntp_synced() ? "synced" : "timeout");
+        log_print("[BOOT] clock wait done (%s)\n",
+                  clock_synced() ? "synced" : "timeout");
     }
 
     log_boot_recovery();
@@ -190,7 +188,7 @@ void loop() {
     unsigned long now = millis();
 
     wifi_loop();
-    ntp_loop();
+    clock_sync();
     weather_loop();
     if (wifi_connected() && !server_ready) {
         server_setup();

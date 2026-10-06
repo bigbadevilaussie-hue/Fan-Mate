@@ -1,7 +1,7 @@
 # Fan-Mate — What To Do Next
 
 Last updated: 2026-10-06
-Firmware: **v4.28**
+Firmware: **v4.30**
 Tk GUI: **v3.95**
 QML GUI2: **v1.11** (parked)
 
@@ -34,7 +34,7 @@ See NOTES.md → CURRENT PHASE for details.
 
 ---
 
-## v4.29 CANDIDATES
+## v4.30 CANDIDATES
 
 **Primary item: clock from Opal, NTP removed.**
 

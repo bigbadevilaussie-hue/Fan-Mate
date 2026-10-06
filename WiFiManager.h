@@ -15,7 +15,9 @@ unsigned long wifi_uptime_ms();
 
 
 
-// V3.70: NTP sync state
-bool ntp_synced();
+// v4.29: clock state (from Opal Date header)
+bool ntp_synced();      // kept for compat, returns clock validity
+bool clock_synced();
+void clock_sync();      // one HEAD to WiFi.gatewayIP(), parse Date header
 
 #endif
