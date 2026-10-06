@@ -212,6 +212,19 @@ static bool seal_live(time_t name_epoch) {
 
     time_t now = time(nullptr);
     open_fresh_live(now);
+
+    {
+        size_t total = LittleFS.totalBytes();
+        size_t used  = LittleFS.usedBytes();
+        if (total > 0) {
+            log_print("[STORAGE] %u%% used (%u/%u KB, %u sealed)\n",
+                      (unsigned)((used * 100) / total),
+                      (unsigned)(used / 1024),
+                      (unsigned)(total / 1024),
+                      (unsigned)log_sealed_count());
+        }
+    }
+
     log_write_event("SEAL");
     return true;
 }
