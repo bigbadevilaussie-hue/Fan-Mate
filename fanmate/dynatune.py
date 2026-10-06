@@ -205,31 +205,411 @@ def _test_log(rows):
             "detail": "log rotation broken"}
 
 
-def analyse(rows, boost_thr=700):
-    """Run all six tests. rows is a list of dicts with keys
-    t, temp, net, boost, fan, rpm, room, event (optional).
-    Returns a dict of KPI results plus a recommendation string.
+
+def _test_drive(rows):
+    """UPLOAD ack/nack events in the log confirm the Mac is pulling
+    sealed files. Events use ';' not ',' (sanitized for CSV safety)."""
+    uploads = 0
+    nacks = 0
+    for r in rows:
+        ev = (r.get("event") or "").upper()
+        if ev.startswith("UPLOAD;") and ";OK" in ev:
+            uploads += 1
+        elif "NACK" in ev:
+            nacks += 1
+    if nacks > 0:
+        return {"status": "FAIL", "metric": f"{nacks} nacks",
+                "detail": "CRC failures"}
+    if uploads == 0:
+        return {"status": "IDLE", "metric": "no acks",
+                "detail": "Mac may not be running"}
+    return {"status": "PASS", "metric": f"{uploads} acks", "detail": ""}
+
+
+def _test_clock(rows):
+    """Are all timestamps wall-clock, or are there uptime rows?"""
+    wall = 0
+    uptime = 0
+    for r in rows:
+        t = r.get("t")
+        if isinstance(t, str) and t.startswith("uptime:"):
+            uptime += 1
+        else:
+            wall += 1
+    total = wall + uptime
+    if total == 0:
+        return {"status": "IDLE", "metric": "no data", "detail": ""}
+    if uptime == 0:
+        return {"status": "PASS", "metric": "all wall", "detail": ""}
+    pct = 100.0 * uptime / total
+    if pct < 5:
+        return {"status": "WARN", "metric": f"{uptime} uptime",
+                "detail": f"{pct:.0f}% no clock"}
+    return {"status": "FAIL", "metric": f"{uptime} uptime",
+            "detail": f"{pct:.0f}% no clock"}
+
+
+def _test_boot(rows):
+    """Did any reboots leave boot recovery rows?"""
+    boots = 0
+    for r in rows:
+        ev = (r.get("event") or "").upper()
+        if ev in ("BOOT", "SOFTWARE", "POWERON"):
+            boots += 1
+    if boots == 0:
+        return {"status": "IDLE", "metric": "no reboots", "detail": ""}
+    if boots <= 10:
+        return {"status": "PASS", "metric": f"{boots} boots", "detail": ""}
+    return {"status": "WARN", "metric": f"{boots} boots",
+            "detail": "frequent reboots"}
+
+
+def _test_opal_poll(rows):
+    """Opal poll should be 15s cadence. Check the net column's continuity."""
+    if len(rows) < 10:
+        return {"status": "IDLE", "metric": "small window", "detail": ""}
+    gaps = 0
+    for i in range(1, len(rows)):
+        dt = (rows[i]["t"] - rows[i-1]["t"]).total_seconds()
+        if dt > 60:
+            gaps += 1
+    if gaps == 0:
+        return {"status": "PASS", "metric": "no gaps", "detail": ""}
+    if gaps <= 3:
+        return {"status": "PASS", "metric": f"{gaps} gap(s)",
+                "detail": "within tolerance"}
+    if gaps <= 6:
+        return {"status": "WARN", "metric": f"{gaps} gaps", "detail": ""}
+    return {"status": "FAIL", "metric": f"{gaps} gaps",
+            "detail": "log has multiple >60s gaps"}
+
+
+def _test_night_cap(rows, night_start=22, night_end=7, night_max=75):
+    """Was fan capped at nightMax during night hours?"""
+    night_rows = [r for r in rows
+                  if _is_night(r["t"], night_start, night_end)]
+    if not night_rows:
+        return {"status": "IDLE", "metric": "no night rows", "detail": ""}
+    over = [r for r in night_rows if r["fan"] > night_max + 2]
+    if not over:
+        return {"status": "PASS", "metric": f"0/{len(night_rows)}",
+                "detail": f"capped at {night_max}%"}
+    return {"status": "FAIL", "metric": f"{len(over)} over",
+            "detail": f"exceeds {night_max}%"}
+
+
+def _is_night(t, start, end):
+    h = t.hour
+    if start < end:
+        return start <= h < end
+    return h >= start or h < end
+
+
+def _test_heat_gears(rows, g1=33.0, g2=35.0, g3=37.0, g4=39.0):
+    """For each heat threshold, did the fan gear fire at least once?"""
+    fired = set()
+    for r in rows:
+        t = r["temp"]
+        f = r["fan"]
+        if t >= g4 and f >= 100: fired.add(4)
+        elif t >= g3 and f >= 74: fired.add(3)
+        elif t >= g2 and f >= 50: fired.add(2)
+        elif t >= g1 and f >= 24: fired.add(1)
+    peaks = [max((r["temp"] for r in rows), default=0)]
+    peak = peaks[0]
+    expected = 0
+    if peak >= g4: expected = 4
+    elif peak >= g3: expected = 3
+    elif peak >= g2: expected = 2
+    elif peak >= g1: expected = 1
+    if expected == 0:
+        return {"status": "IDLE", "metric": "no heat",
+                "detail": f"peak {peak:.1f}°C below gear1"}
+    if max(fired) >= expected:
+        return {"status": "PASS", "metric": f"up to {max(fired)}",
+                "detail": f"peak {peak:.1f}°C"}
+    return {"status": "WARN", "metric": f"reached {max(fired) or 0}",
+            "detail": f"expected gear {expected}"}
+
+
+def _test_hysteresis(rows, g1=33.0, hyst=1.0):
+    """Count gear1 transitions per heat event — flapping indicates
+    missing hysteresis."""
+    transitions = 0
+    last = None
+    for r in rows:
+        gear = 0
+        if r["fan"] >= 24: gear = 1
+        if last is not None and gear != last and gear == 1:
+            transitions += 1
+        last = gear
+    # Normal: one entry per heat event. Flapping: many entries per hour.
+    span_h = (rows[-1]["t"] - rows[0]["t"]).total_seconds() / 3600.0
+    rate = transitions / max(1, span_h)
+    if rate < 4:
+        return {"status": "PASS", "metric": f"{transitions} entries",
+                "detail": ""}
+    return {"status": "WARN", "metric": f"{transitions} entries",
+            "detail": f"{rate:.1f}/h — possible flapping"}
+
+
+def _test_phone(rows):
+    """Any PHONE events logged?"""
+    present = 0
+    removed = 0
+    for r in rows:
+        ev = (r.get("event") or "").upper()
+        if "PHONE" in ev:
+            if "DETECT" in ev or "PRESENT" in ev:
+                present += 1
+            elif "REMOVED" in ev or "ABSENT" in ev:
+                removed += 1
+    if present + removed == 0:
+        return {"status": "IDLE", "metric": "no transitions", "detail": ""}
+    if abs(present - removed) > 2:
+        return {"status": "WARN", "metric": f"{present}/{removed}",
+                "detail": "unbalanced detect/remove"}
+    return {"status": "PASS", "metric": f"{present}/{removed}", "detail": ""}
+
+
+def _test_sleep(rows):
+    """SLEEP/WAKE events should pair up."""
+    sleep = 0
+    wake = 0
+    for r in rows:
+        ev = (r.get("event") or "").upper()
+        if ev == "SLEEP": sleep += 1
+        elif ev == "WAKE": wake += 1
+    if sleep + wake == 0:
+        return {"status": "IDLE", "metric": "none", "detail": ""}
+    if abs(sleep - wake) <= 1:
+        return {"status": "PASS", "metric": f"{sleep}/{wake}", "detail": ""}
+    return {"status": "WARN", "metric": f"{sleep}/{wake}",
+            "detail": "unbalanced sleep/wake"}
+
+
+def _test_ntc(rows):
+    """Room temp should be in 5–45°C."""
+    rooms = [r["room"] for r in rows
+             if r.get("room") is not None and r["room"] > -90]
+    if not rooms:
+        return {"status": "IDLE", "metric": "no room data", "detail": ""}
+    lo, hi = min(rooms), max(rooms)
+    if lo < 5 or hi > 45:
+        return {"status": "FAIL", "metric": f"{lo:.0f}–{hi:.0f}",
+                "detail": "out of plausible range"}
+    if lo < 15 or hi > 40:
+        return {"status": "WARN", "metric": f"{lo:.0f}–{hi:.0f}",
+                "detail": "edge of plausible range"}
+    return {"status": "PASS", "metric": f"{lo:.0f}–{hi:.0f}", "detail": ""}
+
+
+def _test_ds18b20(rows):
+    """Phone temp: reject 85.0 (power-on-reset) and 0.0."""
+    temps = [r["temp"] for r in rows if r["temp"] is not None]
+    if not temps:
+        return {"status": "IDLE", "metric": "no data", "detail": ""}
+    bad = [t for t in temps if t == 85.0 or t == 0.0 or t < -50 or t > 120]
+    if not bad:
+        return {"status": "PASS", "metric": f"{len(temps)} reads", "detail": ""}
+    return {"status": "FAIL", "metric": f"{len(bad)} bad",
+            "detail": "85.0 or 0.0 detected"}
+
+
+def _test_rpm(rows):
+    """RPM should never exceed 10,000 (real max ~7500)."""
+    rpms = [r["rpm"] for r in rows if r["rpm"] > 0]
+    if not rpms:
+        return {"status": "IDLE", "metric": "no rpm", "detail": ""}
+    bad = [x for x in rpms if x > 10000]
+    if not bad:
+        return {"status": "PASS", "metric": f"max {max(rpms)}", "detail": ""}
+    return {"status": "WARN", "metric": f"{len(bad)} outliers",
+            "detail": f"max {max(bad)} — tick artefacts"}
+
+
+def _test_stall(rows):
+    """FAN_STALL without FAN_RECOVERED indicates a stuck stall alarm."""
+    stalls = 0
+    recovers = 0
+    for r in rows:
+        ev = (r.get("event") or "").upper()
+        if "FAN_STALL" in ev: stalls += 1
+        elif "FAN_RECOVERED" in ev: recovers += 1
+    if stalls == 0:
+        return {"status": "PASS", "metric": "0 stalls", "detail": ""}
+    if stalls <= recovers:
+        return {"status": "PASS", "metric": f"{stalls}/{recovers}",
+                "detail": "all recovered"}
+    return {"status": "WARN", "metric": f"{stalls}/{recovers}",
+            "detail": "unrecovered stall"}
+
+
+# ---------- config tests (from live_config) ----------
+
+def _test_gear_order(cfg):
+    t = (cfg or {}).get("temp", {})
+    g1 = t.get("gear1", 0); g2 = t.get("gear2", 0)
+    g3 = t.get("gear3", 0); g4 = t.get("gear4", 0)
+    if not all([g1, g2, g3, g4]):
+        return {"status": "IDLE", "metric": "no config", "detail": ""}
+    if g1 < g2 < g3 < g4:
+        return {"status": "PASS", "metric": f"{g1:.0f}<{g2:.0f}<{g3:.0f}<{g4:.0f}",
+                "detail": ""}
+    return {"status": "FAIL", "metric": f"{g1}<{g2}<{g3}<{g4}",
+            "detail": "gear order violated"}
+
+
+def _test_threshold(cfg):
+    b = (cfg or {}).get("boost", {})
+    mode = b.get("mode", 1)
+    if mode == 2:
+        thr = b.get("aggr", {}).get("threshold", 0)
+    elif mode == 1:
+        thr = b.get("normal", {}).get("threshold", 0)
+    else:
+        return {"status": "IDLE", "metric": "mode 0", "detail": "boost off"}
+    if 200 <= thr <= 10000:
+        return {"status": "PASS", "metric": f"{thr} KB/s", "detail": ""}
+    return {"status": "FAIL", "metric": f"{thr} KB/s",
+            "detail": "outside 200–10000"}
+
+
+def _test_boost_mode(cfg):
+    mode = (cfg or {}).get("boost", {}).get("mode", None)
+    if mode is None:
+        return {"status": "IDLE", "metric": "no config", "detail": ""}
+    if mode in (0, 1, 2):
+        names = {0: "off", 1: "normal", 2: "aggr"}
+        return {"status": "PASS", "metric": names[mode], "detail": ""}
+    return {"status": "FAIL", "metric": str(mode), "detail": "not 0/1/2"}
+
+
+def _test_night_window(cfg):
+    n = (cfg or {}).get("night", {})
+    start = n.get("start"); end = n.get("end")
+    maxp = n.get("nightMax")
+    if start is None or end is None:
+        return {"status": "IDLE", "metric": "no config", "detail": ""}
+    if start == end:
+        return {"status": "WARN", "metric": f"{start}–{end}",
+                "detail": "start == end (no night)"}
+    if not (0 <= start <= 23 and 0 <= end <= 23):
+        return {"status": "FAIL", "metric": f"{start}–{end}",
+                "detail": "hour out of 0–23"}
+    if maxp is not None and not (0 <= maxp <= 100):
+        return {"status": "FAIL", "metric": f"max {maxp}",
+                "detail": "nightMax out of 0–100"}
+    return {"status": "PASS", "metric": f"{start}–{end} @ {maxp}%", "detail": ""}
+
+
+def _test_storage(rows, log_info=None):
+    """If /log/info is available, check free space trend."""
+    if log_info is None:
+        return {"status": "IDLE", "metric": "no info", "detail": ""}
+    free = log_info.get("free_bytes", 0)
+    total = 1408 * 1024
+    used_pct = 100.0 * (total - free) / max(1, total)
+    if used_pct < 75:
+        return {"status": "PASS", "metric": f"{used_pct:.0f}% used", "detail": ""}
+    if used_pct < 90:
+        return {"status": "WARN", "metric": f"{used_pct:.0f}% used",
+                "detail": "approaching cap"}
+    return {"status": "FAIL", "metric": f"{used_pct:.0f}% used",
+            "detail": "rotation pausing imminent"}
+
+
+def analyse(rows, boost_thr=700, live_status=None, live_config=None,
+            log_info=None):
+    """Run all tests. Sections:
+      core     — boost / cooldown / delta / lag / events / log
+      data     — drive / clock / boot / opal_poll
+      device   — night_cap / heat_gears / hysteresis / storage
+      hardware — phone / sleep / ntc / ds18b20 / rpm / stall
+      config   — gear_order / threshold / boost_mode / night_window
     """
+    cfg = live_config or {}
+    night = cfg.get("night", {}) if cfg else {}
+    n_start = night.get("start", 22)
+    n_end   = night.get("end", 7)
+    n_max   = night.get("nightMax", 75)
+    t_cfg   = cfg.get("temp", {}) if cfg else {}
+    g1 = t_cfg.get("gear1", 33.0)
+    g2 = t_cfg.get("gear2", 35.0)
+    g3 = t_cfg.get("gear3", 37.0)
+    g4 = t_cfg.get("gear4", 39.0)
+
     result = {
-        "boost":    _test_boost(rows, boost_thr),
-        "cooldown": _test_cooldown(rows),
-        "delta":    _test_delta(rows),
-        "lag":      _test_lag(rows, boost_thr),
-        "events":   _test_events(rows),
-        "log":      _test_log(rows),
+        "core": {
+            "boost":    _test_boost(rows, boost_thr),
+            "cooldown": _test_cooldown(rows),
+            "delta":    _test_delta(rows),
+            "lag":      _test_lag(rows, boost_thr),
+            "events":   _test_events(rows),
+            "log":      _test_log(rows),
+        },
+        "data": {
+            "drive":     _test_drive(rows),
+            "clock":     _test_clock(rows),
+            "boot":      _test_boot(rows),
+            "opal_poll": _test_opal_poll(rows),
+        },
+        "device": {
+            "night_cap":  _test_night_cap(rows, n_start, n_end, n_max),
+            "heat_gears": _test_heat_gears(rows, g1, g2, g3, g4),
+            "hysteresis": _test_hysteresis(rows, g1, 1.0),
+            "storage":    _test_storage(rows, log_info),
+        },
+        "hardware": {
+            "phone":   _test_phone(rows),
+            "sleep":   _test_sleep(rows),
+            "ntc":     _test_ntc(rows),
+            "ds18b20": _test_ds18b20(rows),
+            "rpm":     _test_rpm(rows),
+            "stall":   _test_stall(rows),
+        },
+        "config": {
+            "gear_order":   _test_gear_order(cfg),
+            "threshold":    _test_threshold(cfg),
+            "boost_mode":   _test_boost_mode(cfg),
+            "night_window": _test_night_window(cfg),
+        },
     }
 
-    # Collect all WARN/FAIL recommendations.
     msgs = {
-        "boost":    "Boost stalled — check threshold / on_hold",
-        "cooldown": "Cooldown episodes — review hold time",
-        "delta":    "Delta guard active — check phone temp",
-        "lag":      "Thermal lag detected",
-        "events":   "Bad events detected — check serial log",
-        "log":      "Log seals missing — check NTP / FS",
+        "boost":        "Boost stalled — check threshold / on_hold",
+        "cooldown":     "Cooldown episodes — review hold time",
+        "delta":        "Delta guard active — check phone temp",
+        "lag":          "Thermal lag detected",
+        "events":       "Bad events detected — check serial log",
+        "log":          "Log seals missing — check clock / FS",
+        "drive":        "Drive upload failures",
+        "clock":        "Timestamps using uptime — Opal clock failing",
+        "boot":         "Frequent reboots",
+        "opal_poll":    "Log has >60s gaps — Opal poll dropping",
+        "night_cap":    "Night cap not enforced",
+        "heat_gears":   "Heat gears not firing as expected",
+        "hysteresis":   "Possible gear flapping",
+        "storage":      "Storage approaching cap",
+        "phone":        "Phone detect imbalance",
+        "sleep":        "Sleep/wake imbalance",
+        "ntc":          "Room temp out of range",
+        "ds18b20":      "Phone temp sensor errors",
+        "rpm":          "RPM outliers",
+        "stall":        "Fan stall not recovering",
+        "gear_order":   "Heat gear order invalid",
+        "threshold":    "Boost threshold out of range",
+        "boost_mode":   "Boost mode invalid",
+        "night_window": "Night window invalid",
     }
-    warns = [k for k, v in result.items()
-             if v["status"] in ("WARN", "FAIL")]
+
+    warns = []
+    for section_name, section in result.items():
+        if not isinstance(section, dict):
+            continue
+        for k, v in section.items():
+            if isinstance(v, dict) and v.get("status") in ("WARN", "FAIL"):
+                warns.append(k)
 
     if not warns:
         result["recommendation"] = ""

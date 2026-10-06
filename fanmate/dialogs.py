@@ -305,24 +305,25 @@ class DynaTune(tk.Toplevel):
 
     # ------------------------------------------------------------------
     def _build_ui(self):
-        pad = 16
+        pad = 20
         wrap = tk.Frame(self)
         wrap.pack(fill="both", expand=True, padx=pad, pady=pad)
 
         start = self.rows[0]["t"]
         end   = self.rows[-1]["t"]
         span_h = (end - start).total_seconds() / 3600.0
+        ver = state.latest.get("fv", "?")
 
         tk.Label(wrap,
-                 text=f"Dyna Tune  ·  {start.strftime('%a %d %b  %H:%M')} → {end.strftime('%H:%M')}  ·  {span_h:.1f} h",
-                 font=("Helvetica Neue", 15, "bold")).pack(anchor="w")
-        tk.Label(wrap, text=f"{len(self.rows)} samples",
-                 font=("Helvetica Neue", 10)).pack(anchor="w", pady=(0, 10))
+                 text="Dyna Tune",
+                 font=("Helvetica Neue", 22, "bold")).pack(anchor="w")
+        tk.Label(wrap,
+                 text=f"v{ver}  ·  {start.strftime('%a %d %b  %H:%M')} → {end.strftime('%H:%M')}  ·  {span_h:.1f} h  ·  {len(self.rows)} samples",
+                 font=("Helvetica Neue", 12)).pack(anchor="w", pady=(2, 16))
 
-        # --- KPI board ---
+        # ---------- run tests ----------
         from .dynatune import analyse
         try:
-            from . import state
             b = state.latest_config.get("boost", {})
             mode = b.get("mode", 1)
             if mode == 2:
@@ -332,61 +333,215 @@ class DynaTune(tk.Toplevel):
         except Exception:
             thr = 700
 
-        kpis = analyse(self.rows, boost_thr=thr)
+        try:
+            live_status = dict(state.latest)
+        except Exception:
+            live_status = None
+        try:
+            live_config = dict(state.latest_config)
+        except Exception:
+            live_config = None
+        log_info = None
+        try:
+            import requests
+            r = requests.get(f"{FANMATE_URL}/log/info", timeout=2)
+            if r.status_code == 200:
+                log_info = r.json()
+        except Exception:
+            pass
 
-        board = tk.Frame(wrap)
-        board.pack(fill="x", pady=(0, 8))
+        kpis = analyse(self.rows, boost_thr=thr,
+                       live_status=live_status,
+                       live_config=live_config,
+                       log_info=log_info)
 
-        kpi_order = [
-            ("BOOST",    "boost"),
-            ("COOLDOWN", "cooldown"),
-            ("DELTA",    "delta"),
-            ("LAG",      "lag"),
-            ("EVENTS",   "events"),
-            ("LOG",      "log"),
-        ]
+        # Collect failures + recommendations across sections
+        fails = []
+        recs = []
+        LABELS = {
+            "boost":"BOOST", "cooldown":"COOLDOWN", "delta":"DELTA",
+            "lag":"LAG", "events":"EVENTS", "log":"LOG",
+            "drive":"DRIVE", "clock":"CLOCK", "boot":"BOOT",
+            "opal_poll":"OPAL",
+            "night_cap":"NIGHT", "heat_gears":"HEAT", "hysteresis":"HYST",
+            "storage":"FS",
+            "phone":"PHONE", "sleep":"SLEEP", "ntc":"NTC",
+            "ds18b20":"DS18B20", "rpm":"RPM", "stall":"STALL",
+            "gear_order":"GEARS", "threshold":"THR",
+            "boost_mode":"MODE", "night_window":"WINDOW",
+        }
+        RECS = {
+            "boost":    "boost.on_hold 4 → 2  (or lower threshold)",
+            "cooldown": "review hold time",
+            "delta":    "check phone temp source",
+            "lag":      "normal — phone catches up after burst",
+            "events":   "check serial log",
+            "log":      "check clock / FS",
+            "drive":    "check Mac sync path",
+            "clock":    "Opal clock not landing",
+            "boot":     "frequent reboots — check power",
+            "opal_poll":"Opal poll dropping",
+            "night_cap":"nightMax not enforced",
+            "heat_gears":"heat thresholds may be too high",
+            "hysteresis":"increase tempHysteresis",
+            "storage":  "evict older sealed files",
+            "phone":    "check hall sensor",
+            "sleep":    "sleep/wake imbalance",
+            "ntc":      "check NTC wiring",
+            "ds18b20":  "check probe wiring",
+            "rpm":      "clamp RPM at 10k in firmware",
+            "stall":    "check fan connector",
+            "gear_order":"fix gear thresholds in Settings",
+            "threshold":"set 200–10000",
+            "boost_mode":"set to 0/1/2",
+            "night_window":"fix night hours",
+        }
 
-        for label, key in kpi_order:
-            data = kpis.get(key, {})
-            self._kpi_card(board, label, data)
+        total = 0
+        passed = 0
+        warned = 0
+        failed = 0
+        idle = 0
+        for section_name in ("core","data","device","hardware","config"):
+            sec = kpis.get(section_name, {})
+            if not isinstance(sec, dict):
+                continue
+            for key, data in sec.items():
+                if not isinstance(data, dict):
+                    continue
+                total += 1
+                st = data.get("status", "IDLE")
+                if st == "PASS":
+                    passed += 1
+                elif st == "WARN":
+                    warned += 1
+                    label = LABELS.get(key, key.upper())
+                    metric = data.get("metric", "")
+                    fails.append((label, metric, "WARN"))
+                    recs.append(f"{label}: {RECS.get(key, 'investigate')}")
+                elif st == "FAIL":
+                    failed += 1
+                    label = LABELS.get(key, key.upper())
+                    metric = data.get("metric", "")
+                    fails.append((label, metric, "FAIL"))
+                    recs.append(f"{label}: {RECS.get(key, 'investigate')}")
+                else:
+                    idle += 1
 
-        # --- Recommendation bar ---
-        rec = kpis.get("recommendation", "")
-        if rec:
-            self._recommendation_bar(wrap, rec)
+        parts = [f"{passed} PASS"]
+        if warned: parts.append(f"{warned} WARN")
+        if failed: parts.append(f"{failed} FAIL")
+        if idle:   parts.append(f"{idle} IDLE")
+        score_str = "  ·  ".join(parts)
 
-        # --- Three graphs (shorter now) ---
-        plot_w, plot_h = 660, 90
+        # ---------- SCORE ----------
+        # ---------- SCORE (hero) ----------
+        score_frame = tk.Frame(wrap)
+        score_frame.pack(fill="x", pady=(0, 6))
+        if failed:
+            hero_color = "#d20f39"
+        elif warned:
+            hero_color = "#d99a00"
+        else:
+            hero_color = "#2f9e44"
+        tk.Label(score_frame, text=score_str,
+                 font=("Helvetica Neue", 28, "bold"),
+                 fg=hero_color, anchor="w").pack(side="left")
 
-        net_peak = max((r["net"] for r in self.rows), default=0)
-        self.net_plot = ReportPlot(wrap, self.app, plot_w, plot_h,
-                                   y_min=0, y_max=max(2048, net_peak * 1.15),
-                                   color_key="blue")
-        self.net_plot.pack(pady=(6, 4))
-        self.net_plot.set_series(self.rows, "net", "NETWORK (KB/s)")
+        # divider
+        tk.Frame(wrap, height=1, bg="#d8dde8").pack(fill="x", pady=(14, 0))
 
-        self.fan_plot = ReportPlot(wrap, self.app, plot_w, plot_h,
-                                   y_min=0, y_max=100,
-                                   color_key="green")
-        self.fan_plot.pack(pady=(0, 4))
-        self.fan_plot.set_series(self.rows, "fan", "FAN (%)")
+        # ---------- FAILURES ----------
+        head = tk.Frame(wrap)
+        head.pack(fill="x", pady=(14, 6))
+        fail_header_color = "#d20f39" if failed else ("#d99a00" if warned else "#2f9e44")
+        tk.Label(head, text="FAILURES",
+                 font=("Helvetica Neue", 13, "bold"),
+                 fg=fail_header_color, anchor="w").pack(side="left")
+        tk.Label(head, text=f"  ({len(fails)})",
+                 font=("Helvetica Neue", 13),
+                 fg=fail_header_color, anchor="w").pack(side="left")
 
-        self.temp_plot = ReportPlot(wrap, self.app, plot_w, plot_h,
-                                    y_min=15, y_max=45,
-                                    color_key="orange")
-        self.temp_plot.pack(pady=(0, 8))
-        self.temp_plot.set_series(self.rows, "temp", "TEMP (°C) — phone (orange), room (cyan)",
-                                  key2="room", color2_key="blue")
+        if not fails:
+            tk.Label(wrap, text="none — everything passing",
+                     font=("Helvetica Neue", 14),
+                     fg="#2f9e44", anchor="w").pack(fill="x", pady=(0, 8))
+        else:
+            for (label, metric, sev) in fails:
+                row = tk.Frame(wrap)
+                row.pack(fill="x", pady=2)
+                tk.Label(row, text=label,
+                         font=("Menlo", 13, "bold"),
+                         fg="#d20f39" if sev == "FAIL" else "#d99a00",
+                         width=10, anchor="w").pack(side="left")
+                tk.Label(row, text=metric,
+                         font=("Helvetica Neue", 14),
+                         anchor="w").pack(side="left")
 
-        foot = tk.Frame(wrap)
-        foot.pack(fill="x", pady=(4, 0))
-        tk.Label(foot,
+        # divider
+        tk.Frame(wrap, height=1, bg="#d8dde8").pack(fill="x", pady=(14, 0))
+
+        # ---------- RECOMMENDATIONS ----------
+        head2 = tk.Frame(wrap)
+        head2.pack(fill="x", pady=(14, 6))
+        tk.Label(head2, text="RECOMMENDATIONS",
+                 font=("Helvetica Neue", 13, "bold"),
+                 fg="#1e66f5", anchor="w").pack(side="left")
+        tk.Label(head2, text=f"  ({len(recs)})",
+                 font=("Helvetica Neue", 13),
+                 fg="#1e66f5", anchor="w").pack(side="left")
+
+        if not recs:
+            tk.Label(wrap, text="none — system healthy",
+                     font=("Helvetica Neue", 14),
+                     fg="#2f9e44", anchor="w").pack(fill="x", pady=(0, 8))
+        else:
+            for r in recs:
+                tk.Label(wrap, text=r,
+                         font=("Helvetica Neue", 14),
+                         anchor="w", justify="left",
+                         wraplength=460).pack(fill="x", pady=2)
+
+        # ---------- footer ----------
+        tk.Label(wrap,
                  text=f"rows: {len(self.rows)}  ·  span: {span_h:.1f} h  ·  boost thr: {thr} KB/s",
-                 font=("Helvetica Neue", 10)).pack(anchor="w")
+                 font=("Helvetica Neue", 10)).pack(anchor="w", pady=(20, 4))
 
         tk.Button(wrap, text="Close", width=12,
-                  font=("Helvetica Neue", 11),
+                  font=("Helvetica Neue", 12),
                   command=self.destroy).pack(pady=(10, 0))
+
+        # ---------- append to history ----------
+        try:
+            self._append_history(start, end, ver, score_str, fails, recs)
+        except Exception as e:
+            print(f"[DynaTune] history append failed: {e}")
+
+    # ------------------------------------------------------------------
+    def _append_history(self, start, end, ver, score, fails, recs):
+        import csv, os
+        path = os.path.join(LOG_DIR, "dynatune-history.csv")
+        new = not os.path.exists(path)
+        with open(path, "a", newline="") as f:
+            w = csv.writer(f)
+            if new:
+                w.writerow(["run_at","window_start","window_end",
+                            "version","score","fails","recs"])
+            flat_fails = []
+            for f in fails:
+                if isinstance(f, tuple):
+                    flat_fails.append(f[0] + ": " + f[1])
+                else:
+                    flat_fails.append(str(f))
+            w.writerow([
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                start.strftime("%Y-%m-%d %H:%M:%S"),
+                end.strftime("%Y-%m-%d %H:%M:%S"),
+                ver,
+                score,
+                ";".join(flat_fails),
+                ";".join(str(r) for r in recs),
+            ])
 
     # ------------------------------------------------------------------
     def _kpi_card(self, parent, label, data):
