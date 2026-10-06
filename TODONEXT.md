@@ -36,6 +36,48 @@ See NOTES.md → CURRENT PHASE for details.
 
 ## v4.29 CANDIDATES
 
+**Primary item: clock from Opal, NTP removed.**
+
+The Opal is the only device that is always on. The iPhone comes and goes. The
+ESP32 asks the Opal for time, period. NTP is not demoted, not a fallback,
+removed.
+
+Why:
+- NTP over the carrier is a trap. UDP 123 gets throttled, blackholed, or
+  routed through CGNAT. Worst-case SNTP retry chain is 15-30 s, during
+  which the ESP32's radio is held and every other network operation
+  queues behind it.
+- The self-locking gate: log_rotate_check() returns early if !ntp_synced(),
+  and log_boot_recovery() discards rows if time_ok is false. If NTP never
+  succeeds, rotation stops and boot recovery loses data.
+- The Opal's Date header is a bounded 250 ms HEAD over the LAN. Measured
+  from Mac: median 8.7 ms, max 225 ms. Expected from ESP32: median 30-80 ms,
+  worst 250 ms. 10-50x faster than NTP, no retry tail, no radio hold.
+- Opal has an RTC and NTP-synced clock of its own. Drift is seconds/day.
+  For log timestamps that is more than accurate enough.
+
+Scope:
+
+| File | Change |
+|---|---|
+| WiFiManager.cpp | Remove start_ntp(), ntp_loop(), _ntp_synced_flag. Add clock_sync() -- HEAD to WiFi.gatewayIP(), read Date header, parse, settimeofday(). |
+| WiFiManager.h | Replace ntp_synced() with clock_synced() or make ntp_synced() return clock validity. |
+| fanmate.ino | Replace setup NTP wait with 3-try LAN clock wait (500 ms each). Call clock_sync() every 15 min in tick_15s(). |
+| Logging.cpp | log_rotate_check() gates on time() > 1700000000UL directly, not on a flag. log_boot_recovery() preserves rows under recovered-<uptime>.csv if time unavailable. |
+| Config.h | Add CLOCK_SYNC_INTERVAL_MS, CLOCK_HTTP_TIMEOUT_MS. Bump version to 4.29. |
+
+Implementation notes:
+- HTTPClient: sendRequest("HEAD", NULL, 0). No body transfer.
+- Manual month/day parse -- newlib does not expose timegm() reliably on
+  ESP32 core 2.0.17. Howard Hinnant days_from_civil() for epoch conversion.
+- Sanity floor: reject Date values below 1700000000UL (kernel default 1970).
+- Never hard-fail on clock. Clock is an enhancement, not a gate.
+- Reference: Bike-Mate V5.00, commit 249322f, WifiManager.cpp opalClockSync().
+
+Carried from v4.28 session:
+
+
+
 Carried from v4.28 session:
 
 - **F7 seal filename collision** — confirmed live. Two files named
