@@ -8,6 +8,11 @@
     #include "secrets.example.h"
 #endif
 
+// v4.28 network resilience
+#define OPAL_HTTP_TIMEOUT_MS 400
+#define OPAL_RSSI_FLOOR -70
+#define NTP_SYNC_COOLDOWN_MS 60000
+
 enum SystemState {
     STATE_ACTIVE      = 0,
     STATE_LIGHT_SLEEP = 1,
@@ -15,7 +20,7 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "4.27"
+#define FAN_MATE_VERSION "4.28"
 
 #define QUIET_START_HOUR 22
 #define QUIET_END_HOUR   7

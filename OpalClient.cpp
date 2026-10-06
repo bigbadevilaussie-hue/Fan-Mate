@@ -34,6 +34,8 @@ static bool rpc_call(const String &json_body, String &response) {
     digitalWrite(LED_PIN, LOW);
 
     HTTPClient http;
+    http.setTimeout(OPAL_HTTP_TIMEOUT_MS);
+    if (WiFi.RSSI() < OPAL_RSSI_FLOOR) return false;
     String url = String("http://") + OPAL_IP + "/rpc";
 
     if (!http.begin(url)) {
@@ -41,7 +43,6 @@ static bool rpc_call(const String &json_body, String &response) {
         digitalWrite(LED_PIN, HIGH);
         return false;
     }
-    http.setTimeout(3000);
     http.addHeader("Content-Type", "application/json");
 
     int code = http.POST(json_body);

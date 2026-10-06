@@ -183,6 +183,7 @@ static void tick_15s() {
 }
 
 void loop() {
+  server_loop();
     static unsigned long lastOLED     = 0;
     static bool          server_ready = false;
 
