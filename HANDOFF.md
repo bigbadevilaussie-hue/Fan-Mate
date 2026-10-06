@@ -68,11 +68,10 @@
 > scripts written to /tmp/ then run with python3. Never paste heredocs
 > or # comments directly.
 > 
-> Partition: Fan-Mate uses :PartitionScheme=min_spiffs
->   (1.9MB APP with OTA / 1408KB LittleFS).
-> Bike-Mate uses the DEFAULT partition. Do not mix them up.
+> Partition: Fan-Mate uses the DEFAULT partition (no FQBN suffix).
+> Bike-Mate uses :PartitionScheme=min_spiffs. Do not mix them up.
 
-Generated: 2026-10-06 14:40:13
+Generated: 2026-10-06 14:42:08
 
 ---
 
@@ -80,25 +79,21 @@ Generated: 2026-10-06 14:40:13
 
 ```
 $ git log --oneline -10
+76ea94e docs: v4.28 handoff -- partition scheme corrected, version history through v4.28, [STORAGE] noted
+79b01bc v4.28: [STORAGE] line on seal -- LittleFS percent used, KB, sealed count
+e641d20 v4.28: network resilience -- Opal timeout cap, RSSI floor, WebServer priority
+3212013 v4.27: silence beeps for gear 0-1, alert level 1, and all returns to zero; beep only on 2+ to 2+ transitions
+f90f5a1 v4.26: /status temp_lvl reads heat_get_gear() — display now matches fan decision
+1ef22e0 v4.25: Drive upload — sealed logs POST to Apps Script on seal, 302 treated as success
+bd23182 docs: regenerate handoff with updated README/FILES/PROJECT_STATE
 1f4b9f7 docs: README, FILES, PROJECT_STATE updated to v4.24 / gui-v3.95
 9398bf0 docs: partition scheme note in TODONEXT and handoff top block
 a376c51 docs: regenerate handoff
-5121964 docs: NOTES session log through v4.24 / v3.95 + five-AI audit
-547c987 docs: AUDIT.md — mark 25 findings fixed in v4.21-v4.24 / gui-v3.90-v3.95
-200c9ec docs: regenerate handoff at v4.24 / gui-v3.95
-c03fc02 gui-v3.95: version string was stuck at 3.90 through four commits
-1dbacbf gui-v3.94: periodic config refresh, report timestamp cutoff, refresh button
-0222985 gui-v3.93: remove retired alarm/phone from fetch_config; is_night_now reads device config
-9bab623 gui-v3.92: SettingsDialog fetches config off main thread — no more 10s freeze
 
 $ git status --short
  M HANDOFF.md
 
 $ git tag -l | tail -15
-v4.08
-v4.09
-v4.10
-v4.11
 v4.12
 v4.13
 v4.14
@@ -110,6 +105,10 @@ v4.21
 v4.22
 v4.23
 v4.24
+v4.25
+v4.26
+v4.27
+v4.28
 ```
 
 ---
@@ -336,6 +335,60 @@ frozen behaviour; it does not chase moving targets.
 **The kill mode is three actions, not one.** (1) Firmware fires `opal_set_repeater(false)` at Critical — network drops. (2) Human acknowledges by clicking SILENCE on web dashboard → killState → OFF, but repeater stays off. (3) Human manually re-enables repeater on Opal admin, then clicks ARM → killState → AUTO. No auto-recovery at any stage. Intentional.
 
 **Fan fails safe to 100%.** With the ESP32-C3 in bootloader mode (GPIO 9 held low), GPIO 7 is undriven and the fan spins at full speed. If a 10k pull-down were added, it would fail to 0%. Fail-to-100% is the current behaviour and is deliberate — no change planned.
+
+---
+
+
+### 2026-10-05/06 — v4.25 → v4.28, Opal 2.4 GHz investigation, power outage
+
+**Firmware v4.25 → v4.28:**
+- v4.25 — Drive upload: sealed logs POST to Apps Script on seal. HTTP 302
+  treated as success (Apps Script redirect pattern). `[DRIVE] name OK http=302`
+- v4.26 — `/status` `temp_lvl` reads `heat_get_gear()` instead of recomputing,
+  so the display matches the fan decision exactly
+- v4.27 — Beep gate: `beep_once()` only fires when `fanGear >= 2 && lastFanGear >= 2`.
+  Gear 0-1, alert level 1, and all returns to zero are silent. Kills the
+  every-transition beep.
+- v4.28 — Network resilience:
+  - `OPAL_HTTP_TIMEOUT_MS 400` — Opal RPC cap (was 3000ms)
+  - `OPAL_RSSI_FLOOR -70` — skip Opal poll entirely below this RSSI
+  - `server_loop()` moved to top of `loop()` — HTTP serviced before anything blocking
+  - `NTP_SYNC_COOLDOWN_MS 60000` — throttle NTP re-syncs
+  - `[STORAGE]` line on seal — LittleFS % used, KB, sealed count
+
+**The Opal 2.4 GHz story.** A power outage took out the Opal. When it came back,
+its 2.4 GHz radio was in a broken state: `handle_probe_req: send failed`
+firing multiple times per second, `radar set region 1` (US regulatory domain
+instead of AU). RSSI to the ESP32 dropped from -56 to -68/-71. The ESP32's
+WebServer hung — HTTP timed out, OLED lagged, but ping still replied and the
+thermal path kept running. Root cause: single-radio repeater mode. The Opal's
+2.4 GHz chip has to time-slice between STA uplink (Nick hotspot on ch 6) and
+AP broadcast (StarCabin). When the STA retries storm, the AP can't answer
+probes. ESP32 starves on blocked network calls in `loop()`.
+
+**The v4.28 fix.** Caps Opal RPC at 400ms, skips it entirely below -70 RSSI,
+and services HTTP first in `loop()`. Under the same conditions now, the ESP
+stays reachable even when the Opal link is bad. Verified: device survived
+another Opal restart mid-session without hanging.
+
+**Power outage 12:02.** Woke to dead AC. ESP32 logged through it — sealed 510
+rows of pre-outage data on next boot, uploaded to Drive (302), Mac synced.
+Boot recovery + Drive upload + Mac sync all confirmed working under worst case.
+
+**Docs were backwards.** Handoff said "Fan-Mate uses the DEFAULT partition,
+Bike-Mate uses min_spiffs". Reality is the opposite. Fixed in this pass.
+
+**Lessons:**
+- `str.replace("#endif", ...)` on a header file will hit the FIRST `#endif`,
+  which in `Config.h` is the secrets.h `#else` close. Constants landed inside
+  the `#else` branch. Anchor with the surrounding context, not the bare token.
+- zsh eats `#` lines even inside a heredoc paste if they're at column 0. Keep
+  Python scripts on one line or wrap them in `cat > /tmp/x.py <<'EOF'` and
+  make sure no Python `#` comment starts at column 0 of the pasted block.
+- `server.handleClient()` doesn't work in `fanmate.ino` — `server` is `static`
+  inside `WebServer.cpp`. Must call the exposed `server_loop()` wrapper.
+- `WiFi.RSSI()` returns 0 when disconnected, so `0 < -70` is false — the RSSI
+  floor doesn't fire on a dropped link. v4.28.1 candidate.
 
 ---
 
@@ -621,7 +674,7 @@ https://github.com/bigbadevilaussie-hue/Fan-Mate
 
 # Fan-Mate — Project State
 
-Snapshot date: 2026-10-02
+Snapshot date: 2026-10-06
 Latest firmware: **V4.28** (tag v4.28)
 Latest GUI: Tk **v3.95** (tag gui-v3.95) — workhorse, primary
 Latest GUI2: QML **v1.11** (tag gui-v2-v1.11) — parked until monitor phase completes
@@ -682,7 +735,7 @@ Rule 4 — Fuck it lmao
 
 ## FIRMWARE
 
-**Current version:** V4.18
+**Current version:** V4.28
 
 ### Modules
 | File | Purpose |
@@ -727,6 +780,10 @@ Rule 4 — Fuck it lmao
 | V4.22 | NVS boost keys shortened to ≤15 chars — boost config now persists across reboot |
 | V4.23 | Web dashboard room card, net graph axis 2048→8192 |
 | V4.24 | Rate cap 10 MB/s, log actual gear 0–4 not binary, non-blocking kick-start, kick-start phone gate, log_resume preserves orphan, log_evict_oldest sorts by name |
+| V4.25 | Drive upload: sealed logs POST to Apps Script on seal, HTTP 302 treated as success |
+| V4.26 | `/status` temp_lvl reads `heat_get_gear()` — display now matches the fan decision |
+| V4.27 | Beep gate: only 2+ to 2+ gear transitions beep; gear 0-1, alert level 1, and returns to zero silenced |
+| V4.28 | Network resilience: Opal HTTP timeout cap 400ms, RSSI floor -70 (skip Opal poll below), `server_loop()` at top of loop(), NTP re-sync throttle. `[STORAGE]` line on seal — LittleFS % used, KB, sealed count |
 
 ---
 
@@ -786,6 +843,8 @@ Served directly by the ESP32. Open `http://fan-mate.local/` from iPhone, iPad, i
 **Rotation:** Hourly. Files named `log-v{X.YY}-YYYYMMDD-HHMM.csv` where HHMM is start of content window.
 
 **Events:** SEAL, BOOT, SOFTWARE, POWERON, PANIC, WDT, BROWNOUT, OTA, REBOOT, SLEEP, WAKE, CLEAR, FAN_STALL, FAN_RECOVERED, UPLOAD
+
+**Serial-only (not in CSV):** `[STORAGE] %u%% used (%u/%u KB, %u sealed)` — emitted on every seal since v4.28
 
 **Sync:** GUI pulls via `/log/list` (name+size+crc32), downloads `/log/file?name=X`, verifies CRC32, saves to `~/Documents/FanMate_logs/`, acks via `/log/ack`. ESP32 deletes on ack.
 
@@ -863,10 +922,10 @@ After the monitor week:
 **Build:**
     cd ~/Documents/Arduino/fanmate
     rm -rf build
-    arduino-cli compile --fqbn esp32:esp32:esp32c3 --export-binaries .
+    arduino-cli compile --fqbn esp32:esp32:esp32c3:PartitionScheme=min_spiffs --export-binaries .
     # binary: build/esp32.esp32.esp32c3/fanmate.ino.bin
-    # Fan-Mate uses the DEFAULT partition.
-    # Bike-Mate needs :PartitionScheme=min_spiffs — do not mix.
+    # Fan-Mate uses :PartitionScheme=min_spiffs (1408KB LittleFS).
+    # Bike-Mate uses the DEFAULT partition — do not mix.
 
 **OTA:**
 GUI menu → 📡 Update Firmware → Y/N prompt
@@ -900,14 +959,14 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 ```
 -rw-r--r--@ 1 Nick  staff   5701 30 Sep 09:46 AutoBoost.cpp
 -rw-r--r--@ 1 Nick  staff   1610 30 Sep 09:46 AutoBoost.h
--rw-r--r--@ 1 Nick  staff   1900  2 Oct 09:45 Config.h
+-rw-r--r--@ 1 Nick  staff   2065  6 Oct 14:20 Config.h
 -rw-r--r--@ 1 Nick  staff   5501 27 Sep 18:00 DisplayManager.cpp
 -rw-r--r--@ 1 Nick  staff    422 26 Sep 10:16 DisplayManager.h
--rw-r--r--@ 1 Nick  staff  14553  2 Oct 09:48 FanController.cpp
--rw-r--r--@ 1 Nick  staff    748 30 Sep 12:46 FanController.h
--rw-r--r--@ 1 Nick  staff  14870  2 Oct 09:49 Logging.cpp
+-rw-r--r--@ 1 Nick  staff  14553  2 Oct 12:21 FanController.cpp
+-rw-r--r--@ 1 Nick  staff    829  2 Oct 11:23 FanController.h
+-rw-r--r--@ 1 Nick  staff  17550  6 Oct 14:30 Logging.cpp
 -rw-r--r--@ 1 Nick  staff    647 29 Sep 08:06 Logging.h
--rw-r--r--@ 1 Nick  staff   8397  1 Oct 09:33 OpalClient.cpp
+-rw-r--r--@ 1 Nick  staff   8466  6 Oct 14:20 OpalClient.cpp
 -rw-r--r--@ 1 Nick  staff    343 28 Sep 21:16 OpalClient.h
 -rw-r--r--@ 1 Nick  staff    779 26 Sep 22:04 SerialBuffer.cpp
 -rw-r--r--@ 1 Nick  staff    170 26 Sep 22:03 SerialBuffer.h
@@ -918,13 +977,13 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 -rw-r--r--@ 1 Nick  staff   1716 28 Sep 22:42 WeatherClient.cpp
 -rw-r--r--@ 1 Nick  staff    185 26 Sep 16:33 WeatherClient.h
 -rw-r--r--@ 1 Nick  staff  12801  2 Oct 08:54 WebPage.h
--rw-r--r--@ 1 Nick  staff  15906  1 Oct 08:17 WebServer.cpp
+-rw-r--r--@ 1 Nick  staff  15735  2 Oct 11:23 WebServer.cpp
 -rw-r--r--@ 1 Nick  staff    142 27 Sep 17:39 WebServer.h
 -rw-r--r--@ 1 Nick  staff   3533  1 Oct 09:28 WiFiManager.cpp
 -rw-r--r--@ 1 Nick  staff    315 26 Sep 17:54 WiFiManager.h
--rw-r--r--  1 Nick  staff   6007  2 Oct 09:46 fanmate.ino
--rw-r--r--@ 1 Nick  staff    669 25 Sep 15:31 secrets.example.h
--rw-r--r--@ 1 Nick  staff    770 25 Sep 16:48 secrets.h
+-rw-r--r--  1 Nick  staff   6024  6 Oct 14:29 fanmate.ino
+-rw-r--r--@ 1 Nick  staff    872  2 Oct 11:07 secrets.example.h
+-rw-r--r--@ 1 Nick  staff    907  2 Oct 11:09 secrets.h
 ```
 
 ---
@@ -974,12 +1033,12 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 
 ```
 {
-    "fw": "4.24",
-    "uptime": 2182,
+    "fw": "4.28",
+    "uptime": 463,
     "ip": "192.168.8.242",
-    "rssi": -59,
+    "rssi": -65,
     "ssid": "StarCabin",
-    "temp": 30.94,
+    "temp": 30.31,
     "fan": 0,
     "rpm": 0,
     "phone": 1,
@@ -988,139 +1047,139 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
     "boost": 0,
     "boost_lvl": 0,
     "cooling": 0,
-    "net_kbps": 72.3,
+    "net_kbps": 11.0,
     "temp_lvl": 0,
     "opal": 1,
     "host": 1,
     "host_last_seen": 0,
     "sleep": 0,
     "sleep_countdown": 0,
-    "log_size": 5709,
-    "outdoor_c": 22.3,
-    "room_c": 28.9,
+    "log_size": 1686,
+    "outdoor_c": 24.7,
+    "room_c": 26.0,
     "temp_hist": [
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.8,
-        30.9,
-        30.9,
-        30.9,
-        30.8,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9,
-        30.9
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        30.3,
+        30.3,
+        30.3,
+        30.3,
+        30.3,
+        30.3,
+        30.3,
+        30.3,
+        30.3,
+        30.4,
+        30.4,
+        30.4,
+        30.4,
+        30.4,
+        30.4,
+        30.3,
+        30.3,
+        30.3,
+        30.3,
+        30.3,
+        30.3,
+        30.3,
+        30.3,
+        30.3,
+        30.3,
+        30.3,
+        30.3,
+        30.3,
+        30.3,
+        30.3
     ],
     "net_hist": [
-        78.5,
-        78.0,
-        78.0,
-        72.0,
-        21.7,
-        3.6,
-        4.0,
-        4.0,
-        5.9,
-        31.0,
-        165.9,
-        165.9,
-        165.9,
-        157.3,
-        186.0,
-        186.0,
-        186.0,
-        157.2,
-        157.2,
-        157.2,
-        81.4,
-        81.4,
-        74.1,
-        58.8,
-        99.4,
-        99.4,
-        99.4,
-        74.5,
-        74.5,
-        28.3,
-        7.0,
-        7.0,
-        3.3,
-        470.7,
-        470.7,
-        470.7,
-        137.8,
-        137.8,
-        137.8,
-        112.6,
-        112.6,
-        115.2,
-        115.2,
-        115.2,
-        112.2,
-        66.0,
-        65.4,
-        65.4,
-        63.5,
-        86.8,
-        86.8,
-        86.8,
-        71.6,
-        71.6,
-        75.6,
-        75.6,
-        75.6,
-        73.3,
-        73.3,
-        72.3
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        16.0,
+        16.0,
+        16.0,
+        13.3,
+        13.3,
+        13.3,
+        12.4,
+        9.6,
+        11.4,
+        11.9,
+        11.9,
+        11.9,
+        15.1,
+        16.5,
+        16.5,
+        16.5,
+        15.0,
+        15.0,
+        15.6,
+        15.6,
+        21.4,
+        21.4,
+        21.4,
+        18.8,
+        9.5,
+        12.3,
+        12.3,
+        12.3,
+        11.0
     ],
     "kill_mode": 0,
     "temp_gear1": 33.0,
@@ -1139,15 +1198,15 @@ Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
 ## LOG FILES ON MAC
 
 ```
--rw-r--r--  1 Nick  staff  11341  2 Oct 02:00 /Users/Nick/Documents/FanMate_logs/log-4.22-20261002-0100.csv
--rw-r--r--  1 Nick  staff  11649  2 Oct 03:00 /Users/Nick/Documents/FanMate_logs/log-4.22-20261002-0200.csv
--rw-r--r--  1 Nick  staff  11625  2 Oct 04:00 /Users/Nick/Documents/FanMate_logs/log-4.22-20261002-0300.csv
--rw-r--r--  1 Nick  staff  11406  2 Oct 05:00 /Users/Nick/Documents/FanMate_logs/log-4.22-20261002-0400.csv
--rw-r--r--  1 Nick  staff  11304  2 Oct 06:00 /Users/Nick/Documents/FanMate_logs/log-4.22-20261002-0500.csv
--rw-r--r--  1 Nick  staff  11452  2 Oct 07:00 /Users/Nick/Documents/FanMate_logs/log-4.22-20261002-0600.csv
--rw-r--r--  1 Nick  staff  11504  2 Oct 08:00 /Users/Nick/Documents/FanMate_logs/log-4.22-20261002-0700.csv
--rw-r--r--  1 Nick  staff  11434  2 Oct 09:00 /Users/Nick/Documents/FanMate_logs/log-4.22-20261002-0800.csv
--rw-r--r--  1 Nick  staff   3009  2 Oct 09:15 /Users/Nick/Documents/FanMate_logs/log-4.23-20261002-0900.csv
--rw-r--r--  1 Nick  staff   1561  2 Oct 10:00 /Users/Nick/Documents/FanMate_logs/log-4.24-20261002-0953.csv
+-rw-r--r--  1 Nick  staff  11560  6 Oct 03:23 /Users/Nick/Documents/FanMate_logs/log-4.27-20261006-0200.csv
+-rw-r--r--  1 Nick  staff  11561  6 Oct 05:54 /Users/Nick/Documents/FanMate_logs/log-4.27-20261006-0300.csv
+-rw-r--r--  1 Nick  staff  11429  6 Oct 05:54 /Users/Nick/Documents/FanMate_logs/log-4.27-20261006-0400.csv
+-rw-r--r--  1 Nick  staff  11586  6 Oct 07:06 /Users/Nick/Documents/FanMate_logs/log-4.27-20261006-0500.csv
+-rw-r--r--  1 Nick  staff  11576  6 Oct 07:06 /Users/Nick/Documents/FanMate_logs/log-4.27-20261006-0600.csv
+-rw-r--r--  1 Nick  staff  11632  6 Oct 08:00 /Users/Nick/Documents/FanMate_logs/log-4.27-20261006-0700.csv
+-rw-r--r--  1 Nick  staff  12246  6 Oct 12:42 /Users/Nick/Documents/FanMate_logs/log-4.27-20261006-0800.csv
+-rw-r--r--  1 Nick  staff   4048  6 Oct 13:00 /Users/Nick/Documents/FanMate_logs/log-4.27-20261006-1241.csv
+-rw-r--r--  1 Nick  staff  12539  6 Oct 14:00 /Users/Nick/Documents/FanMate_logs/log-4.27-20261006-1300.csv
+-rw-r--r--  1 Nick  staff   6821  6 Oct 14:34 /Users/Nick/Documents/FanMate_logs/log-4.28-20261006-1400.csv
 ```
 
