@@ -68,10 +68,11 @@
 > scripts written to /tmp/ then run with python3. Never paste heredocs
 > or # comments directly.
 > 
-> Partition: Fan-Mate uses the DEFAULT partition (no FQBN suffix).
-> Bike-Mate uses :PartitionScheme=min_spiffs. Do not mix them up.
+> Partition: Fan-Mate uses :PartitionScheme=min_spiffs
+>   (1.9MB APP with OTA / 1408KB LittleFS).
+> Bike-Mate uses the DEFAULT partition. Do not mix them up.
 
-Generated: 2026-10-02 10:29:24
+Generated: 2026-10-06 14:40:13
 
 ---
 
@@ -116,7 +117,7 @@ v4.24
 ## VERSIONS
 
 ```
-#define FAN_MATE_VERSION "4.24"
+#define FAN_MATE_VERSION "4.28"
 GUI_VERSION = "3.95"
     property string guiVersion: "1.11"
             text: "GUI v" + root.guiVersion + "  ·  FW " + dev.fw
@@ -621,7 +622,7 @@ https://github.com/bigbadevilaussie-hue/Fan-Mate
 # Fan-Mate — Project State
 
 Snapshot date: 2026-10-02
-Latest firmware: **V4.24** (tag v4.24)
+Latest firmware: **V4.28** (tag v4.28)
 Latest GUI: Tk **v3.95** (tag gui-v3.95) — workhorse, primary
 Latest GUI2: QML **v1.11** (tag gui-v2-v1.11) — parked until monitor phase completes
 

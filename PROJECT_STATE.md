@@ -1,7 +1,7 @@
 # Fan-Mate — Project State
 
-Snapshot date: 2026-10-02
-Latest firmware: **V4.24** (tag v4.24)
+Snapshot date: 2026-10-06
+Latest firmware: **V4.28** (tag v4.28)
 Latest GUI: Tk **v3.95** (tag gui-v3.95) — workhorse, primary
 Latest GUI2: QML **v1.11** (tag gui-v2-v1.11) — parked until monitor phase completes
 
@@ -61,7 +61,7 @@ Rule 4 — Fuck it lmao
 
 ## FIRMWARE
 
-**Current version:** V4.18
+**Current version:** V4.28
 
 ### Modules
 | File | Purpose |
@@ -106,6 +106,10 @@ Rule 4 — Fuck it lmao
 | V4.22 | NVS boost keys shortened to ≤15 chars — boost config now persists across reboot |
 | V4.23 | Web dashboard room card, net graph axis 2048→8192 |
 | V4.24 | Rate cap 10 MB/s, log actual gear 0–4 not binary, non-blocking kick-start, kick-start phone gate, log_resume preserves orphan, log_evict_oldest sorts by name |
+| V4.25 | Drive upload: sealed logs POST to Apps Script on seal, HTTP 302 treated as success |
+| V4.26 | `/status` temp_lvl reads `heat_get_gear()` — display now matches the fan decision |
+| V4.27 | Beep gate: only 2+ to 2+ gear transitions beep; gear 0-1, alert level 1, and returns to zero silenced |
+| V4.28 | Network resilience: Opal HTTP timeout cap 400ms, RSSI floor -70 (skip Opal poll below), `server_loop()` at top of loop(), NTP re-sync throttle. `[STORAGE]` line on seal — LittleFS % used, KB, sealed count |
 
 ---
 
@@ -165,6 +169,8 @@ Served directly by the ESP32. Open `http://fan-mate.local/` from iPhone, iPad, i
 **Rotation:** Hourly. Files named `log-v{X.YY}-YYYYMMDD-HHMM.csv` where HHMM is start of content window.
 
 **Events:** SEAL, BOOT, SOFTWARE, POWERON, PANIC, WDT, BROWNOUT, OTA, REBOOT, SLEEP, WAKE, CLEAR, FAN_STALL, FAN_RECOVERED, UPLOAD
+
+**Serial-only (not in CSV):** `[STORAGE] %u%% used (%u/%u KB, %u sealed)` — emitted on every seal since v4.28
 
 **Sync:** GUI pulls via `/log/list` (name+size+crc32), downloads `/log/file?name=X`, verifies CRC32, saves to `~/Documents/FanMate_logs/`, acks via `/log/ack`. ESP32 deletes on ack.
 
@@ -242,10 +248,10 @@ After the monitor week:
 **Build:**
     cd ~/Documents/Arduino/fanmate
     rm -rf build
-    arduino-cli compile --fqbn esp32:esp32:esp32c3 --export-binaries .
+    arduino-cli compile --fqbn esp32:esp32:esp32c3:PartitionScheme=min_spiffs --export-binaries .
     # binary: build/esp32.esp32.esp32c3/fanmate.ino.bin
-    # Fan-Mate uses the DEFAULT partition.
-    # Bike-Mate needs :PartitionScheme=min_spiffs — do not mix.
+    # Fan-Mate uses :PartitionScheme=min_spiffs (1408KB LittleFS).
+    # Bike-Mate uses the DEFAULT partition — do not mix.
 
 **OTA:**
 GUI menu → 📡 Update Firmware → Y/N prompt

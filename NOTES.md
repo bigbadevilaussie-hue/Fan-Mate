@@ -210,6 +210,60 @@ frozen behaviour; it does not chase moving targets.
 
 ---
 
+
+### 2026-10-05/06 — v4.25 → v4.28, Opal 2.4 GHz investigation, power outage
+
+**Firmware v4.25 → v4.28:**
+- v4.25 — Drive upload: sealed logs POST to Apps Script on seal. HTTP 302
+  treated as success (Apps Script redirect pattern). `[DRIVE] name OK http=302`
+- v4.26 — `/status` `temp_lvl` reads `heat_get_gear()` instead of recomputing,
+  so the display matches the fan decision exactly
+- v4.27 — Beep gate: `beep_once()` only fires when `fanGear >= 2 && lastFanGear >= 2`.
+  Gear 0-1, alert level 1, and all returns to zero are silent. Kills the
+  every-transition beep.
+- v4.28 — Network resilience:
+  - `OPAL_HTTP_TIMEOUT_MS 400` — Opal RPC cap (was 3000ms)
+  - `OPAL_RSSI_FLOOR -70` — skip Opal poll entirely below this RSSI
+  - `server_loop()` moved to top of `loop()` — HTTP serviced before anything blocking
+  - `NTP_SYNC_COOLDOWN_MS 60000` — throttle NTP re-syncs
+  - `[STORAGE]` line on seal — LittleFS % used, KB, sealed count
+
+**The Opal 2.4 GHz story.** A power outage took out the Opal. When it came back,
+its 2.4 GHz radio was in a broken state: `handle_probe_req: send failed`
+firing multiple times per second, `radar set region 1` (US regulatory domain
+instead of AU). RSSI to the ESP32 dropped from -56 to -68/-71. The ESP32's
+WebServer hung — HTTP timed out, OLED lagged, but ping still replied and the
+thermal path kept running. Root cause: single-radio repeater mode. The Opal's
+2.4 GHz chip has to time-slice between STA uplink (Nick hotspot on ch 6) and
+AP broadcast (StarCabin). When the STA retries storm, the AP can't answer
+probes. ESP32 starves on blocked network calls in `loop()`.
+
+**The v4.28 fix.** Caps Opal RPC at 400ms, skips it entirely below -70 RSSI,
+and services HTTP first in `loop()`. Under the same conditions now, the ESP
+stays reachable even when the Opal link is bad. Verified: device survived
+another Opal restart mid-session without hanging.
+
+**Power outage 12:02.** Woke to dead AC. ESP32 logged through it — sealed 510
+rows of pre-outage data on next boot, uploaded to Drive (302), Mac synced.
+Boot recovery + Drive upload + Mac sync all confirmed working under worst case.
+
+**Docs were backwards.** Handoff said "Fan-Mate uses the DEFAULT partition,
+Bike-Mate uses min_spiffs". Reality is the opposite. Fixed in this pass.
+
+**Lessons:**
+- `str.replace("#endif", ...)` on a header file will hit the FIRST `#endif`,
+  which in `Config.h` is the secrets.h `#else` close. Constants landed inside
+  the `#else` branch. Anchor with the surrounding context, not the bare token.
+- zsh eats `#` lines even inside a heredoc paste if they're at column 0. Keep
+  Python scripts on one line or wrap them in `cat > /tmp/x.py <<'EOF'` and
+  make sure no Python `#` comment starts at column 0 of the pasted block.
+- `server.handleClient()` doesn't work in `fanmate.ino` — `server` is `static`
+  inside `WebServer.cpp`. Must call the exposed `server_loop()` wrapper.
+- `WiFi.RSSI()` returns 0 when disconnected, so `0 < -70` is false — the RSSI
+  floor doesn't fire on a dropped link. v4.28.1 candidate.
+
+---
+
 ## DYNATUNE — KPI BOARD (planned, next session)
 
 DynaTune becomes a KPI dashboard, not just a plot viewer. Glance-readable,

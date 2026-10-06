@@ -1,7 +1,7 @@
 # Fan-Mate — What To Do Next
 
-Last updated: 2026-10-02
-Firmware: **v4.24**
+Last updated: 2026-10-06
+Firmware: **v4.28**
 Tk GUI: **v3.95**
 QML GUI2: **v1.11** (parked)
 
@@ -34,6 +34,19 @@ See NOTES.md → CURRENT PHASE for details.
 
 ---
 
+## v4.29 CANDIDATES
+
+Carried from v4.28 session:
+
+- **F7 seal filename collision** — confirmed live. Two files named
+  `log-4.27-20261006-1241.csv` were synced to the Mac, different sizes.
+  `seal_live()` must append a counter (`-01`, `-02`) when the target name
+  already exists.
+- **v4.28.1: WiFi-down guard before RSSI check.** `WiFi.RSSI()` returns 0 when
+  disconnected. `0 < -70` is false, so the Opal RSSI floor doesn't fire on a
+  dropped link. Add `if (WiFi.status() != WL_CONNECTED) return false;` before
+  the RSSI check in `rpc_call()`.
+
 ## OPEN FIRMWARE ITEMS
 
 Low priority. Not blocking.
@@ -51,6 +64,12 @@ Low priority. Not blocking.
 ---
 
 ## OPEN TK ITEMS
+
+- **Report2H window trim.** `_find_files_since(2)` walks back by files, not
+  by hours. Confirmed live: report labelled "Last 2 Hours" showed 08:00–14:00
+  (6 hours). Fix: keep the file walk, then trim rows to the actual last N
+  hours by timestamp before plotting. ReportDaily and ReportWeekly are fine —
+  they select by date.
 
 None critical. AUDIT.md Priority 3 has cosmetics if bored.
 
@@ -84,13 +103,12 @@ loses the setting.
 
 | Project | Partition | FQBN suffix |
 |---|---|---|
-| Fan-Mate | Default 4MB (1.2MB APP) | *(none — default)* |
-| Bike-Mate | Minimal SPIFFS (1.9MB APP) | `:PartitionScheme=min_spiffs` |
+| Fan-Mate | Minimal SPIFFS (1.9MB APP / 1408KB LittleFS) | `:PartitionScheme=min_spiffs` |
+| Bike-Mate | Default 4MB | *(none — default)* |
 
-**For Fan-Mate compile:** `esp32:esp32:esp32c3` — default partition,
-no suffix needed.
+**For Fan-Mate compile:** `esp32:esp32:esp32c3:PartitionScheme=min_spiffs`.
 
-**For Bike-Mate compile:** `esp32:esp32:esp32c3:PartitionScheme=min_spiffs`.
+**For Bike-Mate compile:** `esp32:esp32:esp32c3` — default partition.
 
 **Never trust the IDE dropdown.** Use arduino-cli with the FQBN above,
 or a project-local build.sh.
