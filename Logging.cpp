@@ -160,23 +160,57 @@ bool upload_to_github(const char* sealed_path, const char* name, const char* sub
     snprintf(path, sizeof(path), "%s/%04d-%02d/%s",
              subdir, ti.tm_year + 1900, ti.tm_mon + 1, name);
 
+    char url[256];
+    snprintf(url, sizeof(url),
+             "https://api.github.com/repos/%s/%s/contents/%s",
+             GITHUB_OWNER, GITHUB_REPO, path);
+
+    // If file already exists on GitHub, GET its SHA so we can update it.
+    // Missing SHA on an existing path returns 422.
+    String existing_sha = "";
+    {
+        HTTPClient h;
+        h.setReuse(false);
+        h.setTimeout(8000);
+        if (h.begin(url)) {
+            h.addHeader("Authorization", String("Bearer ") + GITHUB_TOKEN);
+            h.addHeader("Accept", "application/vnd.github+json");
+            h.addHeader("User-Agent", "Fan-Mate");
+            int c = h.GET();
+            if (c == 200) {
+                String resp = h.getString();
+                int idx = resp.indexOf("\"sha\":");
+                if (idx >= 0) {
+                    int q1 = resp.indexOf('"', idx + 6);
+                    int q2 = resp.indexOf('"', q1 + 1);
+                    if (q1 > 0 && q2 > q1) {
+                        existing_sha = resp.substring(q1 + 1, q2);
+                    }
+                }
+            }
+            h.end();
+        }
+    }
+
     String body;
-    body.reserve(olen + 256);
+    body.reserve(olen + 320);
     body = "{\"message\":\"seal ";
     body += name;
     body += "\",\"content\":\"";
     body += b64;
     body += "\",\"branch\":\"";
     body += GITHUB_BRANCH;
-    body += "\"}";
+    body += "\"";
+    if (existing_sha.length() > 0) {
+        body += ",\"sha\":\"";
+        body += existing_sha;
+        body += "\"";
+    }
+    body += "}";
     free(b64);
 
-    char url[256];
-    snprintf(url, sizeof(url),
-             "https://api.github.com/repos/%s/%s/contents/%s",
-             GITHUB_OWNER, GITHUB_REPO, path);
-
-    log_print("[GH] PUT %s (%u bytes)\n", path, (unsigned)fileSize);
+    log_print("[GH] PUT %s (%u bytes%s)\n", path, (unsigned)fileSize,
+              existing_sha.length() > 0 ? ", update" : "");
 
     HTTPClient http;
     http.setReuse(false);
@@ -216,9 +250,20 @@ static bool seal_live(time_t name_epoch) {
     char sealed_path[80];
     snprintf(sealed_path, sizeof(sealed_path), "/%s", sealed);
 
+    // If name exists, append -2, -3, ... before .csv
+    // Handles double-Apply in the same minute.
     if (LittleFS.exists(sealed_path)) {
-        log_print("[LOG] seal collision: %s\n", sealed_path);
-        return false;
+        char base[56];
+        strncpy(base, sealed, sizeof(base) - 1);
+        base[sizeof(base) - 1] = 0;
+        char* dot = strrchr(base, '.');
+        if (dot) *dot = 0;
+        for (int i = 2; i <= 99; i++) {
+            snprintf(sealed, sizeof(sealed), "%s-%d.csv", base, i);
+            snprintf(sealed_path, sizeof(sealed_path), "/%s", sealed);
+            if (!LittleFS.exists(sealed_path)) break;
+        }
+        log_print("[LOG] seal collision, using %s\n", sealed_path);
     }
 
     if (!LittleFS.rename(LOG_FILE, sealed_path)) {
