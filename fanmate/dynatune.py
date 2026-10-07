@@ -30,12 +30,17 @@ def _test_boost(rows, boost_thr=700):
     # The log's boost column is binary (0/1), not the gear number.
     # Infer max gear from fan % — firmware maps gear N to fan %:
     # gear 1 = 25, gear 2 = 50, gear 3 = 75, gear 4 = 100.
+    # Fan % from firmware is integer-truncated:
+    #   gear 1 -> map(map(1,0,4,0,255),0,255,0,100) = 24
+    #   gear 2 -> 49   (not 50 — map(127,0,255,0,100) truncates)
+    #   gear 3 -> 74
+    #   gear 4 -> 100
     max_gear = 0
     for r in rows:
         f = r["fan"]
         if f >= 100:   max_gear = max(max_gear, 4)
         elif f >= 74:  max_gear = max(max_gear, 3)
-        elif f >= 50:  max_gear = max(max_gear, 2)
+        elif f >= 49:  max_gear = max(max_gear, 2)
         elif f >= 24:  max_gear = max(max_gear, 1)
 
     thr = boost_thr
@@ -128,37 +133,81 @@ def _test_delta(rows):
 
 
 def _test_lag(rows, boost_thr=700):
-    """Detect post-burst thermal lag (already implemented in DynaTune)."""
+    """Detect post-burst thermal lag using linear moving windows."""
     if len(rows) < 40:
         return {"status": "IDLE", "metric": "window small", "detail": ""}
 
+    from collections import deque
     from datetime import timedelta
-    thr = boost_thr
-    high = thr * 2.5
-    low = thr * 0.6
 
-    # Timestamp-based windows: 4 min before, 3 min after, 9 min for rise.
-    for i in range(len(rows)):
-        ti = rows[i]["t"]
-        prev = [r["net"] for r in rows
-                if ti - timedelta(minutes=4) <= r["t"] < ti
-                and r["net"] is not None]
-        after = [r["net"] for r in rows
-                 if ti <= r["t"] < ti + timedelta(minutes=3)
-                 and r["net"] is not None]
-        if prev and after and max(prev) > high and max(after) < low:
-            t_drop = rows[i]["temp"]
-            later = [r["temp"] for r in rows
-                     if ti <= r["t"] < ti + timedelta(minutes=9)
-                     and r["temp"] > 0]
-            if later:
-                peak = max(later)
-                rise = peak - t_drop
-                if rise >= 1.5:
-                    return {"status": "PASS", "metric": f"+{rise:.1f}°C",
-                            "detail": f"{t_drop:.1f} → {peak:.1f}"}
+    high = boost_thr * 2.5
+    low = boost_thr * 0.6
+    n = len(rows)
+
+    # Rows are chronological. Each deque holds candidate indexes for
+    # the maximum value in its moving timestamp window.
+    prev_q = deque()
+    after_q = deque()
+    later_q = deque()
+
+    prev_right = 0
+    after_right = 0
+    later_right = 0
+
+    for i, row in enumerate(rows):
+        ti = row["t"]
+
+        prev_start = ti - timedelta(minutes=4)
+        after_end = ti + timedelta(minutes=3)
+        later_end = ti + timedelta(minutes=9)
+
+        while prev_right < i:
+            v = rows[prev_right]["net"]
+            if v is not None:
+                while prev_q and rows[prev_q[-1]]["net"] <= v:
+                    prev_q.pop()
+                prev_q.append(prev_right)
+            prev_right += 1
+
+        while prev_q and rows[prev_q[0]]["t"] < prev_start:
+            prev_q.popleft()
+
+        while after_right < n and rows[after_right]["t"] < after_end:
+            v = rows[after_right]["net"]
+            if v is not None and after_right >= i:
+                while after_q and rows[after_q[-1]]["net"] <= v:
+                    after_q.pop()
+                after_q.append(after_right)
+            after_right += 1
+
+        while after_q and after_q[0] < i:
+            after_q.popleft()
+
+        while later_right < n and rows[later_right]["t"] < later_end:
+            v = rows[later_right]["temp"]
+            if v > 0 and later_right >= i:
+                while later_q and rows[later_q[-1]]["temp"] <= v:
+                    later_q.pop()
+                later_q.append(later_right)
+            later_right += 1
+
+        while later_q and later_q[0] < i:
+            later_q.popleft()
+
+        if prev_q and after_q:
+            if rows[prev_q[0]]["net"] > high and rows[after_q[0]]["net"] < low:
+                t_drop = row["temp"]
+                if later_q:
+                    peak = rows[later_q[0]]["temp"]
+                    rise = peak - t_drop
+                    if rise >= 1.5:
+                        return {
+                            "status": "PASS",
+                            "metric": f"+{rise:.1f}°C",
+                            "detail": f"{t_drop:.1f} → {peak:.1f}"
+                        }
+
     return {"status": "IDLE", "metric": "none", "detail": ""}
-
 
 def _test_events(rows):
     """Count bad events in the log (PANIC, WDT, BROWNOUT, FAN_STALL)."""
@@ -307,13 +356,15 @@ def _is_night(t, start, end):
 
 def _test_heat_gears(rows, g1=33.0, g2=35.0, g3=37.0, g4=39.0):
     """For each heat threshold, did the fan gear fire at least once?"""
+    # Fan % from firmware is integer-truncated (see _test_boost comment).
+    # gear 2 reports as 49, not 50.
     fired = set()
     for r in rows:
         t = r["temp"]
         f = r["fan"]
         if t >= g4 and f >= 100: fired.add(4)
         elif t >= g3 and f >= 74: fired.add(3)
-        elif t >= g2 and f >= 50: fired.add(2)
+        elif t >= g2 and f >= 49: fired.add(2)
         elif t >= g1 and f >= 24: fired.add(1)
     peaks = [max((r["temp"] for r in rows), default=0)]
     peak = peaks[0]

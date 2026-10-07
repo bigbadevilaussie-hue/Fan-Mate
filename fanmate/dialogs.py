@@ -211,13 +211,23 @@ class SettingsDialog(tk.Toplevel):
         ).start()
 
     def _apply_worker(self, payload):
+        import requests
         try:
-            r = requests.post(f"{FANMATE_URL}/config", json=payload, timeout=10)
+            r = requests.post(f"{FANMATE_URL}/config", json=payload, timeout=25)
             if r.status_code != 200:
                 msg = f"HTTP {r.status_code}"
                 self.app.root.after(0, lambda m=msg: messagebox.showerror("Settings", m))
-            else:
-                self.app.root.after(0, self.destroy)
+                return
+            self.app.root.after(0, self.destroy)
+        except requests.exceptions.ReadTimeout:
+            # v4.31b: ESP responds before Drive uploads complete.
+            # A read timeout here almost certainly means the response
+            # was sent but arrived after we stopped listening.
+            print("[CFG] read timeout on apply -- assuming success")
+            self.app.root.after(0, self.destroy)
+        except requests.exceptions.ConnectionError as e:
+            msg = str(e)
+            self.app.root.after(0, lambda m=msg: messagebox.showerror("Settings", f"Failed:\n{m}"))
         except Exception as e:
             msg = str(e)
             self.app.root.after(0, lambda m=msg: messagebox.showerror("Settings", f"Failed:\n{m}"))
@@ -246,49 +256,182 @@ class DynaTune(tk.Toplevel):
         self._apply_theme()
 
     # ------------------------------------------------------------------
+    def _newest_config_time(self):
+        """Timestamp of the newest config-*.csv on disk, or None.
+
+        Config snapshots are written on every Apply. The newest file's
+        timestamp is the settings cutoff — everything logged before it
+        ran under older settings and is excluded from the window.
+
+        Filename: config-<fw>-YYYYMMDD-HHMMSS.csv. mtime unreliable.
+        """
+        pattern = os.path.join(LOG_DIR, "config-*.csv")
+        files = sorted(p for p in glob.glob(pattern) if not p.endswith(".part"))
+        if not files:
+            return None
+        newest = files[-1]
+        base = os.path.basename(newest).rsplit(".", 1)[0]
+        parts = base.split("-")
+        if len(parts) < 3:
+            return None
+        try:
+            return datetime.strptime(parts[-2] + parts[-1], "%Y%m%d%H%M%S")
+        except Exception:
+            return None
+
+    def _log_file_start(self, path):
+        """Parse start timestamp from a log filename, or None.
+        Filename: log-<fw>-YYYYMMDD-HHMM.csv  (start of content window)
+        """
+        base = os.path.basename(path).rsplit(".", 1)[0]
+        parts = base.split("-")
+        if len(parts) < 3:
+            return None
+        try:
+            return datetime.strptime(parts[-2] + parts[-1], "%Y%m%d%H%M")
+        except Exception:
+            return None
+
+    def _last_recommendation(self):
+        """Return (run_at, recs_list) from newest dynatune-history.csv
+        row, or (None, []) if no history yet."""
+        path = os.path.join(LOG_DIR, "dynatune-history.csv")
+        if not os.path.exists(path):
+            return (None, [])
+        try:
+            import csv
+            with open(path, newline="") as fh:
+                reader = csv.DictReader(fh)
+                rows = list(reader)
+        except Exception:
+            return (None, [])
+        if not rows:
+            return (None, [])
+        last = rows[-1]
+        run_at_s = (last.get("run_at") or "").strip()
+        recs_s   = (last.get("recs") or "").strip()
+        if not run_at_s or not recs_s:
+            return (None, [])
+        try:
+            run_at = datetime.strptime(run_at_s, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return (None, [])
+        recs = [r.strip() for r in recs_s.split(";") if r.strip()]
+        return (run_at, recs)
+
     def _load_recent_rows(self, hours=18):
+        """Load rows for the analysis window.
+
+        File-level filtering: if a real settings change is on disk
+        (newest config-*.csv differs from previous), skip any log file
+        whose START time is before that change. The one straddling file
+        is parsed and filtered row-by-row. Everything before it is
+        excluded entirely — those rows ran under different settings and
+        would skew the tests.
+        """
         pattern = os.path.join(LOG_DIR, "log-*.csv")
         files = sorted(p for p in glob.glob(pattern) if not p.endswith(".part"))
         if not files:
+            self._settings_filter_time = None
+            self._settings_filter_capped = False
             return []
-        cutoff = datetime.now() - timedelta(hours=hours)
+
+        # No wall cap. The window is bounded by whatever data exists on
+        # disk (the log files themselves, which rotate and evict), and by
+        # the newest config snapshot if one exists.
+        cfg_time = self._newest_config_time()
+
+        if cfg_time is None:
+            cutoff = datetime.min
+            self._settings_filter_time = None
+            self._settings_filter_capped = False
+        else:
+            cutoff = cfg_time
+            self._settings_filter_time = cfg_time
+            self._settings_filter_capped = False
+
         rows = []
-        for path in files[-18:]:
-            rows.extend(self._parse(path))
-        rows = [r for r in rows if r["t"] >= cutoff]
+        files_skipped = 0
+        files_included = 0
+        straddling_filtered_rows = 0
+        HOUR = timedelta(hours=1)
+
+        for path in files:
+            f_start = self._log_file_start(path)
+
+            if f_start is None:
+                parsed = self._parse(path)
+                before = len(parsed)
+                parsed = [r for r in parsed if r["t"] >= cutoff]
+                straddling_filtered_rows += (before - len(parsed))
+                if parsed:
+                    files_included += 1
+                rows.extend(parsed)
+                continue
+
+            f_end_upper = f_start + HOUR
+
+            if f_end_upper < cutoff:
+                files_skipped += 1
+                continue
+
+            if f_start >= cutoff:
+                rows.extend(self._parse(path))
+                files_included += 1
+                continue
+
+            parsed = self._parse(path)
+            before = len(parsed)
+            parsed = [r for r in parsed if r["t"] >= cutoff]
+            if parsed:
+                files_included += 1
+                straddling_filtered_rows += (before - len(parsed))
+                rows.extend(parsed)
+            else:
+                files_skipped += 1
+
         rows.sort(key=lambda r: r["t"])
+        self._files_skipped = files_skipped
+        self._files_included = files_included
+        self._rows_dropped = straddling_filtered_rows
         return rows
 
     def _parse(self, path):
-        """Parse via csv.reader. Tolerates 8-col (pre-room_c) and 9-col rows."""
-        import csv
+        """Fast CSV parse. Manual split + slice-based datetime."""
         out = []
         try:
-            with open(path, newline="") as f:
-                reader = csv.reader(f)
-                for parts in reader:
-                    if not parts or len(parts) < 6:
-                        continue
-                    if parts[0].strip() == "timestamp" or parts[0].startswith("#"):
+            with open(path, "r", errors="ignore") as f:
+                first = True
+                for line in f:
+                    if first:
+                        first = False
+                        if line.startswith("timestamp"):
+                            continue
+                    if len(line) < 20 or line[0] == "#":
                         continue
                     try:
-                        ts = datetime.strptime(parts[0].strip(), "%Y-%m-%d %H:%M:%S")
+                        y = int(line[0:4]); mo = int(line[5:7]); d = int(line[8:10])
+                        h = int(line[11:13]); mi = int(line[14:16]); se = int(line[17:19])
+                        ts = datetime(y, mo, d, h, mi, se)
                     except Exception:
+                        continue
+                    parts = line.rstrip("\n").split(",")
+                    if len(parts) < 6:
                         continue
                     try:
                         temp = float(parts[1])
                     except Exception:
                         continue
-                    try: net = float(parts[2]) if parts[2].strip() else 0.0
+                    try: net = float(parts[2]) if parts[2] else 0.0
                     except Exception: net = 0.0
-                    try: boost = int(parts[3]) if parts[3].strip() else 0
+                    try: boost = int(parts[3]) if parts[3] else 0
                     except Exception: boost = 0
-                    try: fan = int(parts[4]) if parts[4].strip() else 0
+                    try: fan = int(parts[4]) if parts[4] else 0
                     except Exception: fan = 0
-                    try: rpm = int(parts[5]) if parts[5].strip() else 0
+                    try: rpm = int(parts[5]) if parts[5] else 0
                     except Exception: rpm = 0
                     try:
-                        room = float(parts[8]) if len(parts) > 8 and parts[8].strip() else None
+                        room = float(parts[8]) if len(parts) > 8 and parts[8] else None
                         if room is not None and room < -90.0:
                             room = None
                     except Exception:
@@ -300,12 +443,12 @@ class DynaTune(tk.Toplevel):
                         "room": room, "event": event,
                     })
         except Exception as e:
-            print(f"[DynaTune] parse {path}: {e}")
+            print("[DynaTune] parse " + path + ": " + str(e))
         return out
 
     # ------------------------------------------------------------------
     def _build_ui(self):
-        pad = 20
+        pad = 22
         wrap = tk.Frame(self)
         wrap.pack(fill="both", expand=True, padx=pad, pady=pad)
 
@@ -314,14 +457,68 @@ class DynaTune(tk.Toplevel):
         span_h = (end - start).total_seconds() / 3600.0
         ver = state.latest.get("fv", "?")
 
-        tk.Label(wrap,
-                 text="Dyna Tune",
-                 font=("Helvetica Neue", 22, "bold")).pack(anchor="w")
-        tk.Label(wrap,
-                 text=f"v{ver}  ·  {start.strftime('%a %d %b  %H:%M')} → {end.strftime('%H:%M')}  ·  {span_h:.1f} h  ·  {len(self.rows)} samples",
-                 font=("Helvetica Neue", 12)).pack(anchor="w", pady=(2, 16))
+        # ---------- Header ----------
+        hdr = tk.Frame(wrap)
+        hdr.pack(fill="x", pady=(0, 14))
 
-        # ---------- run tests ----------
+        tk.Label(hdr, text="Dyna Tune",
+                 font=("Helvetica Neue", 32, "bold"),
+                 anchor="w").pack(side="left")
+
+        meta = tk.Frame(hdr)
+        meta.pack(side="right", anchor="e", pady=(10, 0))
+        tk.Label(meta, text=f"FW v{ver}",
+                 font=("Menlo", 11, "bold"), anchor="e").pack(anchor="e")
+        tk.Label(meta, text=f"{start.strftime('%a %d %b %H:%M')}  \u2192  {end.strftime('%H:%M')}",
+                 font=("Menlo", 10), anchor="e").pack(anchor="e")
+        tk.Label(meta, text=f"{span_h:.1f} h   \u00b7   {len(self.rows)} samples",
+                 font=("Menlo", 10), anchor="e").pack(anchor="e")
+
+        # Settings filter line
+        sf_time = getattr(self, "_settings_filter_time", None)
+        sf_capped = getattr(self, "_settings_filter_capped", False)
+        files_skipped = getattr(self, "_files_skipped", 0)
+        rows_dropped  = getattr(self, "_rows_dropped", 0)
+
+        if sf_time is None:
+            sf_text = "full window \u2014 no settings change on disk"
+            sf_fg = "#7a8194"
+        else:
+            age_s = (datetime.now() - sf_time).total_seconds()
+            if age_s < 3600:
+                age = f"{int(age_s/60)}m"
+            elif age_s < 86400:
+                age = f"{age_s/3600:.1f}h"
+            else:
+                age = f"{age_s/86400:.1f}d"
+            suffix = ""
+            if files_skipped or rows_dropped:
+                suffix = f" \u00b7 {files_skipped}f/{rows_dropped}r pre-change"
+            sf_text = f"settings changed {age} ago" + suffix
+            sf_fg = "#2f9e44"
+        self._settings_filter_lbl = tk.Label(meta, text=sf_text,
+                 font=("Menlo", 9), fg=sf_fg, anchor="e")
+        self._settings_filter_lbl.pack(anchor="e", pady=(4, 0))
+
+        # Last recommended change (from dynatune-history.csv)
+        rec_run_at, rec_list = self._last_recommendation()
+        if rec_list:
+            age_s = (datetime.now() - rec_run_at).total_seconds()
+            if age_s < 3600:
+                rec_age = f"{int(age_s/60)}m ago"
+            elif age_s < 86400:
+                rec_age = f"{age_s/3600:.1f}h ago"
+            else:
+                rec_age = f"{age_s/86400:.1f}d ago"
+            first_rec = rec_list[0]
+            extra = f"  (+{len(rec_list)-1})" if len(rec_list) > 1 else ""
+            self._last_rec_lbl = tk.Label(meta,
+                     text=f"last rec: {first_rec}{extra}\n{rec_age}",
+                     font=("Menlo", 9), fg="#1e66f5", anchor="e",
+                     justify="right")
+            self._last_rec_lbl.pack(anchor="e", pady=(6, 0))
+
+        # ---------- Run tests ----------
         from .dynatune import analyse
         try:
             b = state.latest_config.get("boost", {})
@@ -355,9 +552,6 @@ class DynaTune(tk.Toplevel):
                        live_config=live_config,
                        log_info=log_info)
 
-        # Collect failures + recommendations across sections
-        fails = []
-        recs = []
         LABELS = {
             "boost":"BOOST", "cooldown":"COOLDOWN", "delta":"DELTA",
             "lag":"LAG", "events":"EVENTS", "log":"LOG",
@@ -371,15 +565,15 @@ class DynaTune(tk.Toplevel):
             "boost_mode":"MODE", "night_window":"WINDOW",
         }
         RECS = {
-            "boost":    "boost.on_hold 4 → 2  (or lower threshold)",
+            "boost":    "boost.on_hold 4 \u2192 2  (or lower threshold)",
             "cooldown": "review hold time",
             "delta":    "check phone temp source",
-            "lag":      "normal — phone catches up after burst",
+            "lag":      "normal \u2014 phone catches up after burst",
             "events":   "check serial log",
             "log":      "check clock / FS",
             "drive":    "check Mac sync path",
             "clock":    "Opal clock not landing",
-            "boot":     "frequent reboots — check power",
+            "boot":     "frequent reboots \u2014 check power",
             "opal_poll":"Opal poll dropping",
             "night_cap":"nightMax not enforced",
             "heat_gears":"heat thresholds may be too high",
@@ -392,16 +586,15 @@ class DynaTune(tk.Toplevel):
             "rpm":      "clamp RPM at 10k in firmware",
             "stall":    "check fan connector",
             "gear_order":"fix gear thresholds in Settings",
-            "threshold":"set 200–10000",
+            "threshold":"set 200\u201310000",
             "boost_mode":"set to 0/1/2",
             "night_window":"fix night hours",
         }
 
-        total = 0
-        passed = 0
-        warned = 0
-        failed = 0
+        total = passed = warned = failed = 0
         idle = 0
+        fails = []
+        recs = []
         for section_name in ("core","data","device","hardware","config"):
             sec = kpis.get(section_name, {})
             if not isinstance(sec, dict):
@@ -413,111 +606,192 @@ class DynaTune(tk.Toplevel):
                 st = data.get("status", "IDLE")
                 if st == "PASS":
                     passed += 1
+                elif st == "IDLE":
+                    # No data to check yet — not a failure. Count as PASS.
+                    passed += 1
+                    idle += 1
                 elif st == "WARN":
                     warned += 1
-                    label = LABELS.get(key, key.upper())
-                    metric = data.get("metric", "")
-                    fails.append((label, metric, "WARN"))
-                    recs.append(f"{label}: {RECS.get(key, 'investigate')}")
+                    fails.append((LABELS.get(key, key.upper()),
+                                  data.get("metric", ""), "WARN"))
+                    recs.append(f"{LABELS.get(key, key.upper())}: {RECS.get(key, 'investigate')}")
                 elif st == "FAIL":
                     failed += 1
-                    label = LABELS.get(key, key.upper())
-                    metric = data.get("metric", "")
-                    fails.append((label, metric, "FAIL"))
-                    recs.append(f"{label}: {RECS.get(key, 'investigate')}")
-                else:
-                    idle += 1
+                    fails.append((LABELS.get(key, key.upper()),
+                                  data.get("metric", ""), "FAIL"))
+                    recs.append(f"{LABELS.get(key, key.upper())}: {RECS.get(key, 'investigate')}")
 
-        parts = [f"{passed} PASS"]
-        if warned: parts.append(f"{warned} WARN")
-        if failed: parts.append(f"{failed} FAIL")
-        if idle:   parts.append(f"{idle} IDLE")
-        score_str = "  ·  ".join(parts)
+        # ---------- Verdict card ----------
+        self._verdict_card = tk.Frame(wrap, highlightthickness=1, bd=0)
+        self._verdict_card.pack(fill="x", pady=(0, 8))
 
-        # ---------- SCORE ----------
-        # ---------- SCORE (hero) ----------
-        score_frame = tk.Frame(wrap)
-        score_frame.pack(fill="x", pady=(0, 6))
+        vwrap = tk.Frame(self._verdict_card)
+        vwrap.pack(fill="x", padx=20, pady=18)
+
         if failed:
-            hero_color = "#d20f39"
+            v_icon = "\u2717"
+            v_text = f"{failed + warned} issue{'s' if failed + warned != 1 else ''} need attention"
+            self._verdict_status = "fail"
         elif warned:
-            hero_color = "#d99a00"
+            v_icon = "\u26a0"
+            v_text = f"{warned} minor issue{'s' if warned != 1 else ''}"
+            self._verdict_status = "warn"
         else:
-            hero_color = "#2f9e44"
-        tk.Label(score_frame, text=score_str,
-                 font=("Helvetica Neue", 28, "bold"),
-                 fg=hero_color, anchor="w").pack(side="left")
+            v_icon = "\u2713"
+            v_text = "healthy"
+            self._verdict_status = "pass"
 
-        # divider
-        tk.Frame(wrap, height=1, bg="#d8dde8").pack(fill="x", pady=(14, 0))
+        vrow = tk.Frame(vwrap)
+        vrow.pack(anchor="w")
 
-        # ---------- FAILURES ----------
-        head = tk.Frame(wrap)
-        head.pack(fill="x", pady=(14, 6))
-        fail_header_color = "#d20f39" if failed else ("#d99a00" if warned else "#2f9e44")
-        tk.Label(head, text="FAILURES",
-                 font=("Helvetica Neue", 13, "bold"),
-                 fg=fail_header_color, anchor="w").pack(side="left")
-        tk.Label(head, text=f"  ({len(fails)})",
-                 font=("Helvetica Neue", 13),
-                 fg=fail_header_color, anchor="w").pack(side="left")
+        self._verdict_icon = tk.Label(vrow, text=v_icon,
+                 font=("Menlo", 34, "bold"), anchor="w")
+        self._verdict_icon.pack(side="left", padx=(0, 14))
 
-        if not fails:
-            tk.Label(wrap, text="none — everything passing",
-                     font=("Helvetica Neue", 14),
-                     fg="#2f9e44", anchor="w").pack(fill="x", pady=(0, 8))
-        else:
+        vtxt = tk.Frame(vrow)
+        vtxt.pack(side="left", anchor="w")
+
+        self._verdict_title = tk.Label(vtxt, text="Fan-Mate",
+                 font=("Helvetica Neue", 14), anchor="w")
+        self._verdict_title.pack(anchor="w")
+
+        self._verdict_msg = tk.Label(vtxt, text=v_text,
+                 font=("Helvetica Neue", 26, "bold"), anchor="w")
+        self._verdict_msg.pack(anchor="w")
+
+        # score pills
+        pills = tk.Frame(vwrap)
+        pills.pack(anchor="w", pady=(14, 0))
+
+        def _pill(parent, text, status_key):
+            f = tk.Frame(parent, highlightthickness=1, bd=0)
+            f.pack(side="left", padx=(0, 6))
+            lbl = tk.Label(f, text=text,
+                     font=("Helvetica Neue", 11, "bold"),
+                     padx=10, pady=3)
+            lbl.pack()
+            f._pill_status = status_key
+            f._pill_label = lbl
+            return f
+
+        self._pills = []
+        pass_label = f"{passed} PASS"
+        if idle:
+            pass_label += f"  ({idle} idle)"
+        self._pills.append(_pill(pills, pass_label, "pass"))
+        if warned:
+            self._pills.append(_pill(pills, f"{warned} WARN", "warn"))
+        if failed:
+            self._pills.append(_pill(pills, f"{failed} FAIL", "fail"))
+
+        # ---------- Grid cards ----------
+        SECTIONS = [
+            ("CORE",     "core",     ["boost","cooldown","delta","lag","events","log"]),
+            ("DATA",     "data",     ["drive","clock","boot","opal_poll"]),
+            ("DEVICE",   "device",   ["night_cap","heat_gears","hysteresis","storage"]),
+            ("HARDWARE", "hardware", ["phone","sleep","ntc","ds18b20","rpm","stall"]),
+            ("CONFIG",   "config",   ["gear_order","threshold","boost_mode","night_window"]),
+        ]
+
+        self._grid_cards = []
+        for sec_label, sec_key, keys in SECTIONS:
+            card = tk.Frame(wrap, highlightthickness=1, bd=0)
+            card.pack(fill="x", pady=(0, 6))
+
+            inner = tk.Frame(card)
+            inner.pack(fill="x", padx=14, pady=10)
+
+            tk.Label(inner, text=sec_label,
+                     font=("Menlo", 10, "bold"),
+                     width=10, anchor="w").pack(side="left")
+
+            sec = kpis.get(sec_key, {})
+            for k in keys:
+                d = sec.get(k, {}) if isinstance(sec, dict) else {}
+                st = d.get("status", "IDLE")
+                short = LABELS.get(k, k.upper())
+                chip = self._test_chip(inner, short, st)
+                chip.pack(side="left", padx=(0, 6))
+
+            self._grid_cards.append(card)
+
+        # ---------- Issues + Recs ----------
+        self._issue_cards = []
+
+        if fails:
+            card = tk.Frame(wrap, highlightthickness=1, bd=0)
+            card.pack(fill="x", pady=(10, 6))
+            inner = tk.Frame(card)
+            inner.pack(fill="x", padx=16, pady=12)
+
+            tk.Label(inner, text="ISSUES" if not failed else "FAILURES",
+                     font=("Helvetica Neue", 12, "bold"),
+                     anchor="w").pack(anchor="w")
+
             for (label, metric, sev) in fails:
-                row = tk.Frame(wrap)
-                row.pack(fill="x", pady=2)
-                tk.Label(row, text=label,
-                         font=("Menlo", 13, "bold"),
-                         fg="#d20f39" if sev == "FAIL" else "#d99a00",
+                r = tk.Frame(inner)
+                r.pack(fill="x", pady=3)
+                tk.Label(r, text=label,
+                         font=("Menlo", 12, "bold"),
                          width=10, anchor="w").pack(side="left")
-                tk.Label(row, text=metric,
-                         font=("Helvetica Neue", 14),
+                tk.Label(r, text=metric,
+                         font=("Helvetica Neue", 13),
                          anchor="w").pack(side="left")
+            self._issue_cards.append(card)
 
-        # divider
-        tk.Frame(wrap, height=1, bg="#d8dde8").pack(fill="x", pady=(14, 0))
+        if recs:
+            card = tk.Frame(wrap, highlightthickness=1, bd=0)
+            card.pack(fill="x", pady=(0, 6))
+            inner = tk.Frame(card)
+            inner.pack(fill="x", padx=16, pady=12)
 
-        # ---------- RECOMMENDATIONS ----------
-        head2 = tk.Frame(wrap)
-        head2.pack(fill="x", pady=(14, 6))
-        tk.Label(head2, text="RECOMMENDATIONS",
-                 font=("Helvetica Neue", 13, "bold"),
-                 fg="#1e66f5", anchor="w").pack(side="left")
-        tk.Label(head2, text=f"  ({len(recs)})",
-                 font=("Helvetica Neue", 13),
-                 fg="#1e66f5", anchor="w").pack(side="left")
+            tk.Label(inner, text="RECOMMENDATIONS",
+                     font=("Helvetica Neue", 12, "bold"),
+                     anchor="w").pack(anchor="w")
 
-        if not recs:
-            tk.Label(wrap, text="none — system healthy",
-                     font=("Helvetica Neue", 14),
-                     fg="#2f9e44", anchor="w").pack(fill="x", pady=(0, 8))
-        else:
             for r in recs:
-                tk.Label(wrap, text=r,
-                         font=("Helvetica Neue", 14),
+                tk.Label(inner, text=r,
+                         font=("Helvetica Neue", 13),
                          anchor="w", justify="left",
-                         wraplength=460).pack(fill="x", pady=2)
+                         wraplength=560).pack(fill="x", pady=2)
+            self._issue_cards.append(card)
 
-        # ---------- footer ----------
-        tk.Label(wrap,
-                 text=f"rows: {len(self.rows)}  ·  span: {span_h:.1f} h  ·  boost thr: {thr} KB/s",
-                 font=("Helvetica Neue", 10)).pack(anchor="w", pady=(20, 4))
+        # ---------- Footer ----------
+        foot = tk.Frame(wrap)
+        foot.pack(fill="x", pady=(10, 0))
+        tk.Label(foot,
+                 text=f"rows {len(self.rows)}   \u00b7   span {span_h:.1f}h   \u00b7   boost thr {thr} KB/s",
+                 font=("Menlo", 10), anchor="w").pack(side="left")
 
-        tk.Button(wrap, text="Close", width=12,
-                  font=("Helvetica Neue", 12),
-                  command=self.destroy).pack(pady=(10, 0))
+        self._close_btn = tk.Button(foot, text="Close", width=10,
+                  font=("Helvetica Neue", 11),
+                  relief="flat", bd=0,
+                  command=self.destroy)
+        self._close_btn.pack(side="right")
 
-        # ---------- append to history ----------
-        try:
-            self._append_history(start, end, ver, score_str, fails, recs)
-        except Exception as e:
-            print(f"[DynaTune] history append failed: {e}")
+        self._apply_theme()
 
-    # ------------------------------------------------------------------
+    def _test_chip(self, parent, text, status):
+        """Coloured pill for one test.
+
+        IDLE is treated as PASS at the UI layer — the test didn't fail,
+        it just had no data to check yet. Rendering IDLE as a distinct
+        third state made the board look worse than it is.
+        """
+        f = tk.Frame(parent, highlightthickness=1, bd=0)
+        if status == "IDLE":
+            status_visual = "PASS"
+        else:
+            status_visual = status
+        icon = {"PASS": "\u2713", "WARN": "\u26a0",
+                "FAIL": "\u2717"}.get(status_visual, "\u25cb")
+        lbl = tk.Label(f, text=f"{icon} {text}",
+                 font=("Menlo", 10, "bold"),
+                 padx=7, pady=2)
+        lbl.pack()
+        f._chip_status = status_visual
+        f._chip_label = lbl
+        return f
     def _append_history(self, start, end, ver, score, fails, recs):
         import csv, os
         path = os.path.join(LOG_DIR, "dynatune-history.csv")
@@ -608,35 +882,76 @@ class DynaTune(tk.Toplevel):
             "FAIL": t["red"],
             "IDLE": t["muted"],
         }
+        status_bg = {
+            "PASS": t["card"],
+            "WARN": t["card"],
+            "FAIL": t["card"],
+            "IDLE": t["card"],
+        }
+
+        def recolour(w, bg, border):
+            try:
+                cls = w.winfo_class()
+            except Exception:
+                return
+            if cls in ("Frame", "Toplevel"):
+                w.configure(bg=bg, highlightbackground=border,
+                            highlightcolor=border)
+            elif cls == "Label":
+                w.configure(bg=bg)
+            elif cls == "Button":
+                w.configure(bg=t["card"], fg=t["fg"],
+                            activebackground=t["accent"],
+                            activeforeground=t["fg"])
 
         def walk(w):
             try:
                 cls = w.winfo_class()
             except Exception:
                 return
+
+            chip_status = getattr(w, "_chip_status", None)
+            pill_status = getattr(w, "_pill_status", None)
+
             if cls in ("Frame", "Toplevel"):
-                if getattr(w, "_kpi_recommendation", False):
-                    w.configure(bg=t["yellow"], highlightbackground=t["yellow"])
+                if chip_status or pill_status:
+                    st = chip_status or pill_status
+                    w.configure(bg=status_bg.get(st, t["card"]),
+                                highlightbackground=status_color.get(st, t["card_border"]),
+                                highlightcolor=status_color.get(st, t["card_border"]))
                 else:
-                    w.configure(bg=t["bg"], highlightbackground=t["card_border"])
+                    w.configure(bg=t["card"],
+                                highlightbackground=t["card_border"],
+                                highlightcolor=t["card_border"])
             elif cls == "Label":
-                if getattr(w.master, "_kpi_recommendation", False):
-                    w.configure(bg=t["yellow"], fg=t["bg"])
+                parent = w.master
+                p_chip = getattr(parent, "_chip_status", None)
+                p_pill = getattr(parent, "_pill_status", None)
+                if p_chip:
+                    w.configure(bg=status_bg.get(p_chip, t["card"]),
+                                fg=status_color.get(p_chip, t["fg"]))
+                elif p_pill:
+                    w.configure(bg=status_bg.get(p_pill, t["card"]),
+                                fg=status_color.get(p_pill, t["fg"]))
                 else:
-                    w.configure(bg=t["bg"], fg=t["fg"])
-            elif cls == "Canvas":
-                filled = getattr(w, "dot_filled", None)
-                if filled is True:
-                    # colour matches parent's status
-                    status = getattr(w.master.master, "_kpi_status", "IDLE")
-                    w.configure(bg=t["bg"])
-                    w.itemconfig("fill", fill=status_color.get(status, t["muted"]))
-                elif filled is False:
-                    w.configure(bg=t["bg"])
-                    w.itemconfig("fill", fill=t["card_border"])
+                    w.configure(bg=t["card"], fg=t["fg"])
             elif cls == "Button":
                 w.configure(bg=t["card"], fg=t["fg"],
-                            activebackground=t["accent"], activeforeground=t["fg"])
+                            activebackground=t["accent"],
+                            activeforeground=t["fg"])
+
             for c in w.winfo_children():
                 walk(c)
+
         walk(self)
+
+        # Verdict icon + message colour
+        if hasattr(self, "_verdict_icon"):
+            st = getattr(self, "_verdict_status", "pass")
+            col = status_color.get(st.upper(), t["fg"])
+            self._verdict_icon.configure(bg=t["card"], fg=col)
+            self._verdict_msg.configure(bg=t["card"], fg=col)
+            self._verdict_title.configure(bg=t["card"], fg=t["muted"])
+            self._verdict_card.configure(bg=t["card"],
+                highlightbackground=t["card_border"],
+                highlightcolor=t["card_border"])
