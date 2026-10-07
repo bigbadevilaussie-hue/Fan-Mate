@@ -234,6 +234,58 @@ class App:
         except Exception as e:
             print(f"[OTA] archive failed: {e}")
 
+        # Upload .bin to GitHub repo (main source repo, not uploads)
+        try:
+            import base64
+            import re
+            secrets_path = os.path.join(FANMATE_DIR, "secrets.h")
+            secrets_text = open(secrets_path).read()
+
+            def _secret(name):
+                m = re.search(r'#define\s+' + name + r'\s+"([^"]+)"', secrets_text)
+                return m.group(1) if m else None
+
+            tok = _secret("GITHUB_TOKEN")
+            src_owner = _secret("GITHUB_OWNER")
+            src_repo = _secret("GITHUB_REPO")
+            src_branch = _secret("GITHUB_BRANCH")
+
+            if not tok:
+                print("[OTA] GITHUB_TOKEN not in secrets.h, skipping bin upload")
+            else:
+                bin_path = BUILD_BIN
+                bin_name = os.path.basename(bin_path)
+                with open(bin_path, "rb") as bf:
+                    b64 = base64.b64encode(bf.read()).decode("ascii")
+
+                api_url = f"https://api.github.com/repos/{src_owner}/{src_repo}/contents/firmware/{bin_name}"
+                headers = {
+                    "Authorization": f"Bearer {tok}",
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": "Fan-Mate-GUI",
+                }
+                payload = {
+                    "message": f"firmware: v{src_ver} ({bin_name})",
+                    "content": b64,
+                    "branch": src_branch,
+                }
+
+                print(f"[OTA] uploading {bin_name} ({len(b64)} b64 chars) to GitHub...")
+
+                # Check if file already exists — need SHA to update
+                head = requests.get(api_url, headers=headers, timeout=15)
+                if head.status_code == 200:
+                    payload["sha"] = head.json().get("sha")
+
+                r = requests.put(api_url, json=payload, headers=headers, timeout=60)
+                if r.status_code in (200, 201):
+                    print(f"[OTA] bin uploaded to GitHub: {bin_name} ({r.status_code})")
+                else:
+                    print(f"[OTA] bin upload failed: HTTP {r.status_code}")
+                    print(f"[OTA] response: {r.text[:200]}")
+        except Exception as e:
+            print(f"[OTA] bin upload error: {e}")
+
         print(f"[OTA] uploading...")
         t0 = time.time()
         try:

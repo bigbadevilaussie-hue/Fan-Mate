@@ -1,4 +1,5 @@
 #include "Logging.h"
+#include <mbedtls/base64.h>
 #include "Config.h"
 #include "DisplayManager.h"
 #include "WiFiManager.h"
@@ -121,72 +122,91 @@ static void open_fresh_live(time_t start_epoch) {
 //  Google Drive upload — POST sealed log to Apps Script
 //  HTTP 302 is treated as success (Apps Script redirect pattern).
 // ------------------------------------------------------------
-bool upload_to_drive(const char* sealed_path, const char* name) {
+bool upload_to_github(const char* sealed_path, const char* name, const char* subdir) {
     File f = LittleFS.open(sealed_path, "r");
     if (!f) {
-        log_print("[DRIVE] cannot open %s\n", sealed_path);
+        log_print("[GH] cannot open %s\n", sealed_path);
         return false;
     }
-
     size_t fileSize = f.size();
     if (fileSize == 0) {
-        log_print("[DRIVE] %s empty, skipping\n", name);
+        log_print("[GH] %s empty, skipping\n", name);
         f.close();
         return true;
     }
-
-    String body;
-    body.reserve(fileSize * 3 + 128);
-    body = "filename=";
-
-    for (const char* q = name; *q; q++) {
-        char c = *q;
-        if (isalnum((unsigned char)c) || c == '-' || c == '_' || c == '.' || c == '~') {
-            body += c;
-        } else {
-            char buf[4];
-            snprintf(buf, sizeof(buf), "%%%02X", (unsigned char)c);
-            body += buf;
-        }
+    if (fileSize > 500000) {
+        log_print("[GH] %s too big (%u), skipping\n", name, (unsigned)fileSize);
+        f.close();
+        return false;
     }
-    body += "&data=";
 
-    while (f.available()) {
-        char c = (char)f.read();
-        if (isalnum((unsigned char)c) || c == '-' || c == '_' || c == '.' || c == '~') {
-            body += c;
-        } else {
-            char buf[4];
-            snprintf(buf, sizeof(buf), "%%%02X", (unsigned char)c);
-            body += buf;
-        }
-    }
+    uint8_t* buf = (uint8_t*)malloc(fileSize);
+    if (!buf) { f.close(); return false; }
+    f.read(buf, fileSize);
     f.close();
 
-    log_print("[DRIVE] POST %s size=%u body=%u\n",
-              name, (unsigned)fileSize, (unsigned)body.length());
+    size_t b64_len = 4 * ((fileSize + 2) / 3) + 1;
+    char* b64 = (char*)malloc(b64_len);
+    if (!b64) { free(buf); return false; }
+    size_t olen = 0;
+    mbedtls_base64_encode((unsigned char*)b64, b64_len, &olen, buf, fileSize);
+    b64[olen] = 0;
+    free(buf);
+
+    struct tm ti;
+    time_t now = time(nullptr);
+    localtime_r(&now, &ti);
+    char path[128];
+    snprintf(path, sizeof(path), "%s/%04d-%02d/%s",
+             subdir, ti.tm_year + 1900, ti.tm_mon + 1, name);
+
+    String body;
+    body.reserve(olen + 256);
+    body = "{\"message\":\"seal ";
+    body += name;
+    body += "\",\"content\":\"";
+    body += b64;
+    body += "\",\"branch\":\"";
+    body += GITHUB_BRANCH;
+    body += "\"}";
+    free(b64);
+
+    char url[256];
+    snprintf(url, sizeof(url),
+             "https://api.github.com/repos/%s/%s/contents/%s",
+             GITHUB_OWNER, GITHUB_REPO, path);
+
+    log_print("[GH] PUT %s (%u bytes)\n", path, (unsigned)fileSize);
 
     HTTPClient http;
     http.setReuse(false);
-    http.setTimeout(DRIVE_UPLOAD_TIMEOUT_MS);
+    http.setTimeout(20000);
     http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
 
     int code = -1;
     for (int attempt = 1; attempt <= 2; attempt++) {
-        http.begin(DRIVE_URL);
-        http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-        code = http.POST((uint8_t*)body.c_str(), body.length());
+        if (!http.begin(url)) break;
+        http.addHeader("Authorization", String("Bearer ") + GITHUB_TOKEN);
+        http.addHeader("Accept", "application/vnd.github+json");
+        http.addHeader("User-Agent", "Fan-Mate");
+        http.addHeader("Content-Type", "application/json");
+        code = http.PUT((uint8_t*)body.c_str(), body.length());
         if (code > 0) break;
         http.end();
         delay(500);
     }
 
-    bool ok = (code == 302 || code == 200);
-    log_print("[DRIVE] %s %s http=%d\n", name, ok ? "OK" : "FAIL", code);
+    bool ok = (code == 201 || code == 200);
+    log_print("[GH] %s %s http=%d\n", name, ok ? "OK" : "FAIL", code);
+    if (!ok && code > 0) {
+        String resp = http.getString();
+        if (resp.length() > 0) {
+            log_print("[GH] resp: %s\n", resp.substring(0, 200).c_str());
+        }
+    }
     http.end();
     return ok;
 }
-
 static bool seal_live(time_t name_epoch) {
     if (!LittleFS.exists(LOG_FILE)) return false;
 
@@ -209,7 +229,7 @@ static bool seal_live(time_t name_epoch) {
     log_print("[LOG] sealed %s\n", sealed_path);
 
     // Upload to Drive (best-effort, non-fatal)
-    upload_to_drive(sealed_path, sealed);
+    upload_to_github(sealed_path, sealed, "logs");
 
     time_t now = time(nullptr);
     open_fresh_live(now);
@@ -367,7 +387,7 @@ void log_write_config_snapshot() {
     f.close();
 
     log_print("[CFG] snapshot: %s\n", name);
-    upload_to_drive(path, name);
+    upload_to_github(path, name, "config");
 }
 
 void log_flush_seal() {
