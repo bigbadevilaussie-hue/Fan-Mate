@@ -1,30 +1,3 @@
-// ===== WORKING NOTES =============================================
-// Naming:  GUI = Tk (fanmate/*.py).  GUI2 = QML (fanmate_v2/*).
-//          Web = WebPage.h (needs flash).  Firmware = .cpp/.h/.ino.
-//
-// Version bump every change, BEFORE compiling:
-//   Firmware: FAN_MATE_VERSION in Config.h
-//   Tk:       GUI_VERSION in fanmate/config.py
-//   QML:      guiVersion in fanmate_v2/qml/Main.qml
-//
-// Patch via Python. Write script to /tmp/, run python3 /tmp/patch.py.
-// Never paste heredocs or multi-line shell that edits files.
-//
-// Build:  arduino-cli compile --fqbn esp32:esp32:esp32c3:PartitionScheme=min_spiffs --export-binaries .
-//   Fan-Mate uses min_spiffs. Bike-Mate uses DEFAULT. Do not mix.
-//   ESP32 core 2.0.17 ONLY (do not upgrade to 3.x).
-//
-// Gotchas:
-//   - Catalina mDNS slow. Use IP 192.168.8.242, not .local.
-//   - WiFi.RSSI() returns 0 when disconnected.
-//   - server.handleClient() does not work here. Use server_loop().
-//   - NVS keys <=15 chars. Longer keys silently fail.
-//   - Fan fails safe to 100% (bootloader leaves GPIO 7 undriven).
-//
-// Docs: README.md
-// Current: FW v4.50 | Tk GUI v4.50 | QML GUI2 v1.11 (parked)
-// =================================================================
-
 #include "Config.h"
 #include "Settings.h"
 #include "FanController.h"
