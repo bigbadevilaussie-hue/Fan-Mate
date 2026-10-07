@@ -1,175 +1,94 @@
-# Fan-Mate — What To Do Next
+# Fan-Mate — Todo Next
 
-Last updated: 2026-10-06
-Firmware: **v4.30**
-Tk GUI: **v3.95**
-QML GUI2: **v1.11** (parked)
+## Current state (2026-10-07)
 
----
+- Firmware **v4.50** — configurable delta trigger, RPM clamp
+- Tk GUI **v4.50** — matches Web, Delta trigger setting, heat threshold check
+- QML GUI2 **v1.11** — parked
 
-## CURRENT PHASE — MONITOR
+Both firmware and GUI tags pushed. Everything tested, everything committed.
 
-Firmware and Tk GUI are frozen. Running under real conditions
-for ~7 days before any further work.
+## Confirmed working
 
-**Do NOT start QML port until the monitor week is up.**
+- **Apply settings** — value changes persist to NVS, config snapshot
+  writes on Apply, Drive upload (302) succeeds. The earlier "Apply does
+  not work" report was a test artefact: Apply was pressed without
+  changing any value, so nothing appeared to change.
+- **DynaTune** — opens in under 1 second on 19k rows (was 6 minutes
+  before the `_test_lag` O(n) rewrite).
+- **Network resilience** — Opal hang no longer stalls the ESP32 WebServer.
+- **Tk matches Web** — alert/stall/sleep/opal/boost states now render
+  identically across both UIs.
 
-See NOTES.md → CURRENT PHASE for details.
+## Open — real
 
----
+### F1. No-op Apply must not seal + snapshot [minor]
 
-## WHEN THE MONITOR WEEK IS UP
+Every Apply seals the log and writes a `config-*.csv`. That moves the
+DynaTune cutoff to the snapshot timestamp. If nothing changed, this
+blanks the window for ~25 minutes until the next hourly seal.
 
-1. Read the week's reports (Tk GUI → Reports → Daily / Weekly,
-   and DynaTune KPI board).
-2. Look for anomalies the audit didn't predict. Especially:
-   - delta guard flapping on AC or heater transitions
-   - cooldown timeout vs early release ratio
-   - log rotation edge cases
-   - Opal tick stability (should be 15.0s ± 0.1s)
-   - sun-through-curtain solar gain
-3. If firmware is stable, freeze it.
-4. If Tk is stable, freeze it.
-5. THEN port to QML — translation only, no redesign.
+Fix in `Settings.cpp settings_apply_json()`:
+  1. Copy `config` at function entry
+  2. Parse JSON into `config`
+  3. Compare entry vs parsed. If identical, log "no change" and skip
+     settings_save(), log_seal_now(), log_write_config_snapshot(),
+     log_write_event("CFG_APPLIED")
+  4. If different, proceed as now
 
----
+### F2. DynaTune doesn't distinguish external vs internal reboots [minor]
 
-## v4.30 CANDIDATES
+`_test_boot` counts all BOOT/SOFTWARE/POWERON events the same. Storm
+brownouts and firmware crashes look identical. Fix: parse the reset
+reason from the log's event column (`POWERON`, `BROWNOUT`, `PANIC`,
+`WDT`, `SOFTWARE`) and only WARN on the internal ones. External resets
+should be reported but not flagged.
 
-**Primary item: clock from Opal, NTP removed.**
+### F3. DynaTune heat-gear tolerance may be too tight [minor]
 
-The Opal is the only device that is always on. The iPhone comes and goes. The
-ESP32 asks the Opal for time, period. NTP is not demoted, not a fallback,
-removed.
+`_test_heat_gears` WARNs when `temp.gear1` differs from
+`avg_room + delta_trigger` by more than 1.5°C. That's tight for a
+variable environment. Consider loosening to 2.5 or 3.0. Current board
+shows `HEAT: g1 33.0 vs room+5.1 = 29.3` (diff 3.7) — genuine signal,
+but the same test will fire on a well-tuned 30.0 gear1 in a 25°C room
+(diff 0.7, passes) but WARN on 32.0 (diff 2.7).
 
-Why:
-- NTP over the carrier is a trap. UDP 123 gets throttled, blackholed, or
-  routed through CGNAT. Worst-case SNTP retry chain is 15-30 s, during
-  which the ESP32's radio is held and every other network operation
-  queues behind it.
-- The self-locking gate: log_rotate_check() returns early if !ntp_synced(),
-  and log_boot_recovery() discards rows if time_ok is false. If NTP never
-  succeeds, rotation stops and boot recovery loses data.
-- The Opal's Date header is a bounded 250 ms HEAD over the LAN. Measured
-  from Mac: median 8.7 ms, max 225 ms. Expected from ESP32: median 30-80 ms,
-  worst 250 ms. 10-50x faster than NTP, no retry tail, no radio hold.
-- Opal has an RTC and NTP-synced clock of its own. Drift is seconds/day.
-  For log timestamps that is more than accurate enough.
+## Open — cosmetic
 
-Scope:
+### C1. DynaTune "tell me off" header
 
-| File | Change |
-|---|---|
-| WiFiManager.cpp | Remove start_ntp(), ntp_loop(), _ntp_synced_flag. Add clock_sync() -- HEAD to WiFi.gatewayIP(), read Date header, parse, settimeofday(). |
-| WiFiManager.h | Replace ntp_synced() with clock_synced() or make ntp_synced() return clock validity. |
-| fanmate.ino | Replace setup NTP wait with 3-try LAN clock wait (500 ms each). Call clock_sync() every 15 min in tick_15s(). |
-| Logging.cpp | log_rotate_check() gates on time() > 1700000000UL directly, not on a flag. log_boot_recovery() preserves rows under recovered-<uptime>.csv if time unavailable. |
-| Config.h | Add CLOCK_SYNC_INTERVAL_MS, CLOCK_HTTP_TIMEOUT_MS. Bump version to 4.29. |
+Header shows `last rec: <top rec>` from the newest `dynatune-history.csv`
+row. It echoes the rec without acknowledging whether it was acted on.
+Should say: `still unaddressed — 14m, 4 runs` when the same rec appears
+in consecutive history rows. Add to `fanmate/dialogs.py` header block;
+needs `_rec_streak()` walker in place of `_last_recommendation()`.
 
-Implementation notes:
-- HTTPClient: sendRequest("HEAD", NULL, 0). No body transfer.
-- Manual month/day parse -- newlib does not expose timegm() reliably on
-  ESP32 core 2.0.17. Howard Hinnant days_from_civil() for epoch conversion.
-- Sanity floor: reject Date values below 1700000000UL (kernel default 1970).
-- Never hard-fail on clock. Clock is an enhancement, not a gate.
-- Reference: Bike-Mate V5.00, commit 249322f, WifiManager.cpp opalClockSync().
+### C2. Dead code in `dialogs.py`
 
-Carried from v4.28 session:
+`_kpi_card` and `_recommendation_bar` methods in `DynaTune` are
+defined but never called since the pretty layout rewrite. Safe to
+delete.
 
+### C3. `PWM_MIN = 40` unused in Config.h
 
+The flat PWM map doesn't use it. Either remove or annotate as
+documentation.
 
-Carried from v4.28 session:
+### C4. Docs regen
 
-- **F7 seal filename collision** — confirmed live. Two files named
-  `log-4.27-20261006-1241.csv` were synced to the Mac, different sizes.
-  `seal_live()` must append a counter (`-01`, `-02`) when the target name
-  already exists.
-- **v4.28.1: WiFi-down guard before RSSI check.** `WiFi.RSSI()` returns 0 when
-  disconnected. `0 < -70` is false, so the Opal RSSI floor doesn't fire on a
-  dropped link. Add `if (WiFi.status() != WL_CONNECTED) return false;` before
-  the RSSI check in `rpc_call()`.
+- HANDOFF.md still says v4.28 / v3.95 — regen
+- PROJECT_STATE.md version history stops at v4.28
+- Partition-scheme contradiction in HANDOFF top block (says DEFAULT,
+  actual is min_spiffs)
 
-## OPEN FIRMWARE ITEMS
+## Parked
 
-Low priority. Not blocking.
-
-- F7 — seal filename minute-resolution collisions. Multiple sleep
-  cycles inside one minute collide. Wake overwrites live file.
-- F8 — `/status` SSID and IP not JSON-escaped. Breaks if SSID
-  ever contains a quote or backslash.
-- F9 — `settings_apply_json` accepts anything. Add validation for
-  gear ordering, night ranges, boost mode. Currently a user can
-  save `gear3 < gear2` and shadow out gears.
-- F10 — legacy NVS fallback maps `temp.kill` into both gear3 and
-  gear4. Only bites devices with pre-gear-schema NVS.
-
----
-
-## OPEN TK ITEMS
-
-- **Report2H window trim.** `_find_files_since(2)` walks back by files, not
-  by hours. Confirmed live: report labelled "Last 2 Hours" showed 08:00–14:00
-  (6 hours). Fix: keep the file walk, then trim rows to the actual last N
-  hours by timestamp before plotting. ReportDaily and ReportWeekly are fine —
-  they select by date.
-
-None critical. AUDIT.md Priority 3 has cosmetics if bored.
-
----
-
-## QML WORK (deferred until firmware + Tk frozen)
-
-- Settings panel — Rectangle overlay with NumberAnimation, not
-  Drawer (Drawer fought Qt layout rules last attempt)
-- Kill banner — SILENCE / ARM buttons, top-centred overlay
-- Delta lamp — fifth lamp or repurpose one existing
-- Bridge URLs use IP not `.local`
-
----
-
-## AUDIT
-
-Full list in **AUDIT.md** — 97 findings, ranked by consensus and
-severity. 26 closed. Remaining are mostly cosmetic or design
-decisions.
-
-**Priority 1 and 2 in AUDIT.md** are the ones worth attention.
-
----
-
-## PARTITION SCHEME
-
-Each ESP32 project needs its own partition, and the Arduino IDE
-only remembers one per board type. Switching between projects
-loses the setting.
-
-| Project | Partition | FQBN suffix |
-|---|---|---|
-| Fan-Mate | Minimal SPIFFS (1.9MB APP / 1408KB LittleFS) | `:PartitionScheme=min_spiffs` |
-| Bike-Mate | Default 4MB | *(none — default)* |
-
-**For Fan-Mate compile:** `esp32:esp32:esp32c3:PartitionScheme=min_spiffs`.
-
-**For Bike-Mate compile:** `esp32:esp32:esp32c3` — default partition.
-
-**Never trust the IDE dropdown.** Use arduino-cli with the FQBN above,
-or a project-local build.sh.
-
----
-
-## RULES — DO NOT VIOLATE
-
-- **Version bump on every change.** Firmware → `Config.h`.
-  Tk → `fanmate/config.py`. QML → `Main.qml`.
-- **Read the file before patching it.** No guessing anchors.
-- **One command per paste.** Nick's zsh mangles multi-line
-  heredocs and `#` comments.
-- **Do not start QML work** until the monitor phase is declared
-  complete.
-- **Ask before assuming** — if the phase has changed, confirm.
-
----
-
-## REPO
-
-https://github.com/bigbadevilaussie-hue/Fan-Mate
+- QML GUI2 v1.12 — settings panel (Rectangle overlay, not Drawer),
+  kill banner, delta lamp, bridge URLs use IP not .local
+- Thermal runaway failsafe — sensor health (DS18B20 stale detection,
+  NTC plausibility, rate-of-rise). Designed, not implemented.
+- Night cap removal — `FanController.cpp` caps at `nightMax` (75%),
+  no UI to change. Feature decision.
+- Temp gear hysteresis for gears 2/3/4 — currently exact-threshold.
+  Only gear 1 entry has hysteresis.
+- WiFi Nokia trigger — patch failed, only phone-detect triggers.
