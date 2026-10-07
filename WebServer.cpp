@@ -203,8 +203,14 @@ static void handle_config_post() {
         server.send(400, "text/plain", "bad json");
         return;
     }
-    settings_apply_json(body.c_str());
+
+    // v4.31b: respond immediately. settings_apply_json() runs the seal +
+    // config snapshot + two Drive uploads, which can take 10-20 seconds.
+    // Blocking on those starves the WebServer and times out the client.
     server.send(200, "text/plain", "OK");
+    delay(20);
+
+    settings_apply_json(body.c_str());
 }
 
 static void handle_time_post() {

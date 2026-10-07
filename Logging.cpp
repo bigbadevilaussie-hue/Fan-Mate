@@ -4,6 +4,7 @@
 #include "WiFiManager.h"
 #include "SerialBuffer.h"
 #include "AutoBoost.h"
+#include "Settings.h"
 
 #include <LittleFS.h>
 #include <HTTPClient.h>
@@ -120,7 +121,7 @@ static void open_fresh_live(time_t start_epoch) {
 //  Google Drive upload — POST sealed log to Apps Script
 //  HTTP 302 is treated as success (Apps Script redirect pattern).
 // ------------------------------------------------------------
-static bool upload_to_drive(const char* sealed_path, const char* name) {
+bool upload_to_drive(const char* sealed_path, const char* name) {
     File f = LittleFS.open(sealed_path, "r");
     if (!f) {
         log_print("[DRIVE] cannot open %s\n", sealed_path);
@@ -319,6 +320,56 @@ void log_init() {
     }
 }
 
+void log_seal_now() {
+    time_t now = time(nullptr);
+    seal_live(now);
+}
+
+void log_write_config_snapshot() {
+    time_t now = time(nullptr);
+    struct tm ti;
+    localtime_r(&now, &ti);
+    char name[64];
+    snprintf(name, sizeof(name), "%s%s-%04d%02d%02d-%02d%02d%02d.csv",
+             CONFIG_FILENAME_PREFIX, FAN_MATE_VERSION,
+             ti.tm_year + 1900, ti.tm_mon + 1, ti.tm_mday,
+             ti.tm_hour, ti.tm_min, ti.tm_sec);
+    char path[80];
+    snprintf(path, sizeof(path), "/%s", name);
+
+    File f = LittleFS.open(path, "w");
+    if (!f) {
+        log_print("[CFG] snapshot open failed: %s\n", name);
+        return;
+    }
+    f.println(CONFIG_HEADER);
+
+    char ts[24];
+    snprintf(ts, sizeof(ts), "%04d-%02d-%02d %02d:%02d:%02d",
+             ti.tm_year + 1900, ti.tm_mon + 1, ti.tm_mday,
+             ti.tm_hour, ti.tm_min, ti.tm_sec);
+
+    f.printf("%s,temp.gear1,%.1f\n",          ts, config.tempGear1);
+    f.printf("%s,temp.gear2,%.1f\n",          ts, config.tempGear2);
+    f.printf("%s,temp.gear3,%.1f\n",          ts, config.tempGear3);
+    f.printf("%s,temp.gear4,%.1f\n",          ts, config.tempGear4);
+    f.printf("%s,temp.hysteresis,%.1f\n",     ts, config.tempHysteresis);
+    f.printf("%s,night.start,%d\n",           ts, config.nightStart);
+    f.printf("%s,night.end,%d\n",             ts, config.nightEnd);
+    f.printf("%s,night.nightMax,%d\n",        ts, config.nightMax);
+    f.printf("%s,boost.mode,%d\n",            ts, config.boostMode);
+    f.printf("%s,boost.normal.threshold,%d\n", ts, config.boostNormal.threshold);
+    f.printf("%s,boost.normal.on_hold,%d\n",   ts, config.boostNormal.on_hold);
+    f.printf("%s,boost.normal.off_hold,%d\n",  ts, config.boostNormal.off_hold);
+    f.printf("%s,boost.aggr.threshold,%d\n",   ts, config.boostAggr.threshold);
+    f.printf("%s,boost.aggr.on_hold,%d\n",     ts, config.boostAggr.on_hold);
+    f.printf("%s,boost.aggr.off_hold,%d\n",    ts, config.boostAggr.off_hold);
+    f.close();
+
+    log_print("[CFG] snapshot: %s\n", name);
+    upload_to_drive(path, name);
+}
+
 void log_flush_seal() {
     if (!LittleFS.exists(LOG_FILE)) {
         _logging_paused = true;
@@ -454,10 +505,20 @@ size_t log_get_size() {
 }
 
 static bool log_evict_oldest() {
+    char all[LOG_MAX_SEALED][48];
+    size_t total = log_list_sealed(all, LOG_MAX_SEALED);
     char names[LOG_MAX_SEALED][48];
-    size_t n = log_list_sealed(names, LOG_MAX_SEALED);
+    size_t n = 0;
+    for (size_t i = 0; i < total; i++) {
+        if (strncmp(all[i], LOG_FILENAME_PREFIX,
+                    strlen(LOG_FILENAME_PREFIX)) == 0) {
+            strncpy(names[n], all[i], 47);
+            names[n][47] = 0;
+            n++;
+        }
+    }
     if (n <= LOG_KEEP_MIN) {
-        log_print("[LOG] evict: only %u sealed, keeping all\n", (unsigned)n);
+        log_print("[LOG] evict: only %u log files, keeping all\n", (unsigned)n);
         return false;
     }
     // Sort by filename. Filenames are log-<fw>-<YYYYMMDD>-<HHMM>.csv;
@@ -542,7 +603,9 @@ static bool is_sealed_name(const char* name) {
     if (!name) return false;
     const char* n = (name[0] == '/') ? name + 1 : name;
     if (strcmp(n, "log.csv") == 0) return false;
-    return strncmp(n, LOG_FILENAME_PREFIX, strlen(LOG_FILENAME_PREFIX)) == 0;
+    if (strncmp(n, LOG_FILENAME_PREFIX, strlen(LOG_FILENAME_PREFIX)) == 0) return true;
+    if (strncmp(n, CONFIG_FILENAME_PREFIX, strlen(CONFIG_FILENAME_PREFIX)) == 0) return true;
+    return false;
 }
 
 size_t log_list_sealed(char names[][48], size_t max) {

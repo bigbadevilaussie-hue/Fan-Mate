@@ -1,6 +1,7 @@
 #include "Settings.h"
 #include "Config.h"
 #include "SerialBuffer.h"
+#include "Logging.h"
 
 #include <Preferences.h>
 #include <ArduinoJson.h>
@@ -156,6 +157,11 @@ void settings_apply_json(const char* json) {
     }
 
     settings_save();
+
+    log_seal_now();
+    log_write_config_snapshot();
+    log_write_event("CFG_APPLIED");
+
     Serial.println("[CFG] applied + saved");
 }
 

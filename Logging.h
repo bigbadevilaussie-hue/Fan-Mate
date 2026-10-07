@@ -12,8 +12,10 @@ size_t log_get_size();
 void   log_check_full();
 void   log_clear();
 void   log_flush_seal();
+void   log_seal_now();
 void   log_resume();
 String log_time_string();
+void   log_write_config_snapshot();
 
 
 void   log_rotate_check();
