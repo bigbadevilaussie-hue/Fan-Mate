@@ -66,3 +66,28 @@ OTA: Tk GUI menu → 📡 Update Firmware.
 https://github.com/bigbadevilaussie-hue/Fan-Mate
 
 Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
+
+## Rules
+
+### Version bump
+Every change bumps the version, before compiling:
+
+- Firmware: `FAN_MATE_VERSION` in `Config.h`
+- Tk: `GUI_VERSION` in `fanmate/config.py`
+- QML: `guiVersion` in `fanmate_v2/qml/Main.qml`
+
+If the bump lands after the compile, the firmware reports the old version and log filenames use the old prefix.
+
+### Patching
+Nick's zsh eats multi-line pastes. Always write the patch as a Python script to `/tmp/`, then run `python3 /tmp/patch.py`. Never paste heredocs or multi-line shell that edits files.
+
+### Naming
+GUI = Tk (`fanmate/*.py`). GUI2 = QML (`fanmate_v2/*`). Web = `WebPage.h` (needs flash). Firmware = `.cpp`/`.h`/`.ino`.
+
+### Gotchas
+- Catalina mDNS slow. Use IP `192.168.8.242`, not `.local`.
+- `WiFi.RSSI()` returns 0 when disconnected.
+- `server.handleClient()` doesn't work here. Use `server_loop()`.
+- NVS keys ≤15 chars. Longer keys silently fail.
+- Fan fails safe to 100% (bootloader leaves GPIO 7 undriven).
+- QML Column + anchors don't mix. Use `TapHandler` for clicks inside Columns.
