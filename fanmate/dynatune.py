@@ -354,8 +354,14 @@ def _is_night(t, start, end):
     return h >= start or h < end
 
 
-def _test_heat_gears(rows, g1=33.0, g2=35.0, g3=37.0, g4=39.0):
-    """For each heat threshold, did the fan gear fire at least once?"""
+def _test_heat_gears(rows, g1=33.0, g2=35.0, g3=37.0, g4=39.0, delta_trigger=5.1):
+    """Heat gears + threshold plausibility vs observed room temp.
+
+    If the delta guard's trigger (room+5.1) sits meaningfully below the
+    absolute gear-1 threshold (g1), the absolute rule will never fire
+    before the delta rule already has — so g1 is too high for the room
+    it runs in. Recommend aligning g1 to room + delta_trigger.
+    """
     # Fan % from firmware is integer-truncated (see _test_boost comment).
     # gear 2 reports as 49, not 50.
     fired = set()
@@ -376,6 +382,16 @@ def _test_heat_gears(rows, g1=33.0, g2=35.0, g3=37.0, g4=39.0):
     if expected == 0:
         return {"status": "IDLE", "metric": "no heat",
                 "detail": f"peak {peak:.1f}°C below gear1"}
+    # Threshold-vs-delta plausibility check
+    rooms = [r["room"] for r in rows if r.get("room") is not None and r["room"] > -90]
+    avg_room = sum(rooms) / len(rooms) if rooms else None
+    if avg_room is not None:
+        suggested_g1 = round(avg_room + delta_trigger, 1)
+        if abs(g1 - suggested_g1) >= 1.5:
+            return {"status": "WARN",
+                    "metric": f"g1 {g1:.1f} vs room+{delta_trigger} = {suggested_g1:.1f}",
+                    "detail": f"avg room {avg_room:.1f}, suggest {suggested_g1:.1f}"}
+
     if max(fired) >= expected:
         return {"status": "PASS", "metric": f"up to {max(fired)}",
                 "detail": f"peak {peak:.1f}°C"}
@@ -607,7 +623,8 @@ def analyse(rows, boost_thr=700, live_status=None, live_config=None,
         },
         "device": {
             "night_cap":  _test_night_cap(rows, n_start, n_end, n_max),
-            "heat_gears": _test_heat_gears(rows, g1, g2, g3, g4),
+            "heat_gears": _test_heat_gears(rows, g1, g2, g3, g4,
+                                           t_cfg.get("delta_trigger", 5.1)),
             "hysteresis": _test_hysteresis(rows, g1, 1.0),
             "storage":    _test_storage(rows, log_info),
         },

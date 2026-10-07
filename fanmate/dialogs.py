@@ -101,6 +101,10 @@ class SettingsDialog(tk.Toplevel):
         self.temp_g4 = tk.StringVar(value=str(latest_config["temp"].get("gear4", 36.0)))
         field("Critical (100%)", self.temp_g4)
 
+        self.delta_trigger = tk.StringVar(
+            value=str(latest_config["temp"].get("delta_trigger", 5.1)))
+        field("Delta trigger (°C)", self.delta_trigger)
+
         section("⚡", "BOOST")
         mode_map = {0: "off", 1: "normal", 2: "aggressive"}
         self.boost_mode = tk.StringVar(
@@ -197,6 +201,7 @@ class SettingsDialog(tk.Toplevel):
                     "gear2": float(self.temp_g2.get()),
                     "gear3": float(self.temp_g3.get()),
                     "gear4": float(self.temp_g4.get()),
+                    "delta_trigger": float(self.delta_trigger.get()),
                 },
 
             }

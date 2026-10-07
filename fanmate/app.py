@@ -123,14 +123,14 @@ class App:
         self.data_title.pack(pady=(8, 0))
         self.rate_lbl = tk.Label(self.data_card, text="-- KB/s", font=FONT_VALUE)
         self.rate_lbl.pack(pady=(2, 6))
-        self.data_graph = Graph(self.data_card, self, y_min=0, y_max=2048, w=380, h=100)
+        self.data_graph = Graph(self.data_card, self, y_min=0, y_max=8192, w=380, h=100)
         self.data_graph.pack(padx=6, pady=(0, 8))
 
         self.graph_card = Card(root, self)
         self.graph_card.pack(fill="x", padx=18, pady=8)
         self.graph_title = tk.Label(self.graph_card, text="📈 TEMPERATURE HISTORY", font=FONT_LABEL)
         self.graph_title.pack(pady=(8, 0))
-        self.temp_graph = Graph(self.graph_card, self, y_min=15, y_max=55)
+        self.temp_graph = Graph(self.graph_card, self, y_min=15, y_max=45)
         self.temp_graph.pack(padx=6, pady=(4, 8))
 
         self.footer_lbl = tk.Label(
@@ -339,7 +339,8 @@ class App:
             em = phone_temp_emoji(temp)
             c = (t["green"] if temp < 25 else t["blue"] if temp < 35
                  else t["yellow"] if temp < 45 else t["red"])
-            self.temp_lbl.config(text=f"{temp:.1f}°C  {em}", fg=c)
+            prefix = "💤 " if sleep else ""
+            self.temp_lbl.config(text=f"{prefix}{temp:.1f}°C  {em}", fg=c)
 
         fan_pct = int(d.get("fan", 0))
         night_now = is_night_now()
@@ -353,28 +354,53 @@ class App:
             text=f"OFF {fe}" if fan_pct == 0 else f"{fan_pct}% {fe}",
             fg=fcolor,
         )
+
+        # RPM — red + STALL suffix if fan_stall
         rpm = int(d.get("rpm", 0))
-        self.rpm_lbl.config(text=f"{rpm}", fg=t["green"] if rpm > 0 else t["muted"])
+        if stall:
+            self.rpm_lbl.config(text=f"{rpm}  STALL", fg=t["red"])
+        else:
+            self.rpm_lbl.config(text=f"{rpm}", fg=t["green"] if rpm > 0 else t["muted"])
 
+        # Phone — append (net down) if opal offline
         phone = bool(d.get("phone", 0))
-        self.phone_lbl.config(
-            text="YES 📱" if phone else "NO  📴",
-            fg=t["green"] if phone else t["muted"],
-        )
+        if phone and not opal:
+            self.phone_lbl.config(text="YES 📱  (net down)", fg=t["orange"])
+        else:
+            self.phone_lbl.config(
+                text="YES 📱" if phone else "NO  📴",
+                fg=t["green"] if phone else t["muted"],
+            )
 
-        # BOOST level name
+        # BOOST — TURBO override when boost active, else gear name
         bl = int(d.get("boost_lvl", 0))
         bl = max(0, min(4, bl))
         boost_names  = ["Parked", "Cruising", "Fast", "Racing", "Nitro"]
         boost_colors = [t["muted"], t["green"], t["yellow"], t["orange"], t["red"]]
-        self.boost_lbl.config(text=boost_names[bl], fg=boost_colors[bl])
+        if boost and bl == 0:
+            # Binary boost flag set but data gear 0 (cooldown hold)
+            self.boost_lbl.config(text="🏎️ Turbo", fg=t["green"])
+        elif boost:
+            self.boost_lbl.config(text=boost_names[bl], fg=boost_colors[bl])
+        else:
+            self.boost_lbl.config(text=boost_names[bl], fg=boost_colors[bl])
 
-        # TEMP level name
+        # TEMP — alert level overrides gear name
         tl = int(d.get("temp_lvl", 0))
         tl = max(0, min(4, tl))
         temp_names  = ["Normal", "Warm", "Hot", "Hotter", "Critical"]
         temp_colors = [t["green"], t["yellow"], t["orange"], t["orange"], t["red"]]
-        self.temp_level_lbl.config(text=temp_names[tl], fg=temp_colors[tl])
+        if stall:
+            # Stall takes precedence, matches Web's order
+            self.temp_level_lbl.config(text=temp_names[tl], fg=temp_colors[tl])
+        elif alert >= 3:
+            self.temp_level_lbl.config(text="💀 Kill", fg=t["red"])
+        elif alert == 2:
+            self.temp_level_lbl.config(text="🚨 Oh Shit", fg=t["red"])
+        elif alert == 1:
+            self.temp_level_lbl.config(text="⚠ Warn", fg=t["orange"])
+        else:
+            self.temp_level_lbl.config(text=temp_names[tl], fg=temp_colors[tl])
 
         # weather card removed; outdoor temp goes into bottom card
         od = d.get("outdoor_c")
@@ -400,7 +426,8 @@ class App:
         self.footer_lbl.config(
             text=f"GUI v{GUI_VERSION}  ·  FW {d.get('fv', '?')}"
         )
-        self.temp_graph.trigger = latest_config.get("temp", {}).get("gear1", None)
+        # Match Web: red dash = temp_warning (gear2), from /status
+        self.temp_graph.trigger = d.get("temp_warning") or latest_config.get("temp", {}).get("gear2", None)
         self.temp_graph.set_data(temp_hist)
 
         boost_mode = latest_config.get("boost", {}).get("mode", 1)
