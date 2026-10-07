@@ -24,6 +24,7 @@ struct FanMateConfig {
     float   tempGear3;   // Hotter   -> gear 3
     float   tempGear4;   // Critical -> gear 4 + kill
     float   tempHysteresis;
+    float   deltaTrigger;  // phone-room delta that fires the guard (default 5.1)
 
     // Night
     int     nightStart;

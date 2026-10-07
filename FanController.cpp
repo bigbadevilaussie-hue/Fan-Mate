@@ -306,10 +306,12 @@ void updateFanAndAlerts(
         float room = readNTC();
         if (room > -90.0f) {
             float d = currentTemp - room;
+            float enter = config.deltaTrigger;      // default 5.1
+            float exit  = config.deltaTrigger - 1.0f; // default 4.1
             if (delta_guard_active) {
-                if (d < 4.0f) delta_guard_active = false;
+                if (d < exit) delta_guard_active = false;
             } else {
-                if (d > 5.0f) delta_guard_active = true;
+                if (d > enter) delta_guard_active = true;
             }
         } else {
             delta_guard_active = false;
@@ -468,6 +470,10 @@ void updateTach() {
         interrupts();
         lastTachRead = now;
         fanRPMLocal = (pulses * 60) / 2;
+        // Reject tick-stretch artefacts: a 40mm fan can't exceed 10k RPM.
+        // Any reading above that is a counter glitch (ISR fired during a
+        // blocked loop, or millis() drift during an Opal stall).
+        if (fanRPMLocal > 10000) fanRPMLocal = 0;
     }
 }
 

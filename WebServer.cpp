@@ -141,6 +141,7 @@ static void handle_status() {
     json += "\"temp_gear3\":" + String(config.tempGear3, 1) + ",";
     json += "\"temp_gear4\":" + String(config.tempGear4, 1) + ",";
     json += "\"temp_warning\":" + String(config.tempGear2, 1) + ",";
+    json += "\"delta_trigger\":" + String(config.deltaTrigger, 1) + ",";
     json += "\"temp_panic\":" + String(config.tempGear3, 1) + ",";
     json += "\"temp_kill\":" + String(config.tempGear4, 1) + ",";
     int boostThr = 700;
@@ -161,7 +162,8 @@ static void handle_config_get() {
     json += "\"gear2\":" + String(config.tempGear2, 1) + ",";
     json += "\"gear3\":" + String(config.tempGear3, 1) + ",";
     json += "\"gear4\":" + String(config.tempGear4, 1) + ",";
-    json += "\"hysteresis\":" + String(config.tempHysteresis, 1);
+    json += "\"hysteresis\":" + String(config.tempHysteresis, 1) + ",";
+    json += "\"delta_trigger\":" + String(config.deltaTrigger, 1);
     json += "},";
 
     json += "\"boost\":{";

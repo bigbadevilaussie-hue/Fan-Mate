@@ -16,6 +16,7 @@ static void set_defaults() {
     config.tempGear3      = 34.0;
     config.tempGear4      = 36.0;
     config.tempHysteresis = 1.0;
+    config.deltaTrigger   = 5.1;
 
     config.nightStart   = 22;
     config.nightEnd     = 7;
@@ -46,6 +47,7 @@ void settings_load() {
     config.tempGear4 = prefs.getFloat("temp.gear4",
                         prefs.getFloat("temp.kill",    config.tempGear4));
     config.tempHysteresis = prefs.getFloat("t.hyst", config.tempHysteresis);
+    config.deltaTrigger   = prefs.getFloat("delta.trigger", config.deltaTrigger);
 
     config.nightStart     = prefs.getInt  ("night.start",      config.nightStart);
     config.nightEnd       = prefs.getInt  ("night.end",        config.nightEnd);
@@ -85,6 +87,7 @@ void settings_save() {
     prefs.putFloat("temp.gear3",       config.tempGear3);
     prefs.putFloat("temp.gear4",       config.tempGear4);
     prefs.putFloat("t.hyst",  config.tempHysteresis);
+    prefs.putFloat("delta.trigger", config.deltaTrigger);
 
     prefs.putInt  ("night.start",      config.nightStart);
     prefs.putInt  ("night.end",        config.nightEnd);
@@ -128,6 +131,7 @@ void settings_apply_json(const char* json) {
         if (t.containsKey("gear4"))      config.tempGear4 = t["gear4"].as<float>();
         else if (t.containsKey("kill"))    config.tempGear4 = t["kill"].as<float>();
         if (t.containsKey("hysteresis")) config.tempHysteresis = t["hysteresis"].as<float>();
+        if (t.containsKey("delta_trigger")) config.deltaTrigger = t["delta_trigger"].as<float>();
     }
 
     if (doc.containsKey("night")) {
