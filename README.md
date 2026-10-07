@@ -104,6 +104,7 @@ GUI = Tk (`fanmate/*.py`). GUI2 = QML (`fanmate_v2/*`). Web = `WebPage.h` (needs
 - `_test_heat_gears` compares `temp.gear1` against `avg_room + delta_trigger`. Recommendation text hardcodes `boost.on_hold 4 → 2` regardless of the current `on_hold` value. Fix: read the current setting and only suggest a change if it differs.
 
 **Firmware**
+- Cooldown margin. Currently `cold_temp + 0.3` releases the fan before residual modem heat arrives, so phone can creep up ~1°C post-download. Consider `COOLDOWN_MARGIN_C = 1.5` in AutoBoost.cpp, or make it configurable via NVS (`cooldown.margin`, Settings field).
 - Double-Apply in the same minute still creates a duplicate seal name (cosmetic; collision suffix `-2` handles it, GitHub upload succeeds on second attempt with SHA).
 
 **GUI**
