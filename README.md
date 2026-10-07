@@ -2,142 +2,67 @@
 
 ESP32-C3 fan controller that keeps an iPhone cool on a 24/7 hotspot mount.
 
-The iPhone is the sole internet uplink (weak signal, rural Queensland). Every byte through the network heats its cellular modem. Fan-Mate watches the router's WAN traffic rate and spins a 40mm PWM fan when downloads are detected — before the phone gets hot, not after.
+The iPhone is the sole internet uplink (weak signal, rural Queensland). Every byte through the network heats its cellular modem. Fan-Mate watches the router WAN traffic rate and spins a 40mm PWM fan when downloads are detected — before the phone gets hot, not after.
 
----
+Current: **FW v4.50** · **Tk GUI v4.50** · **QML GUI2 v1.11** (parked)
+
+Repo: https://github.com/bigbadevilaussie-hue/Fan-Mate
 
 ## Hardware
 
-| Component | Notes |
-|---|---|
-| MCU | ESP32-C3 SuperMini |
-| Display | 72x40 SSD1306 OLED |
-| Temperature | DS18B20 waterproof probe (phone back contact) |
-| Phone detection | A3144 hall sensor + Quad Lock magnet |
-| Fan | 40mm 4-wire PWM, 5V, 0.1A |
-| Buzzer | SFM-27 piezo |
-| Power | USB-C 5V, 2A |
+| Component | Pin | Notes |
+|---|---|---|
+| MCU | — | ESP32-C3 SuperMini |
+| Thermistor (NTC) | GPIO 0 | 10k MF52AT, room temp, +6.0 offset |
+| Hall sensor | GPIO 1 | A3144, phone presence |
+| Fan tach | GPIO 3 | INPUT_PULLUP, IRQ |
+| DS18B20 | GPIO 4 | Phone back contact |
+| OLED SDA / SCL | GPIO 5 / 6 | I2C |
+| Fan PWM | GPIO 7 | 25 kHz, 8-bit |
+| Blue LED | GPIO 8 | onboard |
+| Buzzer | GPIO 10 | LEDC channel 1 |
 
-### Pin map
-
-| GPIO | Function |
-|------|----------|
-| 0 | Thermistor (NTC 10k, room temp) |
-| 1 | Hall sensor (phone presence) |
-| 3 | Fan tach |
-| 4 | DS18B20 |
-| 5 | OLED SDA |
-| 6 | OLED SCL |
-| 7 | Fan PWM (25 kHz) |
-| 8 | Blue LED |
-| 10 | Buzzer |
-
----
+Shroud printed, mounted on Quad Lock adapter. Phone docked. DS18B20 in the Quad Lock socket against the case back. Fan over the camera bump, adjacent to the SoC.
 
 ## What it does
 
-**Network-triggered boost.** The fan responds to router WAN traffic, not to the phone temperature. Traffic heats the modem *before* the phone surface warms. By the time the DS18B20 sees heat, the modem is already cooking. Fan-Mate watches the leading indicator.
-
-**Auto Boost with rate-based gears and thermal cooldown.** Fan target gear = `floor(network_rate / threshold)`, clamped 0–4. A rate of 1× threshold targets gear 1, 2× targets gear 2, and so on. Up-steps are gated by `on_hold` ticks to prevent chatter; down-steps hold until rate drops below 80% of the current gear's entry point.
-
-When traffic stops, the data gear ramps back to zero — but the fan doesn't. The phone's modem keeps heating for a while after the bytes stop arriving, so a **cooldown phase** holds the fan at gear 1 until the phone temperature returns to the "cold temp" recorded when the boost began (or a 20-minute timeout expires). The cold temp persists across boost sessions, only overwritten on the next 0→1 gear transition.
-
-If the router becomes unreachable mid-session, boost gears freeze but the cooldown check keeps running — so the fan doesn't get stuck on while the network is down.
-
-**Hourly log rotation.** Log sealed every hour, streamed to the Mac over WiFi, CRC32 verified, then deleted from the ESP32. Files named `log-vX.YY-YYYYMMDD-HHMM.csv`.
-
-**Delta guard.** If the phone is 5°C above room temperature — sun on the mount, heavy modem load, or an external heat source — the fan floor rises to gear 1 even when boost and heat rules are idle. Exit band at 3°C to prevent sawtooth. Phone temp floor at 24°C so a cold phone in a cold corner doesn't trigger it.
-
-**Heat control.** Four absolute thresholds (Warm / Hot / Hotter / Critical, defaults 33/35/37/39°C) drive fan gears 1–4. Each gear has entry and exit hysteresis so the fan doesn't flap at the threshold. Critical drives the **kill mode** state machine — the fan runs at 100%, the buzzer beeps every 30 s until acknowledged, and the router's WiFi repeater is cut to stop downloads feeding the phone's heat.
-
-**OTA over HTTP.** Compiled binary uploaded from the Mac GUI. Device reboots into new firmware.
-
-**Autonomous.** ESP32 keeps cooling and logging whether the Mac is on or off. Sleeps when the phone is absent, wakes when it returns.
-
----
-
-## Firmware
-
-Current version: **V4.24**
-
-### HTTP API
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/` | GET | Web dashboard |
-| `/status` | GET | JSON telemetry |
-| `/config` | GET/POST | Config read/update |
-| `/time` | POST | Set RTC |
-| `/log.csv` | GET | Live log |
-| `/log/list` | GET | Sealed file list |
-| `/log/file` | GET | Stream sealed file |
-| `/log/ack` | POST | Confirm, delete |
-| `/log/nack` | POST | CRC failed, keep |
-| `/log/info` | GET | Log stats |
-| `/log/clear` | POST | Wipe live log |
-| `/serial` | GET | Serial page |
-| `/serial-raw` | GET | Text serial dump |
-| `/reboot` | GET | Restart |
-| `/ota` | POST | Firmware upload |
-
-### Log format
-
-
----
-
-## Web Dashboard
-
-Open `http://fan-mate.local/` from any browser on the same network — iPhone, iPad, iMac.
-
-- Portrait layout, 420px max-width
-- Live refresh every 5s
-- Cards: weather, room, phone temp, fan/RPM, phone/status, clock
-- Graphs: network rate, temperature history (15 min)
-- Threshold lines drawn on graphs
-
-Read-only. For settings, use the Tk GUI.
-
----
-
-## Tk GUI
-
-Python 3 on the Mac. Full control.
-
-- Live telemetry every 10s
-- Settings dialog (Heat / Boost / Night)
-- Reports: Last 2 Hours, Daily, Weekly (with room temp overlay)
-- DynaTune KPI board — six diagnostic tests (boost, cooldown, delta, lag, events, log)
-- OTA updates
-- Log sync
-- Weather card
-
-Launcher: `python3 fanmate.py`
-
----
+- **Network-triggered boost** — responds to router WAN traffic, not phone temp. Traffic heats the modem before the phone surface warms.
+- **Rate-based gears** — target gear = `floor(net_kbps / threshold)`, clamp 0–4, with up/down hysteresis.
+- **Cooldown hold** — when traffic stops, holds gear 1 until phone temp returns to the pre-boost value (or 20-min timeout).
+- **Delta guard** — phone 5.1°C above room → gear 1 floor. Configurable.
+- **Heat control** — four thresholds (Warm/Hot/Hotter/Critical = 33/35/37/39) with per-gear hysteresis.
+- **Priority** — `max(heat, delta, boost)`.
+- **Kill mode** — at Critical: fan 100%, buzzer every 30s, repeater cut. Manual re-arm.
+- **Autonomous** — cools and logs whether the Mac is on or off. Sleeps when phone absent.
+- **Hourly log rotation** — sealed, CRC32-verified Mac sync, Drive upload.
 
 ## Build
 
-1. Arduino IDE 2.x, or arduino-cli 0.35.3
-2. Board: **ESP32C3 Dev Module**
-3. ESP32 core: **2.0.17** (2.x required — do NOT upgrade to 3.x)
-4. Libraries: Adafruit GFX, Adafruit BusIO, Adafruit SSD1306, OneWire, DallasTemperature, ArduinoJson
-5. Create `secrets.h` with WiFi credentials (see `secrets.example.h`)
-6. Compile:
+Arduino IDE 2.x or arduino-cli. ESP32 core **2.0.17** (2.x required — do NOT upgrade to 3.x).
 
----
+Partition: `:PartitionScheme=min_spiffs` (1408 KB LittleFS).
 
-## Repo layout
+```zsh
+arduino-cli compile --fqbn esp32:esp32:esp32c3:PartitionScheme=min_spiffs --export-binaries .
+# binary: build/esp32.esp32.esp32c3/fanmate.ino.bin
+```
 
+Libraries: Adafruit GFX, Adafruit BusIO, Adafruit SSD1306, OneWire, DallasTemperature, ArduinoJson.
 
----
+Secrets: copy `secrets.example.h` to `secrets.h`, fill WiFi + Opal credentials.
 
-## Related
+OTA: Tk GUI menu → 📡 Update Firmware.
 
-- Bike-Mate: https://github.com/bigbadevilaussie-hue/Bike-Mate
-- Same author, same stack, different application (motorcycle battery + ride logger)
+## GUI
 
----
+**Tk GUI** (primary) — `python3 fanmate.py`. Live telemetry, Settings, Reports, DynaTune KPI board, OTA, log sync, weather, day/night theme.
 
-## License
+**QML GUI2** (parked) — `fanmate_v2/*`. Ports frozen behaviour once firmware + Tk are stable.
 
-No license. Personal project.
+**Web dashboard** — served by ESP32 at `/`. Read-only except kill-mode banner.
+
+## Repo
+
+https://github.com/bigbadevilaussie-hue/Fan-Mate
+
+Related: https://github.com/bigbadevilaussie-hue/Bike-Mate

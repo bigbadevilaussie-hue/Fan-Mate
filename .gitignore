@@ -1,37 +1,20 @@
-build/
-*.elf
-*.map
-__pycache__/
-*.pyc
+# Secrets
 secrets.h
 *.local.h
-backups/
 
-# No backups
-*.bak
-*.py.bak
-*.broken_*
-.broken_*/
-.bak_*/
-fanmate-backup-*.py
-fanmate-v2.*.py
-fanmate-v3.0*.py
-
-# Build artifacts
+# Build
 build/
 *.bin
 *.elf
 *.map
 
+# Python
+__pycache__/
+*.pyc
+
 # Backups
 *.bak
 *.py.bak
-fanmate.py.before-*
-fanmate.py.pre-*
-fanmate/*_legacy.py
-HANDOFF.md
-fanmate-v2.*.py
-fanmate-v3.0*.py
-fanmate.py.before-*
-PROJECT.md
+
+# macOS
 .DS_Store
