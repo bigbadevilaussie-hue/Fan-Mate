@@ -70,6 +70,9 @@ class App:
         reports.add_command(label="Last 2 Hours", command=self.menu_report_2h)
         reports.add_command(label="Daily",        command=self.menu_report_daily)
         reports.add_command(label="Weekly",       command=self.menu_report_weekly)
+        reports.add_separator()
+        reports.add_command(label="Settings History",
+                            command=self.menu_settings_history)
         am.add_cascade(label="📊  Reports", menu=reports)
         am.add_separator()
         am.add_command(label="🎛️  Dyna Tune", command=self.menu_dyna_tune)
@@ -168,6 +171,10 @@ class App:
 
     def menu_report_weekly(self):
         ReportWeekly(self.root, self)
+
+    def menu_settings_history(self):
+        from .changelog import ChangelogWindow
+        ChangelogWindow(self.root, self)
 
     def menu_dyna_tune(self):
         DynaTune(self.root, self)
