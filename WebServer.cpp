@@ -178,7 +178,7 @@ static void handle_config_get() {
     json += "\"on_hold\":" + String(config.boostAggr.on_hold) + ",";
     json += "\"off_hold\":" + String(config.boostAggr.off_hold);
     json += "}";
-    json += "},";
+    json += "}";
 
     json += "}";
     server.send(200, "application/json", json);
