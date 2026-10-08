@@ -18,3 +18,7 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# PyInstaller
+dist/
+build/Fan-Mate/
