@@ -18,9 +18,6 @@ static void set_defaults() {
     config.tempHysteresis = 1.0;
     config.deltaTrigger   = 5.1;
 
-    config.nightStart   = 22;
-    config.nightEnd     = 7;
-    config.nightMax     = 75;
 
 
     config.boostMode = 1;   // Normal
@@ -49,9 +46,6 @@ void settings_load() {
     config.tempHysteresis = prefs.getFloat("t.hyst", config.tempHysteresis);
     config.deltaTrigger   = prefs.getFloat("delta.trigger", config.deltaTrigger);
 
-    config.nightStart     = prefs.getInt  ("night.start",      config.nightStart);
-    config.nightEnd       = prefs.getInt  ("night.end",        config.nightEnd);
-    config.nightMax       = prefs.getInt  ("night.max",        config.nightMax);
 
 
     config.boostMode      = prefs.getInt("boost.mode",         config.boostMode);
@@ -70,8 +64,6 @@ void settings_load() {
     Serial.printf("  temp warm=%.1f hot=%.1f hotter=%.1f crit=%.1f hyst=%.1f\n",
                   config.tempGear1, config.tempGear2, config.tempGear3,
                   config.tempGear4, config.tempHysteresis);
-    Serial.printf("  night %02d:00-%02d:00 max=%d%%\n",
-                  config.nightStart, config.nightEnd, config.nightMax);
     const char* bm = (config.boostMode == 0) ? "off"
                    : (config.boostMode == 2) ? "aggr" : "normal";
     Serial.printf("  boost.mode=%s normal(%d/%d) aggr(%d/%d)\n", bm,
@@ -89,9 +81,6 @@ void settings_save() {
     prefs.putFloat("t.hyst",  config.tempHysteresis);
     prefs.putFloat("delta.trigger", config.deltaTrigger);
 
-    prefs.putInt  ("night.start",      config.nightStart);
-    prefs.putInt  ("night.end",        config.nightEnd);
-    prefs.putInt  ("night.max",        config.nightMax);
 
 
     prefs.putInt("boost.mode",             config.boostMode);
@@ -134,12 +123,6 @@ void settings_apply_json(const char* json) {
         if (t.containsKey("delta_trigger")) config.deltaTrigger = t["delta_trigger"].as<float>();
     }
 
-    if (doc.containsKey("night")) {
-        JsonObject n = doc["night"];
-        if (n.containsKey("start"))    config.nightStart = n["start"].as<int>();
-        if (n.containsKey("end"))      config.nightEnd   = n["end"].as<int>();
-        if (n.containsKey("nightMax")) config.nightMax   = n["nightMax"].as<int>();
-    }
 
     if (doc.containsKey("boost")) {
         JsonObject b = doc["boost"];
@@ -167,13 +150,4 @@ void settings_apply_json(const char* json) {
     log_write_event("CFG_APPLIED");
 
     Serial.println("[CFG] applied + saved");
-}
-
-bool settings_is_night() {
-    struct tm ti;
-    if (!getLocalTime(&ti, 10)) return false;
-    int h = ti.tm_hour;
-    if (config.nightStart < config.nightEnd)
-        return (h >= config.nightStart && h < config.nightEnd);
-    return (h >= config.nightStart || h < config.nightEnd);
 }

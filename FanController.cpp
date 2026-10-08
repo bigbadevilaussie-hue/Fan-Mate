@@ -60,7 +60,6 @@ static void kill_state_machine(float currentTemp);
 static void runBeepSequence(int beeps, int beepMs, int gapMs, int intervalMs);
 static void beep_once();
 void beep_once_update();
-static bool quiet_hours();
 
 // ------------------------------------------------------------
 void readDS18B20(float &currentTemp) {
@@ -164,22 +163,12 @@ static int compute_temp_gear(float t) {
 }
 
 // ------------------------------------------------------------
-static bool quiet_hours() {
-    struct tm ti;
-    if (!getLocalTime(&ti, 10)) return false;
-    int h = ti.tm_hour;
-    if (QUIET_START_HOUR < QUIET_END_HOUR) {
-        return h >= QUIET_START_HOUR && h < QUIET_END_HOUR;
-    }
-    return h >= QUIET_START_HOUR || h < QUIET_END_HOUR;
-}
 
 // ------------------------------------------------------------
 static bool          short_beep_active = false;
 static unsigned long short_beep_timer  = 0;
 
 static void beep_once() {
-    if (quiet_hours()) return;
     if (short_beep_active) return;
     tone(BUZZER_PIN, BUZZER_TONE_HZ);
     short_beep_active = true;
@@ -374,10 +363,6 @@ void updateFanAndAlerts(
         newPwm = map(fanGear, 0, 4, 0, 255);
     }
 
-    if (settings_is_night()) {
-        int cap = (config.nightMax * 255) / 100;
-        if (newPwm > cap) newPwm = cap;
-    }
 
     if (!effectivePhone) {
         newPwm = 0;

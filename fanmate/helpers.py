@@ -71,16 +71,3 @@ def fan_emoji(p):
     if p < 30:  return "🍃"
     if p < 70:  return "💨"
     return "🌪️"
-
-
-def is_night_now():
-    """True if current local time is in the night window.
-    Reads from the device's latest_config so it matches the fan cap."""
-    from .config import NIGHT_START_HOUR, NIGHT_END_HOUR
-    night = state.latest_config.get("night", {})
-    start = night.get("start", NIGHT_START_HOUR)
-    end   = night.get("end",   NIGHT_END_HOUR)
-    h = datetime.now().hour
-    if start < end:
-        return start <= h < end
-    return h >= start or h < end

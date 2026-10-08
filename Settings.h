@@ -8,7 +8,6 @@
 //  V4.20 — schema:
 //    temp  : gear1/gear2/gear3/gear4 + hysteresis
 //    boost : mode + normal/aggr profiles (nested)
-//    night : start/end/nightMax
 // ============================================================
 
 struct BoostProfile {
@@ -26,10 +25,6 @@ struct FanMateConfig {
     float   tempHysteresis;
     float   deltaTrigger;  // phone-room delta that fires the guard (default 5.1)
 
-    // Night
-    int     nightStart;
-    int     nightEnd;
-    int     nightMax;
 
     // Boost
     int     boostMode;      // 0=off, 1=normal, 2=aggr
@@ -43,6 +38,5 @@ void settings_load();
 void settings_save();
 void settings_reset();
 void settings_apply_json(const char* json);
-bool settings_is_night();
 
 #endif

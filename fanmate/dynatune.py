@@ -333,18 +333,6 @@ def _test_opal_poll(rows):
             "detail": "log has multiple >60s gaps"}
 
 
-def _test_night_cap(rows, night_start=22, night_end=7, night_max=75):
-    """Was fan capped at nightMax during night hours?"""
-    night_rows = [r for r in rows
-                  if _is_night(r["t"], night_start, night_end)]
-    if not night_rows:
-        return {"status": "IDLE", "metric": "no night rows", "detail": ""}
-    over = [r for r in night_rows if r["fan"] > night_max + 2]
-    if not over:
-        return {"status": "PASS", "metric": f"0/{len(night_rows)}",
-                "detail": f"capped at {night_max}%"}
-    return {"status": "FAIL", "metric": f"{len(over)} over",
-            "detail": f"exceeds {night_max}%"}
 
 
 def _is_night(t, start, end):
@@ -552,22 +540,6 @@ def _test_boost_mode(cfg):
     return {"status": "FAIL", "metric": str(mode), "detail": "not 0/1/2"}
 
 
-def _test_night_window(cfg):
-    n = (cfg or {}).get("night", {})
-    start = n.get("start"); end = n.get("end")
-    maxp = n.get("nightMax")
-    if start is None or end is None:
-        return {"status": "IDLE", "metric": "no config", "detail": ""}
-    if start == end:
-        return {"status": "WARN", "metric": f"{start}–{end}",
-                "detail": "start == end (no night)"}
-    if not (0 <= start <= 23 and 0 <= end <= 23):
-        return {"status": "FAIL", "metric": f"{start}–{end}",
-                "detail": "hour out of 0–23"}
-    if maxp is not None and not (0 <= maxp <= 100):
-        return {"status": "FAIL", "metric": f"max {maxp}",
-                "detail": "nightMax out of 0–100"}
-    return {"status": "PASS", "metric": f"{start}–{end} @ {maxp}%", "detail": ""}
 
 
 def _test_storage(rows, log_info=None):
@@ -591,15 +563,11 @@ def analyse(rows, boost_thr=700, live_status=None, live_config=None,
     """Run all tests. Sections:
       core     — boost / cooldown / delta / lag / events / log
       data     — drive / clock / boot / opal_poll
-      device   — night_cap / heat_gears / hysteresis / storage
+      device   — heat_gears / hysteresis / storage
       hardware — phone / sleep / ntc / ds18b20 / rpm / stall
-      config   — gear_order / threshold / boost_mode / night_window
+      config   — gear_order / threshold / boost_mode
     """
     cfg = live_config or {}
-    night = cfg.get("night", {}) if cfg else {}
-    n_start = night.get("start", 22)
-    n_end   = night.get("end", 7)
-    n_max   = night.get("nightMax", 75)
     t_cfg   = cfg.get("temp", {}) if cfg else {}
     g1 = t_cfg.get("gear1", 33.0)
     g2 = t_cfg.get("gear2", 35.0)
@@ -622,7 +590,6 @@ def analyse(rows, boost_thr=700, live_status=None, live_config=None,
             "opal_poll": _test_opal_poll(rows),
         },
         "device": {
-            "night_cap":  _test_night_cap(rows, n_start, n_end, n_max),
             "heat_gears": _test_heat_gears(rows, g1, g2, g3, g4,
                                            t_cfg.get("delta_trigger", 5.1)),
             "hysteresis": _test_hysteresis(rows, g1, 1.0),
@@ -640,7 +607,6 @@ def analyse(rows, boost_thr=700, live_status=None, live_config=None,
             "gear_order":   _test_gear_order(cfg),
             "threshold":    _test_threshold(cfg),
             "boost_mode":   _test_boost_mode(cfg),
-            "night_window": _test_night_window(cfg),
         },
     }
 
@@ -655,7 +621,6 @@ def analyse(rows, boost_thr=700, live_status=None, live_config=None,
         "clock":        "Timestamps using uptime — Opal clock failing",
         "boot":         "Frequent reboots",
         "opal_poll":    "Log has >60s gaps — Opal poll dropping",
-        "night_cap":    "Night cap not enforced",
         "heat_gears":   "Heat gears not firing as expected",
         "hysteresis":   "Possible gear flapping",
         "storage":      "Storage approaching cap",
@@ -668,7 +633,6 @@ def analyse(rows, boost_thr=700, live_status=None, live_config=None,
         "gear_order":   "Heat gear order invalid",
         "threshold":    "Boost threshold out of range",
         "boost_mode":   "Boost mode invalid",
-        "night_window": "Night window invalid",
     }
 
     warns = []

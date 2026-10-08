@@ -20,7 +20,6 @@ latest_config = {
         "normal": {"threshold": 700, "on_hold": 4, "off_hold": 4},
         "aggr":   {"threshold": 400, "on_hold": 2, "off_hold": 8},
     },
-    "night": {"start": 22, "end": 7, "nightMax": 75},
 }
 connected = False
 time_synced = False

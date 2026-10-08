@@ -402,13 +402,8 @@ class App:
             self.temp_lbl.config(text=f"{prefix}{temp:.1f}°C  {em}", fg=c)
 
         fan_pct = int(d.get("fan", 0))
-        night_now = is_night_now()
-        if night_now and fan_pct > 0:
-            fe = "💤"
-            fcolor = t["blue"]
-        else:
-            fe = fan_emoji(fan_pct)
-            fcolor = t["muted"] if fan_pct == 0 else t["green"]
+        fe = fan_emoji(fan_pct)
+        fcolor = t["muted"] if fan_pct == 0 else t["green"]
         self.fan_lbl.config(
             text=f"OFF {fe}" if fan_pct == 0 else f"{fan_pct}% {fe}",
             fg=fcolor,

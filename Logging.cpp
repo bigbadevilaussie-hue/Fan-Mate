@@ -419,9 +419,6 @@ void log_write_config_snapshot() {
     f.printf("%s,temp.gear3,%.1f\n",          ts, config.tempGear3);
     f.printf("%s,temp.gear4,%.1f\n",          ts, config.tempGear4);
     f.printf("%s,temp.hysteresis,%.1f\n",     ts, config.tempHysteresis);
-    f.printf("%s,night.start,%d\n",           ts, config.nightStart);
-    f.printf("%s,night.end,%d\n",             ts, config.nightEnd);
-    f.printf("%s,night.nightMax,%d\n",        ts, config.nightMax);
     f.printf("%s,boost.mode,%d\n",            ts, config.boostMode);
     f.printf("%s,boost.normal.threshold,%d\n", ts, config.boostNormal.threshold);
     f.printf("%s,boost.normal.on_hold,%d\n",   ts, config.boostNormal.on_hold);

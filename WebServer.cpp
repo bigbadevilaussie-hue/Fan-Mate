@@ -180,12 +180,6 @@ static void handle_config_get() {
     json += "}";
     json += "},";
 
-    json += "\"night\":{";
-    json += "\"start\":" + String(config.nightStart) + ",";
-    json += "\"end\":" + String(config.nightEnd) + ",";
-    json += "\"nightMax\":" + String(config.nightMax);
-    json += "}";
-
     json += "}";
     server.send(200, "application/json", json);
 }

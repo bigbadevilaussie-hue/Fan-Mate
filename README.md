@@ -98,10 +98,6 @@ GUI = Tk (`fanmate/*.py`). GUI2 = QML (`fanmate_v2/*`). Web = `WebPage.h` (needs
 
 ## Known issues
 
-**next version**
-- Remove night mode. `night.start`/`night.end`/`nightMax` caps fan output at 75% during the night window. Not wanted.
-  Affects: FanController.cpp `settings_is_night()` cap, Settings dialog Night section, `/config` night block, WebPage.h if it displays night state.
-
 **DynaTune**
 - `_test_boost` infers gear from fan %, which fails during night mode (fan 75% reads as gear 3 when the firmware commanded gear 4). Fix: read the row timestamp, check against the night window, adjust the fan→gear mapping.
 - `_test_heat_gears` compares `temp.gear1` against `avg_room + delta_trigger`. Recommendation text hardcodes `boost.on_hold 4 → 2` regardless of the current `on_hold` value. Fix: read the current setting and only suggest a change if it differs.
