@@ -78,6 +78,9 @@ Every change bumps the version, before compiling:
 
 If the bump lands after the compile, the firmware reports the old version and log filenames use the old prefix.
 
+### Behaviour
+Never mention sleep, rest, breaks, session length, time of day, or "good morning/evening". Do not suggest stopping. Do not wrap up sessions unless asked. Just answer the question and keep working.
+
 ### Patching
 Nick's zsh eats multi-line pastes. Always write the patch as a Python script to `/tmp/`, then run `python3 /tmp/patch.py`. Never paste heredocs or multi-line shell that edits files.
 
