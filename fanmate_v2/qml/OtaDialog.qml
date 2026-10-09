@@ -5,8 +5,10 @@ Dialog {
     id: otaDialog
     title: "Update Firmware"
     modal: true
-    width: 460
-    height: 340
+    width: 340
+    height: 260
+    padding: 12
+    anchors.centerIn: parent
 
     property int  progress: 0
     property string statusMsg: ""
@@ -60,13 +62,12 @@ Dialog {
     }
 
     contentItem: Column {
-        spacing: 10
-        padding: 16
+        spacing: 6
 
         // Metadata box
         Rectangle {
             width: parent.width
-            height: 130
+            height: 118
             color: "#232334"
             radius: 6
             border.color: "#313145"
@@ -74,8 +75,8 @@ Dialog {
 
             Column {
                 anchors.fill: parent
-                anchors.margins: 12
-                spacing: 4
+                anchors.margins: 10
+                spacing: 2
 
                 Text {
                     text: "File:        fanmate.ino.bin"
@@ -159,7 +160,7 @@ Dialog {
         // Buttons
         Row {
             spacing: 12
-            anchors.horizontalCenter: parent.horizontalCenter
+            x: (parent.width - width) / 2
 
             // No / Close / Hide — left button
             Rectangle {
