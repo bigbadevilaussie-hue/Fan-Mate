@@ -89,7 +89,10 @@ def collect_changes():
         # current_settings() so the changes list only contains real diffs.
 
         if prev is not None and when is not None:
-            for key in sorted(set(prev) | set(cur)):
+            # Only diff keys that exist in BOTH files. Schema changes
+            # (keys added or removed between firmware versions) are not
+            # user-driven settings changes, so don't list them.
+            for key in sorted(set(prev) & set(cur)):
                 old = prev.get(key, "")
                 new = cur.get(key, "")
                 if old == new:

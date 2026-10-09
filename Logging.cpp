@@ -419,6 +419,7 @@ void log_write_config_snapshot() {
     f.printf("%s,temp.gear3,%.1f\n",          ts, config.tempGear3);
     f.printf("%s,temp.gear4,%.1f\n",          ts, config.tempGear4);
     f.printf("%s,temp.hysteresis,%.1f\n",     ts, config.tempHysteresis);
+    f.printf("%s,temp.delta_trigger,%.1f\n",  ts, config.deltaTrigger);
     f.printf("%s,boost.threshold,%d\n",  ts, config.boostThreshold);
     f.printf("%s,boost.on_hold,%d\n",     ts, config.boostOnHold);
     f.printf("%s,boost.off_hold,%d\n",    ts, config.boostOffHold);
