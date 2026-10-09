@@ -69,7 +69,7 @@ Item {
                 text: "BOOST"
                 color: lampRoot.boostLvl >= 1 ? "#cdd6f4" : "#4a5568"
                 font.family: "Helvetica Neue"
-                font.pixelSize: 8
+                font.pixelSize: 9
                 font.weight: Font.Bold
                 font.letterSpacing: 2
             }
@@ -93,7 +93,7 @@ Item {
                 text: "TEMP"
                 color: (lampRoot.tempLvl >= 1 || lampRoot.alertLvl === 1) ? "#cdd6f4" : "#4a5568"
                 font.family: "Helvetica Neue"
-                font.pixelSize: 8
+                font.pixelSize: 9
                 font.weight: Font.Bold
                 font.letterSpacing: 2
             }
@@ -117,7 +117,7 @@ Item {
                 text: "OPAL"
                 color: "#8a92a8"
                 font.family: "Helvetica Neue"
-                font.pixelSize: 8
+                font.pixelSize: 9
                 font.weight: Font.Bold
                 font.letterSpacing: 2
             }
@@ -141,7 +141,7 @@ Item {
                 text: "KILL"
                 color: lampRoot.killMode > 0 ? "#cdd6f4" : "#4a5568"
                 font.family: "Helvetica Neue"
-                font.pixelSize: 8
+                font.pixelSize: 9
                 font.weight: Font.Bold
                 font.letterSpacing: 2
             }

@@ -142,7 +142,7 @@ Item {
             text: v
             color: gaugeRoot.accentDim
             font.family: "Menlo"
-            font.pixelSize: 12
+            font.pixelSize: 11
             font.weight: Font.Medium
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
@@ -179,8 +179,8 @@ Item {
               : "--.- MB/s"
         color: gaugeRoot.valueColor
         font.family: "Menlo"
-        font.pixelSize: 14
-        font.weight: Font.Medium
+        font.pixelSize: 16
+        font.weight: Font.Bold
         z: 10
     }
 
@@ -191,7 +191,7 @@ Item {
         text: "NET"
         color: gaugeRoot.accentDim
         font.family: "Helvetica Neue"
-        font.pixelSize: 9
+        font.pixelSize: 10
         font.weight: Font.Bold
         font.letterSpacing: 3
     }

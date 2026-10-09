@@ -171,25 +171,25 @@ Item {
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: 24
+        anchors.verticalCenterOffset: 36
         text: gaugeRoot.hasData
               ? gaugeRoot.value.toFixed(0) + " RPM"
               : "---- RPM"
         color: gaugeRoot.valueColor
         font.family: "Menlo"
-        font.pixelSize: 14
-        font.weight: Font.Medium
+        font.pixelSize: 16
+        font.weight: Font.Bold
         z: 10
     }
 
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: 44
+        anchors.verticalCenterOffset: 56
         text: "FAN"
         color: gaugeRoot.accentDim
         font.family: "Helvetica Neue"
-        font.pixelSize: 9
+        font.pixelSize: 10
         font.weight: Font.Bold
         font.letterSpacing: 3
     }
