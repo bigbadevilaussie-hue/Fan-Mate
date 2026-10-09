@@ -191,7 +191,7 @@ Item {
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: 24
+        anchors.verticalCenterOffset: 36
         text: gaugeRoot.hasData
               ? gaugeRoot.value.toFixed(1) + " MB/s"
               : "--.- MB/s"
@@ -205,7 +205,7 @@ Item {
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: 44
+        anchors.verticalCenterOffset: 56
         text: "NET"
         color: gaugeRoot.accentDim
         font.family: "Helvetica Neue"

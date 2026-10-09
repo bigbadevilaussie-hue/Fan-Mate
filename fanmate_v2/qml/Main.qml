@@ -134,7 +134,7 @@ ApplicationWindow {
         }
 
         TempBar {
-            x: 800
+            x: parent.width - 24 - width
             y: 90
             width: 72
             height: 260
@@ -143,7 +143,8 @@ ApplicationWindow {
         }
 
         TrafficGauge {
-            x: 80
+            id: netGauge
+            x: 100
             y: 140
             width: 180
             height: 180
@@ -154,10 +155,11 @@ ApplicationWindow {
         }
 
         RpmGauge {
-            x: 280
+            id: rpmGauge
+            x: (parent.width - width) / 2
             y: 90
-            width: 285
-            height: 285
+            width: 240
+            height: 240
             value: dev.rpm || 0
             vmin: 0
             vmax: 7500
@@ -167,7 +169,8 @@ ApplicationWindow {
         }
 
         TempGauge {
-            x: 590
+            id: tempGauge
+            x: 620
             y: 140
             width: 180
             height: 180
@@ -178,6 +181,52 @@ ApplicationWindow {
             tempGear2: dev.tempGear2 || 32.0
             tempGear3: dev.tempGear3 || 34.0
             tempGear4: dev.tempGear4 || 36.0
+        }
+
+        // Three sparklines under their gauges
+        Sparkline {
+            x: netGauge.x + (netGauge.width - width) / 2
+            y: netGauge.y + netGauge.height + 6
+            width: 140
+            height: 32
+            maxSamples: 30
+            value: netGauge.value
+            lineColor: netGauge.valueColor
+            autoScale: true
+            minSpan: 1.0
+            hardMin: 0
+            threshold: netGauge.boostThresholdMb
+            thresholdInScale: false
+        }
+
+        Sparkline {
+            x: rpmGauge.x + (rpmGauge.width - width) / 2
+            y: rpmGauge.y + rpmGauge.height + 6
+            width: 140
+            height: 32
+            maxSamples: 30
+            value: rpmGauge.value
+            lineColor: rpmGauge.valueColor
+            autoScale: true
+            minSpan: 500
+            hardMin: 0
+            threshold: rpmGauge.rpmWarn
+            thresholdInScale: false
+        }
+
+        Sparkline {
+            x: tempGauge.x + (tempGauge.width - width) / 2
+            y: tempGauge.y + tempGauge.height + 6
+            width: 140
+            height: 32
+            maxSamples: 30
+            value: tempGauge.value
+            valid: tempGauge.hasData
+            lineColor: tempGauge.valueColor
+            autoScale: true
+            minSpan: 3
+            threshold: tempGauge.tempGear2
+            thresholdInScale: false
         }
 
         // bottom info row
