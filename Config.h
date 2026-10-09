@@ -22,7 +22,7 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "4.59"
+#define FAN_MATE_VERSION "4.60"
 
 #define DEBUG_VERBOSE 0
 
@@ -35,6 +35,10 @@ extern unsigned long phone_absent_since;
 #define TACH_PIN         3
 #define DS18B20_PIN      4
 #define PHONE_SENSE_PIN  1
+// v4.60: hall sensor temporarily disabled (shorted VCC/GND)
+// Set to 1 once the wiring is fixed. When 0, phonePresent is
+// forced true so the device never enters light sleep.
+#define HALL_SENSOR_ENABLED 0
 #define NTC_PIN          0
 
 #define PWM_FREQ      25000

@@ -100,6 +100,19 @@ float readNTC() {
 }
 
 void updatePhoneDetection() {
+#if !HALL_SENSOR_ENABLED
+    // Hall sensor disconnected. Force phone present so the device
+    // never enters light sleep and the fan runs autonomously.
+    static bool reported = false;
+    if (!reported) {
+        reported = true;
+        phonePresent = true;
+        phone_present_since = millis();
+        phone_absent_since = 0;
+        log_print("[PHONE] sensor disabled, forcing present\n");
+    }
+    return;
+#endif
     static bool lastState = false;
     static unsigned long lastChange = 0;
     static bool initialized = false;
