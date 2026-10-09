@@ -108,7 +108,11 @@ ApplicationWindow {
 
                     MenuButton {
                         text: "   Last 2 Hours"
-                        onTriggered: { menu.close(); reportsSection.expanded = false }
+                        onTriggered: {
+                            menu.close()
+                            reportsSection.expanded = false
+                            helloPanel.visible = true
+                        }
                     }
                     MenuButton {
                         text: "   Daily"
@@ -561,6 +565,10 @@ ApplicationWindow {
         running: serialPanel.visible
         repeat: true
         onTriggered: dev.fetchSerial()
+    }
+
+    HelloPanel {
+        id: helloPanel
     }
 
     OtaDialog {
