@@ -21,7 +21,7 @@ ApplicationWindow {
     // ---------- drawer ----------
     Drawer {
         id: menu
-        width: 200
+        width: 150
         height: root.height
         edge: Qt.LeftEdge
         interactive: true
@@ -37,29 +37,12 @@ ApplicationWindow {
             anchors.margins: 14
             spacing: 6
 
-            Text {
-                text: "🌀  Fan-Mate"
-                color: "#89b4fa"
-                font.family: "Helvetica Neue"
-                font.pixelSize: 18
-                font.bold: true
-                anchors.horizontalCenter: parent.horizontalCenter
-                topPadding: 8
-                bottomPadding: 8
-            }
-
-            Rectangle { width: parent.width; height: 1; color: "#313145" }
-
             MenuButton {
                 text: "📟  Serial"
                 onTriggered: {
                     menu.close()
                     root.openSerialPanel()
                 }
-            }
-            MenuButton {
-                text: "📍  Dashboard"
-                onTriggered: dev.open_url("http://fan-mate.local/")
             }
             Item {
                 id: reportsSection
@@ -137,7 +120,7 @@ ApplicationWindow {
             }
 
             MenuButton {
-                text: "📡  Update Firmware"
+                text: "📡  Firmware"
                 onTriggered: {
                     menu.close()
                     otaDialog.open()
