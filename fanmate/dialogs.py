@@ -81,7 +81,6 @@ class SettingsDialog(tk.Toplevel):
                 row=self._row, column=0, sticky="w", pady=6)
             seg = tk.Frame(root)
             seg.grid(row=self._row, column=1, sticky="e", pady=6)
-            label_map = {"off": "OFF", "normal": "NORMAL", "aggressive": "BEAST"}
             for opt in options:
                 tk.Radiobutton(
                     seg, text=label_map.get(opt, opt.upper()), variable=var, value=opt,
@@ -106,35 +105,23 @@ class SettingsDialog(tk.Toplevel):
         field("Delta trigger (°C)", self.delta_trigger)
 
         section("⚡", "BOOST")
-        mode_map = {0: "off", 1: "normal", 2: "aggressive"}
-        self.boost_mode = tk.StringVar(
-            value=mode_map.get(latest_config["boost"].get("mode", 1), "normal"))
-        segmented("Mode", self.boost_mode, ["off", "normal", "aggressive"])
 
-        norm = latest_config["boost"].get("normal", {})
-        aggr = latest_config["boost"].get("aggr", {})
+        b = latest_config["boost"]
+        self.boost_thr = tk.StringVar(value=str(b.get("threshold", 900)))
+        self.boost_on  = tk.StringVar(value=str(b.get("on_hold", 2)))
+        self.boost_off = tk.StringVar(value=str(b.get("off_hold", 4)))
 
-        self.norm_thr = tk.StringVar(value=str(norm.get("threshold", 700)))
-        self.norm_on  = tk.StringVar(value=str(norm.get("on_hold", 4)))
-        self.norm_off = tk.StringVar(value=str(norm.get("off_hold", 4)))
-        self.aggr_thr = tk.StringVar(value=str(aggr.get("threshold", 400)))
-        self.aggr_on  = tk.StringVar(value=str(aggr.get("on_hold", 2)))
-        self.aggr_off = tk.StringVar(value=str(aggr.get("off_hold", 8)))
-
-        for name, thr_v, on_v, off_v in [
-            ("Normal",     self.norm_thr, self.norm_on, self.norm_off),
-            ("Aggressive", self.aggr_thr, self.aggr_on, self.aggr_off),
-        ]:
-            tk.Label(root, text=name, font=("Helvetica Neue", 11, "bold"),
-                     anchor="w").grid(row=self._row, column=0, sticky="w", pady=4)
-            fr = tk.Frame(root)
-            fr.grid(row=self._row, column=1, sticky="e", pady=4)
-            for lbl, var in (("Thr", thr_v), ("On", on_v), ("Off", off_v)):
-                tk.Label(fr, text=lbl, font=("Helvetica Neue", 10)).pack(side="left", padx=(6, 2))
-                tk.Entry(fr, textvariable=var, width=5,
-                         font=("Helvetica Neue", 12), justify="right",
-                         relief="flat", highlightthickness=1).pack(side="left")
-            self._row += 1
+        tk.Label(root, text="Thresholds",
+                 font=("Helvetica Neue", 11, "bold"),
+                 anchor="w").grid(row=self._row, column=0, sticky="w", pady=4)
+        fr = tk.Frame(root)
+        fr.grid(row=self._row, column=1, sticky="e", pady=4)
+        for lbl, var in (("Thr", self.boost_thr), ("On", self.boost_on), ("Off", self.boost_off)):
+            tk.Label(fr, text=lbl, font=("Helvetica Neue", 10)).pack(side="left", padx=(6, 2))
+            tk.Entry(fr, textvariable=var, width=5,
+                     font=("Helvetica Neue", 12), justify="right",
+                     relief="flat", highlightthickness=1).pack(side="left")
+        self._row += 1
 
         btns = tk.Frame(root)
         btns.grid(row=self._row, column=0, columnspan=3, pady=(18, 4))
@@ -179,22 +166,11 @@ class SettingsDialog(tk.Toplevel):
 
     def apply(self):
         try:
-            mode_str = self.boost_mode.get()
-            mode_int = {"off": 0, "normal": 1, "aggressive": 2}[mode_str]
-
             payload = {
                 "boost": {
-                    "mode": mode_int,
-                    "normal": {
-                        "threshold": int(self.norm_thr.get()),
-                        "on_hold":   int(self.norm_on.get()),
-                        "off_hold":  int(self.norm_off.get()),
-                    },
-                    "aggr": {
-                        "threshold": int(self.aggr_thr.get()),
-                        "on_hold":   int(self.aggr_on.get()),
-                        "off_hold":  int(self.aggr_off.get()),
-                    },
+                    "threshold": int(self.boost_thr.get()),
+                    "on_hold":   int(self.boost_on.get()),
+                    "off_hold":  int(self.boost_off.get()),
                 },
                 "temp": {
                     "gear1": float(self.temp_g1.get()),
@@ -529,7 +505,7 @@ class DynaTune(tk.Toplevel):
             b = state.latest_config.get("boost", {})
             mode = b.get("mode", 1)
             if mode == 2:
-                thr = int(b.get("aggr", {}).get("threshold", 700))
+                thr = int(b.get("threshold", 900))
             else:
                 thr = int(b.get("normal", {}).get("threshold", 700))
         except Exception:
@@ -567,7 +543,7 @@ class DynaTune(tk.Toplevel):
             "phone":"PHONE", "sleep":"SLEEP", "ntc":"NTC",
             "ds18b20":"DS18B20", "rpm":"RPM", "stall":"STALL",
             "gear_order":"GEARS", "threshold":"THR",
-            "boost_mode":"MODE", "night_window":"WINDOW",
+
         }
         RECS = {
             "boost":    "boost.on_hold 4 \u2192 2  (or lower threshold)",
@@ -592,7 +568,6 @@ class DynaTune(tk.Toplevel):
             "stall":    "check fan connector",
             "gear_order":"fix gear thresholds in Settings",
             "threshold":"set 200\u201310000",
-            "boost_mode":"set to 0/1/2",
             "night_window":"fix night hours",
         }
 
@@ -695,7 +670,7 @@ class DynaTune(tk.Toplevel):
             ("DATA",     "data",     ["drive","clock","boot","opal_poll"]),
             ("DEVICE",   "device",   ["night_cap","heat_gears","hysteresis","storage"]),
             ("HARDWARE", "hardware", ["phone","sleep","ntc","ds18b20","rpm","stall"]),
-            ("CONFIG",   "config",   ["gear_order","threshold","boost_mode","night_window"]),
+            ("CONFIG",   "config",   ["gear_order","threshold"]),
         ]
 
         self._grid_cards = []

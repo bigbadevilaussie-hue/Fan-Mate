@@ -48,6 +48,15 @@ def http_poll_loop():
                 latest["fan_stall"] = d.get("fan_stall", 0)
                 latest["temp_lvl"]  = d.get("temp_lvl", 0)
 
+                # History arrays for QML MiniGraph / any consumer that
+                # needs the full /status history (not just the last value)
+                if "temp_hist" in d and isinstance(d["temp_hist"], list):
+                    latest["temp_hist"] = d["temp_hist"]
+                if "net_hist" in d and isinstance(d["net_hist"], list):
+                    latest["net_hist"] = d["net_hist"]
+                if "rpm_hist" in d and isinstance(d["rpm_hist"], list):
+                    latest["rpm_hist"] = d["rpm_hist"]
+
                 if latest["temp"] is not None:
                     temp_hist.append(float(latest["temp"]))
                 download_hist.append(latest["net_kbps"])

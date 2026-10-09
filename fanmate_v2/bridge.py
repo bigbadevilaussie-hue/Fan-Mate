@@ -42,6 +42,9 @@ class Bridge(QObject):
     tempGear3Changed = Signal()
     tempGear4Changed = Signal()
     boostThresholdChanged = Signal()
+    netHistChanged   = Signal()
+    tempHistChanged  = Signal()
+    rpmHistChanged   = Signal()
     otaProgress = Signal(int)
     otaStatus   = Signal(str)
     otaError    = Signal(str)
@@ -109,8 +112,22 @@ class Bridge(QObject):
             self.tempGear3Changed.emit()
         if self._changed("temp_gear4", self._get("temp_gear4", 36.0)):
             self.tempGear4Changed.emit()
-        if self._changed("boost_threshold", self._get("boost_threshold", 700)):
+        if self._changed("boost_threshold", self._get("boost_threshold", 900)):
             self.boostThresholdChanged.emit()
+
+        # History arrays from device — change detection by last 5 values
+        nh = state.latest.get("net_hist") or []
+        th = state.latest.get("temp_hist") or []
+        rh = state.latest.get("rpm_hist") or []
+        nh_key = ",".join(str(x) for x in nh[-5:]) if nh else ""
+        th_key = ",".join(str(x) for x in th[-5:]) if th else ""
+        rh_key = ",".join(str(x) for x in rh[-5:]) if rh else ""
+        if self._changed("net_hist_key", nh_key):
+            self.netHistChanged.emit()
+        if self._changed("temp_hist_key", th_key):
+            self.tempHistChanged.emit()
+        if self._changed("rpm_hist_key", rh_key):
+            self.rpmHistChanged.emit()
 
     @Slot(str)
     def open_url(self, url):
@@ -243,4 +260,22 @@ class Bridge(QObject):
 
     @Property(int, notify=boostThresholdChanged)
     def boostThreshold(self):
-        return int(self._get("boost_threshold", 700))
+        return int(self._get("boost_threshold", 900))
+
+    @Property(str, notify=netHistChanged)
+    def netHistJson(self):
+        import json as _json
+        h = state.latest.get("net_hist") or []
+        return _json.dumps(h)
+
+    @Property(str, notify=tempHistChanged)
+    def tempHistJson(self):
+        import json as _json
+        h = state.latest.get("temp_hist") or []
+        return _json.dumps(h)
+
+    @Property(str, notify=rpmHistChanged)
+    def rpmHistJson(self):
+        import json as _json
+        h = state.latest.get("rpm_hist") or []
+        return _json.dumps(h)

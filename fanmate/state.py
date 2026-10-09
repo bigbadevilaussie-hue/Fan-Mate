@@ -12,14 +12,11 @@ latest = {
     "temp": None, "fan": 0, "rpm": 0, "phone": 0, "alert": 0,
     "boost": 0, "fv": "?", "net_kbps": 0.0,
     "sleep": 0, "sleep_countdown": 0, "opal": 1, "fan_stall": 0,
+    "temp_hist": [], "net_hist": [], "rpm_hist": [],
 }
 latest_config = {
     "temp": {"gear1": 30.0, "gear2": 32.0, "gear3": 34.0, "gear4": 36.0, "hysteresis": 1.0, "delta_trigger": 5.1},
-    "boost": {
-        "mode": 1,
-        "normal": {"threshold": 700, "on_hold": 4, "off_hold": 4},
-        "aggr":   {"threshold": 400, "on_hold": 2, "off_hold": 8},
-    },
+    "boost": {"threshold": 900, "on_hold": 2, "off_hold": 4},
 }
 connected = False
 time_synced = False

@@ -135,6 +135,15 @@ static void handle_status() {
     }
     json += "],";
 
+    extern float webRpmHist[];
+    json += "\"rpm_hist\":[";
+    for (int i = 0; i < 60; i++) {
+        int idx = (webHistIdx + i) % 60;
+        if (i > 0) json += ",";
+        json += String((int)webRpmHist[idx]);
+    }
+    json += "],";
+
     json += "\"kill_mode\":" + String(kill_get_state()) + ",";
     json += "\"temp_gear1\":" + String(config.tempGear1, 1) + ",";
     json += "\"temp_gear2\":" + String(config.tempGear2, 1) + ",";
@@ -144,10 +153,7 @@ static void handle_status() {
     json += "\"delta_trigger\":" + String(config.deltaTrigger, 1) + ",";
     json += "\"temp_panic\":" + String(config.tempGear3, 1) + ",";
     json += "\"temp_kill\":" + String(config.tempGear4, 1) + ",";
-    int boostThr = 700;
-    if (config.boostMode == 1) boostThr = config.boostNormal.threshold;
-    else if (config.boostMode == 2) boostThr = config.boostAggr.threshold;
-    json += "\"boost_threshold\":" + String(boostThr);
+    json += "\"boost_threshold\":" + String(config.boostThreshold);
 
     json += "}";
 
@@ -167,17 +173,9 @@ static void handle_config_get() {
     json += "},";
 
     json += "\"boost\":{";
-    json += "\"mode\":" + String(config.boostMode) + ",";
-    json += "\"normal\":{";
-    json += "\"threshold\":" + String(config.boostNormal.threshold) + ",";
-    json += "\"on_hold\":" + String(config.boostNormal.on_hold) + ",";
-    json += "\"off_hold\":" + String(config.boostNormal.off_hold);
-    json += "},";
-    json += "\"aggr\":{";
-    json += "\"threshold\":" + String(config.boostAggr.threshold) + ",";
-    json += "\"on_hold\":" + String(config.boostAggr.on_hold) + ",";
-    json += "\"off_hold\":" + String(config.boostAggr.off_hold);
-    json += "}";
+    json += "\"threshold\":" + String(config.boostThreshold) + ",";
+    json += "\"on_hold\":" + String(config.boostOnHold) + ",";
+    json += "\"off_hold\":" + String(config.boostOffHold);
     json += "}";
 
     json += "}";

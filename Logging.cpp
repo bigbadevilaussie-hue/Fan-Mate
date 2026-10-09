@@ -419,13 +419,9 @@ void log_write_config_snapshot() {
     f.printf("%s,temp.gear3,%.1f\n",          ts, config.tempGear3);
     f.printf("%s,temp.gear4,%.1f\n",          ts, config.tempGear4);
     f.printf("%s,temp.hysteresis,%.1f\n",     ts, config.tempHysteresis);
-    f.printf("%s,boost.mode,%d\n",            ts, config.boostMode);
-    f.printf("%s,boost.normal.threshold,%d\n", ts, config.boostNormal.threshold);
-    f.printf("%s,boost.normal.on_hold,%d\n",   ts, config.boostNormal.on_hold);
-    f.printf("%s,boost.normal.off_hold,%d\n",  ts, config.boostNormal.off_hold);
-    f.printf("%s,boost.aggr.threshold,%d\n",   ts, config.boostAggr.threshold);
-    f.printf("%s,boost.aggr.on_hold,%d\n",     ts, config.boostAggr.on_hold);
-    f.printf("%s,boost.aggr.off_hold,%d\n",    ts, config.boostAggr.off_hold);
+    f.printf("%s,boost.threshold,%d\n",  ts, config.boostThreshold);
+    f.printf("%s,boost.on_hold,%d\n",     ts, config.boostOnHold);
+    f.printf("%s,boost.off_hold,%d\n",    ts, config.boostOffHold);
     f.close();
 
     log_print("[CFG] snapshot: %s\n", name);

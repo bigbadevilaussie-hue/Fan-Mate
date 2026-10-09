@@ -34,6 +34,7 @@ unsigned long last_tick     = 0;
 #define WEB_HIST_LEN 60
 float webTempHist[WEB_HIST_LEN] = {0};
 float webNetHist[WEB_HIST_LEN]  = {0};
+float webRpmHist[WEB_HIST_LEN]  = {0};
 int   webHistIdx = 0;
 
 void enter_sleep() {
@@ -160,6 +161,7 @@ static void tick_15s() {
 
     webTempHist[webHistIdx] = currentTemp;
     webNetHist[webHistIdx]  = kbps_smooth;
+    webRpmHist[webHistIdx]  = (float)fanRPM;
     webHistIdx = (webHistIdx + 1) % WEB_HIST_LEN;
 
     auto_boost_update(kbps_smooth, currentTemp, opal_ok);

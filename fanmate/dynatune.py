@@ -14,7 +14,7 @@ def _status_dots(status):
     return {"PASS": 5, "WARN": 3, "FAIL": 1, "IDLE": 2}.get(status, 0)
 
 
-def _test_boost(rows, boost_thr=700):
+def _test_boost(rows, boost_thr=900):
     """Did boost ramp cleanly when rate supported it?
 
     Look at the highest network rate in the window. If it was >= 3x thr,
@@ -517,27 +517,14 @@ def _test_gear_order(cfg):
 
 def _test_threshold(cfg):
     b = (cfg or {}).get("boost", {})
-    mode = b.get("mode", 1)
-    if mode == 2:
-        thr = b.get("aggr", {}).get("threshold", 0)
-    elif mode == 1:
-        thr = b.get("normal", {}).get("threshold", 0)
-    else:
-        return {"status": "IDLE", "metric": "mode 0", "detail": "boost off"}
+    thr = b.get("threshold", 0)
+    if thr == 0:
+        return {"status": "IDLE", "metric": "no config", "detail": ""}
     if 200 <= thr <= 10000:
         return {"status": "PASS", "metric": f"{thr} KB/s", "detail": ""}
     return {"status": "FAIL", "metric": f"{thr} KB/s",
             "detail": "outside 200–10000"}
 
-
-def _test_boost_mode(cfg):
-    mode = (cfg or {}).get("boost", {}).get("mode", None)
-    if mode is None:
-        return {"status": "IDLE", "metric": "no config", "detail": ""}
-    if mode in (0, 1, 2):
-        names = {0: "off", 1: "normal", 2: "aggr"}
-        return {"status": "PASS", "metric": names[mode], "detail": ""}
-    return {"status": "FAIL", "metric": str(mode), "detail": "not 0/1/2"}
 
 
 
@@ -565,7 +552,7 @@ def analyse(rows, boost_thr=700, live_status=None, live_config=None,
       data     — drive / clock / boot / opal_poll
       device   — heat_gears / hysteresis / storage
       hardware — phone / sleep / ntc / ds18b20 / rpm / stall
-      config   — gear_order / threshold / boost_mode
+      config   — gear_order / threshold
     """
     cfg = live_config or {}
     t_cfg   = cfg.get("temp", {}) if cfg else {}
@@ -606,7 +593,6 @@ def analyse(rows, boost_thr=700, live_status=None, live_config=None,
         "config": {
             "gear_order":   _test_gear_order(cfg),
             "threshold":    _test_threshold(cfg),
-            "boost_mode":   _test_boost_mode(cfg),
         },
     }
 
@@ -632,7 +618,6 @@ def analyse(rows, boost_thr=700, live_status=None, live_config=None,
         "stall":        "Fan stall not recovering",
         "gear_order":   "Heat gear order invalid",
         "threshold":    "Boost threshold out of range",
-        "boost_mode":   "Boost mode invalid",
     }
 
     warns = []

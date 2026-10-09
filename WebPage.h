@@ -197,24 +197,12 @@ canvas {
   </div>
 
   <div class="card">
-    <div class="graph-label">📥 Network Rate</div>
-    <div class="graph-value" id="rate">-- KB/s</div>
-    <canvas id="net-graph" width="800" height="200"></canvas>
+    <div class="lbl">📥 Network Rate</div>
+    <div class="val big" id="rate">-- KB/s</div>
   </div>
-
-  <div class="card">
-    <div class="graph-label">📈 Temperature History</div>
-    <canvas id="temp-graph" width="800" height="200"></canvas>
-  </div>
-
 </div>
 
 <script>
-const HIST_LEN = 60;
-let tempHist = new Array(HIST_LEN).fill(null);
-let netHist  = new Array(HIST_LEN).fill(null);
-let threshold = 700;
-let tempWarning = 32.0;
 let everConnected = false;
 
 function emojiFor(t) {
@@ -256,86 +244,6 @@ function tempColor(t) {
   return 'red';
 }
 
-function drawGraph(canvasId, data, yMin, yMax, lineColor, fillColor, threshold, xLabels) {
-  const c = document.getElementById(canvasId);
-  const ctx = c.getContext('2d');
-  const W = c.width, H = c.height;
-  const padL = 60, padR = 34, padT = 14, padB = 20;
-  const pw = W - padL - padR;
-  const ph = H - padT - padB;
-
-  ctx.clearRect(0, 0, W, H);
-  ctx.font = '20px -apple-system, sans-serif';
-  ctx.fillStyle = '#7a8194';
-  ctx.textBaseline = 'middle';
-  ctx.textAlign = 'right';
-
-  ctx.strokeStyle = '#e6e9f0';
-  ctx.lineWidth = 1;
-  for (let i = 0; i < 4; i++) {
-    const frac = i / 3;
-    const y = padT + frac * ph;
-    const v = yMax - frac * (yMax - yMin);
-    ctx.beginPath();
-    ctx.moveTo(padL, y);
-    ctx.lineTo(W - padR, y);
-    ctx.stroke();
-    ctx.fillText(Math.round(v), padL - 6, y);
-  }
-
-  if (threshold !== null && threshold >= yMin && threshold <= yMax) {
-    const ty = padT + ph - ((threshold - yMin) / (yMax - yMin)) * ph;
-    ctx.strokeStyle = '#d20f39';
-    ctx.setLineDash([6, 4]);
-    ctx.beginPath();
-    ctx.moveTo(padL, ty);
-    ctx.lineTo(W - padR, ty);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#d20f39';
-    ctx.textAlign = 'left';
-    ctx.fillText(Math.round(threshold), W - padR + 3, ty);
-    ctx.fillStyle = '#7a8194';
-    ctx.textAlign = 'right';
-  }
-
-  const pts = [];
-  const n = data.length;
-  for (let i = 0; i < n; i++) {
-    const v = data[i];
-    if (v === null || v === undefined) continue;
-    const x = padL + (i / Math.max(1, n - 1)) * pw;
-    const y = padT + ph - ((v - yMin) / (yMax - yMin)) * ph;
-    pts.push([x, y]);
-  }
-  if (pts.length >= 2) {
-    ctx.beginPath();
-    ctx.moveTo(pts[0][0], padT + ph);
-    for (const p of pts) ctx.lineTo(p[0], p[1]);
-    ctx.lineTo(pts[pts.length - 1][0], padT + ph);
-    ctx.closePath();
-    ctx.fillStyle = fillColor;
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.moveTo(pts[0][0], pts[0][1]);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-    ctx.strokeStyle = lineColor;
-    ctx.lineWidth = 3;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.stroke();
-  }
-
-  ctx.fillStyle = '#7a8194';
-  ctx.textBaseline = 'top';
-  ctx.textAlign = 'left';
-  ctx.fillText(xLabels[0], padL, H - padB + 4);
-  ctx.textAlign = 'center';
-  ctx.fillText(xLabels[1], padL + pw / 2, H - padB + 4);
-  ctx.textAlign = 'right';
-  ctx.fillText(xLabels[2], W - padR, H - padB + 4);
-}
 function render(data) {
   const el = id => document.getElementById(id);
 
@@ -401,15 +309,6 @@ function render(data) {
   const rate = data.net_kbps || 0;
   el('rate').textContent = rate >= 1024 ? (rate / 1024).toFixed(2) + ' MB/s' : rate.toFixed(1) + ' KB/s';
 
-  if (data.temp_hist && Array.isArray(data.temp_hist)) tempHist = data.temp_hist;
-  if (data.net_hist && Array.isArray(data.net_hist)) netHist = data.net_hist;
-
-  if (data.temp_warning) tempWarning = data.temp_warning;
-  if (data.boost_threshold) threshold = data.boost_threshold;
-
-  drawGraph('net-graph', netHist, 0, 8192, '#1e66f5', '#cfe0ff', threshold, ['-15m', '-7m', 'now']);
-  drawGraph('temp-graph', tempHist, 15, 45, '#1e66f5', '#cfe0ff', tempWarning, ['-15m', '-7m', 'now']);
-
 
   if (data.kill_mode !== undefined) {
     renderKillBanner(data.kill_mode);
@@ -463,7 +362,7 @@ function renderKillBanner(mode) {
 }
 
 tick();
-setInterval(tick, 5000);
+setInterval(tick, 15000);
 </script>
 </body>
 </html>

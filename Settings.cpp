@@ -20,15 +20,9 @@ static void set_defaults() {
 
 
 
-    config.boostMode = 1;   // Normal
-
-    config.boostNormal.threshold = 700;
-    config.boostNormal.on_hold   = 4;
-    config.boostNormal.off_hold  = 4;
-
-    config.boostAggr.threshold = 400;
-    config.boostAggr.on_hold   = 2;
-    config.boostAggr.off_hold  = 8;
+    config.boostThreshold = 900;
+    config.boostOnHold    = 2;
+    config.boostOffHold   = 4;
 }
 
 void settings_load() {
@@ -48,15 +42,9 @@ void settings_load() {
 
 
 
-    config.boostMode      = prefs.getInt("boost.mode",         config.boostMode);
-
-    config.boostNormal.threshold = prefs.getInt("b.n.thr", config.boostNormal.threshold);
-    config.boostNormal.on_hold   = prefs.getInt("b.n.on",   config.boostNormal.on_hold);
-    config.boostNormal.off_hold  = prefs.getInt("b.n.off",  config.boostNormal.off_hold);
-
-    config.boostAggr.threshold = prefs.getInt("b.a.thr", config.boostAggr.threshold);
-    config.boostAggr.on_hold   = prefs.getInt("b.a.on",   config.boostAggr.on_hold);
-    config.boostAggr.off_hold  = prefs.getInt("b.a.off",  config.boostAggr.off_hold);
+    config.boostThreshold = prefs.getInt("boost.thr", config.boostThreshold);
+    config.boostOnHold    = prefs.getInt("boost.on",  config.boostOnHold);
+    config.boostOffHold   = prefs.getInt("boost.off", config.boostOffHold);
 
     prefs.end();
 
@@ -64,11 +52,8 @@ void settings_load() {
     Serial.printf("  temp warm=%.1f hot=%.1f hotter=%.1f crit=%.1f hyst=%.1f\n",
                   config.tempGear1, config.tempGear2, config.tempGear3,
                   config.tempGear4, config.tempHysteresis);
-    const char* bm = (config.boostMode == 0) ? "off"
-                   : (config.boostMode == 2) ? "aggr" : "normal";
-    Serial.printf("  boost.mode=%s normal(%d/%d) aggr(%d/%d)\n", bm,
-                  config.boostNormal.threshold, config.boostNormal.on_hold,
-                  config.boostAggr.threshold, config.boostAggr.on_hold);
+    Serial.printf("  boost thr=%d on=%d off=%d\n",
+                  config.boostThreshold, config.boostOnHold, config.boostOffHold);
 }
 
 void settings_save() {
@@ -83,13 +68,9 @@ void settings_save() {
 
 
 
-    prefs.putInt("boost.mode",             config.boostMode);
-    prefs.putInt("b.n.thr", config.boostNormal.threshold);
-    prefs.putInt("b.n.on",   config.boostNormal.on_hold);
-    prefs.putInt("b.n.off",  config.boostNormal.off_hold);
-    prefs.putInt("b.a.thr",   config.boostAggr.threshold);
-    prefs.putInt("b.a.on",     config.boostAggr.on_hold);
-    prefs.putInt("b.a.off",    config.boostAggr.off_hold);
+    prefs.putInt("boost.thr", config.boostThreshold);
+    prefs.putInt("boost.on",  config.boostOnHold);
+    prefs.putInt("boost.off", config.boostOffHold);
 
     prefs.end();
     Serial.println("[CFG] saved");
@@ -126,21 +107,9 @@ void settings_apply_json(const char* json) {
 
     if (doc.containsKey("boost")) {
         JsonObject b = doc["boost"];
-        if (b.containsKey("mode")) config.boostMode = b["mode"].as<int>();
-
-        if (b.containsKey("normal")) {
-            JsonObject n = b["normal"];
-            if (n.containsKey("threshold")) config.boostNormal.threshold = n["threshold"].as<int>();
-            if (n.containsKey("on_hold"))   config.boostNormal.on_hold   = n["on_hold"].as<int>();
-            if (n.containsKey("off_hold"))  config.boostNormal.off_hold  = n["off_hold"].as<int>();
-        }
-
-        if (b.containsKey("aggr")) {
-            JsonObject a = b["aggr"];
-            if (a.containsKey("threshold")) config.boostAggr.threshold = a["threshold"].as<int>();
-            if (a.containsKey("on_hold"))   config.boostAggr.on_hold   = a["on_hold"].as<int>();
-            if (a.containsKey("off_hold"))  config.boostAggr.off_hold  = a["off_hold"].as<int>();
-        }
+        if (b.containsKey("threshold")) config.boostThreshold = b["threshold"].as<int>();
+        if (b.containsKey("on_hold"))   config.boostOnHold    = b["on_hold"].as<int>();
+        if (b.containsKey("off_hold"))  config.boostOffHold   = b["off_hold"].as<int>();
     }
 
     settings_save();

@@ -6,7 +6,7 @@ Item {
 
     property real value: 0.0
     property real vmin: 0.0
-    property real vmax: 3.0
+    property real vmax: 4.0
 
     property real boostThresholdMb: 0.68
 
@@ -123,7 +123,7 @@ Item {
     }
 
     Repeater {
-        model: [1, 2, 3]
+        model: [1, 2, 3, 4]
         Rectangle {
             property real d: gaugeRoot.angDeg(modelData)
             width: 2; height: 16
@@ -137,7 +137,7 @@ Item {
     }
 
     Repeater {
-        model: [0.5, 1.5, 2.5]
+        model: [0.5, 1.5, 2.5, 3.5]
         Rectangle {
             property real d: gaugeRoot.angDeg(modelData)
             width: 1; height: 8
@@ -151,7 +151,7 @@ Item {
     }
 
     Repeater {
-        model: [1, 2, 3]
+        model: [1, 2, 3, 4]
         Text {
             property real d: gaugeRoot.angDeg(modelData)
             text: modelData

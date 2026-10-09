@@ -10,12 +10,6 @@
 //    boost : mode + normal/aggr profiles (nested)
 // ============================================================
 
-struct BoostProfile {
-    int threshold;   // KB/s
-    int on_hold;     // ticks over threshold to bump gear
-    int off_hold;    // ticks under threshold to drop gear
-};
-
 struct FanMateConfig {
     // Heat control (four gear thresholds, 30/32/34/36 by default)
     float   tempGear1;   // Warm     -> gear 1
@@ -26,10 +20,10 @@ struct FanMateConfig {
     float   deltaTrigger;  // phone-room delta that fires the guard (default 5.1)
 
 
-    // Boost
-    int     boostMode;      // 0=off, 1=normal, 2=aggr
-    BoostProfile boostNormal;
-    BoostProfile boostAggr;
+    // Boost (single profile, always active)
+    int     boostThreshold;   // KB/s
+    int     boostOnHold;      // ticks over threshold to bump gear
+    int     boostOffHold;     // ticks under threshold to drop gear
 };
 
 extern FanMateConfig config;

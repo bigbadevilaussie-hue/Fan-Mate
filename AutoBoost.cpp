@@ -22,19 +22,15 @@ static int           force_gear_value = 0;
 static unsigned long force_start      = 0;
 
 static int current_threshold() {
-    int t = 999999;
-    if (config.boostMode == 2)      t = config.boostAggr.threshold;
-    else if (config.boostMode == 1) t = config.boostNormal.threshold;
+    int t = config.boostThreshold;
     return (t < 1) ? 1 : t;
 }
 static int current_on_hold() {
-    int v = (config.boostMode == 2) ? config.boostAggr.on_hold
-          : (config.boostMode == 1) ? config.boostNormal.on_hold : 4;
+    int v = config.boostOnHold;
     return (v < 1) ? 1 : v;
 }
 static int current_off_hold() {
-    int v = (config.boostMode == 2) ? config.boostAggr.off_hold
-          : (config.boostMode == 1) ? config.boostNormal.off_hold : 4;
+    int v = config.boostOffHold;
     return (v < 1) ? 1 : v;
 }
 
@@ -57,8 +53,8 @@ static void reset_all() {
 
 void auto_boost_init() {
     reset_all();
-    log_print("[BOOST] init (mode=%d thr=%d on=%d off=%d)\n",
-              config.boostMode, current_threshold(),
+    log_print("[BOOST] init (thr=%d on=%d off=%d)\n",
+              current_threshold(),
               current_on_hold(), current_off_hold());
 }
 
@@ -80,11 +76,6 @@ void auto_boost_update(float net_kbps, float phone_temp, bool net_ok) {
         } else {
             return;
         }
-    }
-
-    if (config.boostMode == 0) {
-        reset_all();
-        return;
     }
 
     if (net_ok) {
