@@ -82,7 +82,26 @@ If the bump lands after the compile, the firmware reports the old version and lo
 Never mention sleep, rest, breaks, session length, time of day, or "good morning/evening". Do not suggest stopping. Do not wrap up sessions unless asked. Just answer the question and keep working.
 
 ### Patching
-Nick's zsh eats multi-line pastes. Always write the patch as a Python script to `/tmp/`, then run `python3 /tmp/patch.py`. Never paste heredocs or multi-line shell that edits files.
+Write each patch as a Python script using a heredoc into `/tmp/patch.py`, then run it in the same paste:
+
+```zsh
+cat > /tmp/patch.py <<'PYEOF'
+import os, shutil
+...
+PYEOF
+python3 /tmp/patch.py
+```
+
+- Always back up first with `shutil.copy2`.
+- Always end with a verification print.
+- Patch and run in one block.
+- Never paste standalone multi-line shell that edits files.
+
+### Working style
+- Don't guess. Read the screenshot, read the file, read the log. If unsure, say unsure.
+- Don't score, rate, or editorialise unless asked.
+- Don't reference time of day, session length, or wrap-up language.
+- One change at a time unless asked for more. Short replies.
 
 ### Naming
 GUI = Tk (`fanmate/*.py`). GUI2 = QML (`fanmate_v2/*`). Web = `WebPage.h` (needs flash). Firmware = `.cpp`/`.h`/`.ino`.
