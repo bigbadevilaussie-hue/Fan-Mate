@@ -23,12 +23,12 @@ Item {
         return boostLvl >= 1 ? zoneColors[boostLvl] : "#2a2a3a"
     }
     function tempState() {
-        return 1    // always lit
+        return (tempLvl >= 1 || alertLvl === 1) ? 1 : 0
     }
     function tempColor() {
         if (tempLvl >= 1) return tempColors[tempLvl]
         if (alertLvl === 1) return "#e67e22"     // delta guard
-        return "#2ecc71"                          // idle: green
+        return "#2a2a3a"                          // idle: off
     }
     function opalState() {
         return opal === 1 ? 1 : 1   // always on
@@ -91,7 +91,7 @@ Item {
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: "TEMP"
-                color: lampRoot.tempLvl >= 1 ? "#cdd6f4" : "#4a5568"
+                color: (lampRoot.tempLvl >= 1 || lampRoot.alertLvl === 1) ? "#cdd6f4" : "#4a5568"
                 font.family: "Helvetica Neue"
                 font.pixelSize: 8
                 font.weight: Font.Bold
