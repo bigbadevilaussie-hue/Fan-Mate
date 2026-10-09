@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 
 Rectangle {
     id: helloPanel
@@ -12,23 +13,25 @@ Rectangle {
     function open() {
         var raw = dev.report2hJson()
         try { reportData = JSON.parse(raw) } catch (e) { reportData = ({}) }
-        var arr = (reportData && reportData.net && reportData.net.samples) ? reportData.net.samples : []
-        spNet.setSamples(arr)
+        var netArr = (reportData && reportData.net && reportData.net.samples) ? reportData.net.samples : []
+        var fanArr = (reportData && reportData.fan && reportData.fan.samples) ? reportData.fan.samples : []
+        spNet.setSamples(netArr)
+        spFan.setSamples(fanArr)
         visible = true
     }
 
     Rectangle {
         anchors.fill: parent
-        anchors.margins: 40
+        anchors.margins: 14
         color: "#232334"
         border.color: "#313145"
         border.width: 1
         radius: 10
 
-        Column {
+        ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 14
+            anchors.margins: 12
+            spacing: 6
 
             Text {
                 text: "Last 2 Hours  ·  Network KB/s"
@@ -53,13 +56,38 @@ Rectangle {
 
             Sparkline {
                 id: spNet
-                width: parent.width
-                height: parent.height - 90
+                Layout.fillWidth: true
+                Layout.fillHeight: true
                 maxSamples: 120
                 intervalMs: 1000000
                 value: 0
                 valid: false
                 lineColor: "#55d7ff"
+                autoScale: true
+                minSpan: 1
+                hardMin: 0
+            }
+
+            Text {
+                text: "Fan %  ·  peak "
+                      + ((reportData && reportData.fan && reportData.fan.peak) || 0)
+                      + "   on "
+                      + ((reportData && reportData.fan && reportData.fan.on_pct) || 0) + "%"
+                color: "#7a8194"
+                font.family: "Menlo"
+                font.pixelSize: 11
+            }
+
+            Sparkline {
+                id: spFan
+                Layout.fillWidth: true
+                Layout.preferredHeight: 80
+                Layout.minimumHeight: 60
+                maxSamples: 120
+                intervalMs: 1000000
+                value: 0
+                valid: false
+                lineColor: "#2ecc71"
                 autoScale: true
                 minSpan: 1
                 hardMin: 0
