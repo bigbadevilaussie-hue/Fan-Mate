@@ -42,8 +42,8 @@ Item {
         return cRed
     }
 
-    readonly property bool hasData: value > 0
-    readonly property color valueColor: hasData ? zoneColor(value) : accentDim
+    readonly property bool hasData: true
+    readonly property color valueColor: zoneColor(value)
 
     readonly property real needleAngle: angDeg(hasData ? value : vmin)
     property real needlePos: needleAngle
@@ -172,9 +172,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
         anchors.verticalCenterOffset: 24
-        text: gaugeRoot.hasData
-              ? gaugeRoot.value.toFixed(0) + " RPM"
-              : "---- RPM"
+        text: gaugeRoot.value.toFixed(0) + " RPM"
         color: gaugeRoot.valueColor
         font.family: "Menlo"
         font.pixelSize: 14
