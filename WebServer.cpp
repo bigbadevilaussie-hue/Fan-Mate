@@ -34,11 +34,9 @@ static void handle_serial_page() {
 <!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Fan-Mate Serial</title>
 <style>
-body{font-family:ui-monospace,monospace;background:#181825;color:#cdd6f4;padding:20px;font-size:13px}
-h1{color:#89b4fa}
-#log{background:#232334;padding:14px;border-radius:8px;height:80vh;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
-a{color:#89b4fa}
-.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+html,body{margin:0;padding:0;height:100%;overflow:hidden}
+body{font-family:ui-monospace,monospace;background:#181825;color:#cdd6f4;font-size:13px}
+#log{background:#181825;padding:6px;height:100%;overflow-y:auto;white-space:pre-wrap;word-break:break-all;box-sizing:border-box}
 </style>
 <script>
 function refresh(){
@@ -55,7 +53,6 @@ setInterval(refresh, 2000);
 window.onload = refresh;
 </script>
 </head><body>
-<div class="top"><h1>Fan-Mate Serial</h1><a href="/">dashboard</a></div>
 <div id="log">loading...</div>
 </body></html>
 )rawliteral";
@@ -276,29 +273,41 @@ static void handle_log_clear() {
 
 static void handle_ota_upload() {
     HTTPUpload& upload = server.upload();
+    static uint32_t ota_total = 0;
+    static uint32_t ota_last_print = 0;
 
     if (upload.status == UPLOAD_FILE_START) {
-        Serial.printf("[OTA] start: %s\n", upload.filename.c_str());
+        log_print("[OTA] start: %s\n", upload.filename.c_str());
         otaInProgress = true;
         otaStarted = true;
+        ota_total = 0;
+        ota_last_print = 0;
 
         if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
-            Serial.printf("[OTA] begin FAILED: %s\n", Update.errorString());
+            log_print("[OTA] begin FAILED: %s\n", Update.errorString());
             otaStarted = false;
         }
     } else if (upload.status == UPLOAD_FILE_WRITE) {
         if (otaStarted) {
             if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
-                Serial.printf("[OTA] write FAILED: %s\n", Update.errorString());
+                log_print("[OTA] write FAILED: %s\n", Update.errorString());
                 otaStarted = false;
+            } else {
+                ota_total += upload.currentSize;
+                // print every 128 KB
+                if (ota_total - ota_last_print >= 131072) {
+                    ota_last_print = ota_total;
+                    log_print("[OTA] downloading %u KB\n",
+                              (unsigned)(ota_total / 1024));
+                }
             }
         }
     } else if (upload.status == UPLOAD_FILE_END) {
         if (otaStarted) {
             if (Update.end(true)) {
-                Serial.printf("[OTA] OK: %u bytes\n", upload.totalSize);
+                log_print("[OTA] done: %u bytes, rebooting\n", upload.totalSize);
             } else {
-                Serial.printf("[OTA] end FAILED: %s\n", Update.errorString());
+                log_print("[OTA] end FAILED: %s\n", Update.errorString());
             }
         }
     }

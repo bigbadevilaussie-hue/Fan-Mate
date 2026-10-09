@@ -22,7 +22,7 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "4.56"
+#define FAN_MATE_VERSION "4.58"
 
 #define DEBUG_VERBOSE 0
 
@@ -62,7 +62,7 @@ extern unsigned long phone_absent_since;
 #define WIFI_CONNECT_TIMEOUT_MS  15000
 #define WIFI_RETRY_INTERVAL_MS   30000
 
-#define SERIAL_BUF_LINES        50
+#define SERIAL_BUF_LINES        20
 #define PHONE_SLEEP_DELAY_MS    30000UL
 #define PHONE_WAKE_DELAY_MS      5000UL
 #define OPAL_LOGIN_REFRESH_MS   3000000
