@@ -72,7 +72,6 @@ ApplicationWindow {
                 onTriggered: dev.quit_app()
             }
 
-            Item { width: 1; height: 1 }
         }
     }
 
@@ -245,6 +244,7 @@ ApplicationWindow {
                 Column {
                     spacing: 1
                     anchors.verticalCenter: parent.verticalCenter
+                    width: 64
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "🌤️ OUT"
@@ -267,6 +267,7 @@ ApplicationWindow {
                 Column {
                     spacing: 1
                     anchors.verticalCenter: parent.verticalCenter
+                    width: 64
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "🏠 ROOM"
@@ -289,6 +290,7 @@ ApplicationWindow {
                 Column {
                     spacing: 1
                     anchors.verticalCenter: parent.verticalCenter
+                    width: 64
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "🕐 TIME"
@@ -326,6 +328,7 @@ ApplicationWindow {
                 Column {
                     spacing: 1
                     anchors.verticalCenter: parent.verticalCenter
+                    width: 64
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "📱 PHONE"
@@ -352,7 +355,7 @@ ApplicationWindow {
             anchors.bottom: parent.bottom
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottomMargin: 8
-            text: "GUI v" + root.guiVersion + "  ·  FW " + dev.fw
+            text: "GUI v" + root.guiVersion + "  ·  FW " + (dev.fw || "?")
             color: "#333"
             font.family: "Menlo"
             font.pixelSize: 10
@@ -398,7 +401,7 @@ ApplicationWindow {
                         anchors.verticalCenter: parent.verticalCenter
                     }
 
-                    Item { width: parent.width - 320; height: 1 }
+                    Item { width: parent.width - 340; height: 1 }
 
                     Rectangle {
                         width: 80; height: 26; radius: 4
@@ -476,7 +479,7 @@ ApplicationWindow {
                         id: serialWeb
                         anchors.fill: parent
                         anchors.margins: 2
-                        url: dev.serialUrl
+                        url: serialPanel.visible ? dev.serialUrl : ""
                     }
                 }
             }
