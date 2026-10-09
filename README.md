@@ -106,6 +106,18 @@ python3 /tmp/patch.py
 ### Naming
 GUI = Tk (`fanmate/*.py`). GUI2 = QML (`fanmate_v2/*`). Web = `WebPage.h` (needs flash). Firmware = `.cpp`/`.h`/`.ino`.
 
+### Handoff — read this first
+
+The README alone is not enough. Before changing anything, ask for:
+
+- repo.txt, dump.txt, firmware_dump.txt — three dumps written to Desktop. Ask how they were produced.
+- ls ~/Documents/Arduino/libraries/Adafruit_SSD1306_72x40/ — custom fork, not in the repo, required to compile.
+- git ls-files secrets.h — if it prints anything, credentials in that file are tracked and need rotating.
+- Which GUI is the live target. README says QML is parked; recent commits say otherwise. Ask, do not assume.
+- If touching DynaTune or log analysis: one log-*.csv and dynatune-history.csv from ~/Documents/FanMate_logs/.
+
+Do not touch code until all three dumps and the library listing are in hand.
+
 ### Gotchas
 - Catalina mDNS slow. Use IP `192.168.8.242`, not `.local`.
 - `WiFi.RSSI()` returns 0 when disconnected.
