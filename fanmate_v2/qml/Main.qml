@@ -132,6 +132,11 @@ ApplicationWindow {
             Rectangle { width: parent.width; height: 1; color: "#313145" }
 
             MenuButton {
+                text: "🎛️  Dyna Tune"
+                onTriggered: { menu.close() }
+            }
+
+            MenuButton {
                 text: "📡  Update Firmware"
                 onTriggered: {
                     menu.close()
