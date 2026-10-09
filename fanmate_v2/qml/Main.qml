@@ -130,7 +130,7 @@ ApplicationWindow {
         }
 
         BoostBar {
-            x: 24
+            x: netGauge.x - 3 - width
             y: 90
             width: 72
             height: 260
@@ -138,7 +138,7 @@ ApplicationWindow {
         }
 
         TempBar {
-            x: parent.width - 24 - width
+            x: tempGauge.x + 167
             y: 90
             width: 72
             height: 260
@@ -148,9 +148,9 @@ ApplicationWindow {
 
         TrafficGauge {
             id: netGauge
-            x: 100
+            x: rpmGauge.x - 139
             y: 140
-            width: 180
+            width: 140
             height: 180
             value: (dev.netKbps || 0) / 1024.0
             vmin: 0
@@ -162,7 +162,7 @@ ApplicationWindow {
             id: rpmGauge
             x: (parent.width - width) / 2
             y: 90
-            width: 240
+            width: 190
             height: 240
             value: dev.rpm || 0
             vmin: 0
@@ -174,9 +174,9 @@ ApplicationWindow {
 
         TempGauge {
             id: tempGauge
-            x: 620
+            x: rpmGauge.x + 205
             y: 140
-            width: 180
+            width: 140
             height: 180
             value: dev.temp || 0
             vmin: 18.0

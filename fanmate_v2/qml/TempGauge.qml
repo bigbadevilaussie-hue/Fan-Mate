@@ -24,7 +24,7 @@ Item {
     implicitHeight: 240
     readonly property real cx: width / 2
     readonly property real cy: height / 2
-    readonly property real rArc: width / 2 - 42
+    readonly property real rArc: width / 2 - 22
     readonly property real rNum: rArc + 24
     readonly property real startDeg: -135
     readonly property real sweepDeg: 270
@@ -115,11 +115,11 @@ Item {
         Rectangle {
             property real v: (gaugeRoot.firstTick + index) * gaugeRoot.tickStep
             property real d: gaugeRoot.angDeg(v)
-            width: 2; height: 16
+            width: 2; height: 9
             color: gaugeRoot.zoneColor(v)
             antialiasing: true
-            x: gaugeRoot.xAt(d, gaugeRoot.rArc - 8) - width / 2
-            y: gaugeRoot.yAt(d, gaugeRoot.rArc - 8) - height / 2
+            x: gaugeRoot.xAt(d, gaugeRoot.rArc + 10) - width / 2
+            y: gaugeRoot.yAt(d, gaugeRoot.rArc + 10) - height / 2
             rotation: d
             transformOrigin: Item.Center
         }
@@ -131,11 +131,11 @@ Item {
             property real v: (gaugeRoot.firstTick + index) * gaugeRoot.tickStep + gaugeRoot.tickStep / 2
             property real d: gaugeRoot.angDeg(v)
             visible: v < gaugeRoot.vmax
-            width: 1; height: 8
-            color: "#2a3a44"
+            width: 1; height: 5
+            color: "#3d5565"
             antialiasing: true
-            x: gaugeRoot.xAt(d, gaugeRoot.rArc - 4) - width / 2
-            y: gaugeRoot.yAt(d, gaugeRoot.rArc - 4) - height / 2
+            x: gaugeRoot.xAt(d, gaugeRoot.rArc + 8) - width / 2
+            y: gaugeRoot.yAt(d, gaugeRoot.rArc + 8) - height / 2
             rotation: d
             transformOrigin: Item.Center
         }

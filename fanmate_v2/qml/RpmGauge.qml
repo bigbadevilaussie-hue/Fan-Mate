@@ -23,7 +23,7 @@ Item {
     implicitHeight: 240
     readonly property real cx: width / 2
     readonly property real cy: height / 2
-    readonly property real rArc: width / 2 - 42
+    readonly property real rArc: width / 2 - 17
     readonly property real rNum: rArc + 24
     readonly property real startDeg: -135
     readonly property real sweepDeg: 270
@@ -109,11 +109,11 @@ Item {
         model: [1, 2, 3, 4, 5, 6, 7]
         Rectangle {
             property real d: gaugeRoot.angDeg(modelData * 1000)
-            width: 2; height: 16
+            width: 2; height: 9
             color: gaugeRoot.zoneColor(modelData * 1000)
             antialiasing: true
-            x: gaugeRoot.xAt(d, gaugeRoot.rArc - 8) - width / 2
-            y: gaugeRoot.yAt(d, gaugeRoot.rArc - 8) - height / 2
+            x: gaugeRoot.xAt(d, gaugeRoot.rArc + 10) - width / 2
+            y: gaugeRoot.yAt(d, gaugeRoot.rArc + 10) - height / 2
             rotation: d
             transformOrigin: Item.Center
         }
@@ -123,11 +123,11 @@ Item {
         model: [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5]
         Rectangle {
             property real d: gaugeRoot.angDeg(modelData * 1000)
-            width: 1; height: 8
-            color: "#2a3a44"
+            width: 1; height: 5
+            color: "#3d5565"
             antialiasing: true
-            x: gaugeRoot.xAt(d, gaugeRoot.rArc - 4) - width / 2
-            y: gaugeRoot.yAt(d, gaugeRoot.rArc - 4) - height / 2
+            x: gaugeRoot.xAt(d, gaugeRoot.rArc + 8) - width / 2
+            y: gaugeRoot.yAt(d, gaugeRoot.rArc + 8) - height / 2
             rotation: d
             transformOrigin: Item.Center
         }
