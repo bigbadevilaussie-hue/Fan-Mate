@@ -65,7 +65,7 @@ OTA: Tk GUI menu → 📡 Update Firmware.
 
 https://github.com/bigbadevilaussie-hue/Fan-Mate
 
-Related: https://github.com/bigbadevilaussie-hue/Bike-Mate
+Related: [Bike-Mate](https://github.com/bigbadevilaussie-hue/Bike-Mate) — ESP32-C3, same OLED fork, same OTA/GitHub-upload pattern. Still on the breadboard. Fan-Mate is the reference implementation; port to Bike-Mate once Fan-Mate is stable.
 
 ## Rules
 
