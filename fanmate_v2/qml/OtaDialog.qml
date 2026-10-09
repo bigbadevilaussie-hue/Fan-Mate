@@ -23,6 +23,7 @@ Dialog {
     property string fwBuilt: "?"
     property bool   fwStale: false
     property bool   fwExists: false
+    property bool   sameVersion: false
 
     function loadMetadata() {
         otaDialog.srcVer = dev.firmwareSourceVer
@@ -32,6 +33,8 @@ Dialog {
         otaDialog.fwBuilt = dev.firmwareBuilt
         otaDialog.fwStale = (dev.firmwareStale === "1")
         otaDialog.fwExists = (dev.firmwareExists === "1")
+        otaDialog.sameVersion = (otaDialog.srcVer === otaDialog.devVer &&
+                                 otaDialog.srcVer !== "?")
         otaDialog.progress = 0
         otaDialog.uploading = false
         otaDialog.done = false
@@ -39,6 +42,10 @@ Dialog {
     }
 
     onOpened: loadMetadata()
+    onClosed: {
+        otaDialog.uploading = false
+        otaDialog.done = false
+    }
 
     background: Rectangle {
         color: "#181825"
@@ -168,7 +175,7 @@ Dialog {
                 height: 34
                 radius: 6
                 color: noArea.pressed ? "#313145" : "#232334"
-                border.color: "#313145"
+                border.color: otaDialog.sameVersion ? "#89b4fa" : "#313145"
                 border.width: 1
 
                 Text {
@@ -193,7 +200,7 @@ Dialog {
                 radius: 6
                 visible: !otaDialog.uploading && !otaDialog.done
                 color: yesArea.pressed ? "#1e66f5" : "#232334"
-                border.color: "#89b4fa"
+                border.color: otaDialog.sameVersion ? "#313145" : "#89b4fa"
                 border.width: 1
                 opacity: otaDialog.fwExists ? 1.0 : 0.4
 
@@ -211,9 +218,7 @@ Dialog {
                     anchors.fill: parent
                     enabled: otaDialog.fwExists
                     onClicked: {
-                        otaDialog.uploading = true
-                        otaDialog.progress = 0
-                        otaDialog.statusMsg = "Uploading " + otaDialog.fwSize + "..."
+                        otaDialog.close()
                         dev.upload_firmware(dev.firmwarePath)
                     }
                 }

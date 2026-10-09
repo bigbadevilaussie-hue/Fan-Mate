@@ -49,6 +49,7 @@ ApplicationWindow {
                 onTriggered: {
                     menu.close()
                     serialPanel.visible = true
+                    serialWeb.url = dev.freshSerialUrl()
                     dev.fetchSerial()
                 }
             }
@@ -479,7 +480,7 @@ ApplicationWindow {
                         id: serialWeb
                         anchors.fill: parent
                         anchors.margins: 2
-                        url: serialPanel.visible ? dev.serialUrl : ""
+                        zoomFactor: 1.15
                     }
                 }
             }

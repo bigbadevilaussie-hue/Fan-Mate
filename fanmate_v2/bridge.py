@@ -484,6 +484,11 @@ class Bridge(QObject):
     def serialUrl(self):
         return "http://192.168.8.242/serial"
 
+    @Slot(result=str)
+    def freshSerialUrl(self):
+        import time
+        return "http://192.168.8.242/serial?t=" + str(int(time.time()))
+
     @Property(str, notify=serialChanged)
     def serialText(self):
         return self._serial_text
