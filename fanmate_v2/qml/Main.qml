@@ -61,6 +61,76 @@ ApplicationWindow {
                 text: "📍  Dashboard"
                 onTriggered: dev.open_url("http://fan-mate.local/")
             }
+            Item {
+                id: reportsSection
+                width: parent.width
+                height: reportsHeader.height + reportsChildren.height
+
+                property bool expanded: false
+
+                Rectangle {
+                    id: reportsHeader
+                    width: parent.width
+                    height: 40
+                    color: reportsArea.pressed ? "#2a2a3a" : "transparent"
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.left: parent.left
+                        anchors.leftMargin: 10
+                        text: "📊  Reports"
+                        color: "#cdd6f4"
+                        font.family: "Helvetica Neue"
+                        font.pixelSize: 13
+                    }
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.right: parent.right
+                        anchors.rightMargin: 10
+                        text: "▸"
+                        color: "#cdd6f4"
+                        font.pixelSize: 12
+                        rotation: reportsSection.expanded ? 90 : 0
+                        Behavior on rotation { NumberAnimation { duration: 150 } }
+                    }
+
+                    MouseArea {
+                        id: reportsArea
+                        anchors.fill: parent
+                        onClicked: reportsSection.expanded = !reportsSection.expanded
+                    }
+                }
+
+                Column {
+                    id: reportsChildren
+                    anchors.top: reportsHeader.bottom
+                    width: parent.width
+                    height: reportsSection.expanded ? childrenRect.height : 0
+                    clip: true
+                    Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
+
+                    MenuButton {
+                        text: "   Last 2 Hours"
+                        onTriggered: { menu.close(); reportsSection.expanded = false }
+                    }
+                    MenuButton {
+                        text: "   Daily"
+                        onTriggered: { menu.close(); reportsSection.expanded = false }
+                    }
+                    MenuButton {
+                        text: "   Weekly"
+                        onTriggered: { menu.close(); reportsSection.expanded = false }
+                    }
+                    MenuButton {
+                        text: "   Settings History"
+                        onTriggered: { menu.close(); reportsSection.expanded = false }
+                    }
+                }
+            }
+
+            Rectangle { width: parent.width; height: 1; color: "#313145" }
+
             MenuButton {
                 text: "📡  Update Firmware"
                 onTriggered: {
