@@ -10,7 +10,7 @@ ApplicationWindow {
     visible: true
     title: "Fan-Mate v2"
     color: "#000000"
-    property string guiVersion: "1.14"
+    property string guiVersion: "1.11"
 
     function openSerialPanel() {
         serialPanel.visible = true
@@ -255,7 +255,7 @@ ApplicationWindow {
                         text: "🌤️ OUT"
                         color: "#4a5568"
                         font.family: "Helvetica Neue"
-                        font.pixelSize: 9
+                        font.pixelSize: 8
                         font.weight: Font.Bold
                         font.letterSpacing: 1
                     }
@@ -264,8 +264,8 @@ ApplicationWindow {
                         text: (dev.outdoor > -90) ? dev.outdoor.toFixed(1) + "°C" : "--.-°C"
                         color: "#cdd6f4"
                         font.family: "Menlo"
-                        font.pixelSize: 15
-                        font.weight: Font.Bold
+                        font.pixelSize: 14
+                        font.weight: Font.Medium
                     }
                 }
 
@@ -278,7 +278,7 @@ ApplicationWindow {
                         text: "🏠 ROOM"
                         color: "#4a5568"
                         font.family: "Helvetica Neue"
-                        font.pixelSize: 9
+                        font.pixelSize: 8
                         font.weight: Font.Bold
                         font.letterSpacing: 1
                     }
@@ -287,8 +287,8 @@ ApplicationWindow {
                         text: (dev.room > -90) ? dev.room.toFixed(1) + "°C" : "--.-°C"
                         color: "#cdd6f4"
                         font.family: "Menlo"
-                        font.pixelSize: 15
-                        font.weight: Font.Bold
+                        font.pixelSize: 14
+                        font.weight: Font.Medium
                     }
                 }
 
@@ -301,7 +301,7 @@ ApplicationWindow {
                         text: "🕐 TIME"
                         color: "#4a5568"
                         font.family: "Helvetica Neue"
-                        font.pixelSize: 9
+                        font.pixelSize: 8
                         font.weight: Font.Bold
                         font.letterSpacing: 1
                     }
@@ -310,8 +310,8 @@ ApplicationWindow {
                         anchors.horizontalCenter: parent.horizontalCenter
                         color: "#cdd6f4"
                         font.family: "Menlo"
-                        font.pixelSize: 15
-                        font.weight: Font.Bold
+                        font.pixelSize: 14
+                        font.weight: Font.Medium
                         Timer {
                             interval: 1000
                             running: true
@@ -339,7 +339,7 @@ ApplicationWindow {
                         text: "📱 PHONE"
                         color: "#4a5568"
                         font.family: "Helvetica Neue"
-                        font.pixelSize: 9
+                        font.pixelSize: 8
                         font.weight: Font.Bold
                         font.letterSpacing: 1
                     }
@@ -348,8 +348,8 @@ ApplicationWindow {
                         text: dev.phone ? "YES" : "NO"
                         color: dev.phone ? "#2ecc71" : "#7a8194"
                         font.family: "Menlo"
-                        font.pixelSize: 15
-                        font.weight: Font.Bold
+                        font.pixelSize: 14
+                        font.weight: Font.Medium
                     }
                 }
             }

@@ -37,11 +37,10 @@ Item {
     function yAt(deg, r) { return cy - r * Math.cos(deg * Math.PI / 180) }
 
     function zoneColor(v) {
-        if (v < tempGear1) return cGreen
-        if (v < tempGear2) return cYellow
-        if (v < tempGear3) return cOrange
-        if (v < tempGear4) return cRed
-        return "#d20f39"    // Critical: deep red, matches StatusLamps tempColors[4]
+        if (v < tempGear2) return cGreen
+        if (v < tempGear3) return cYellow
+        if (v < tempGear4) return cOrange
+        return cRed
     }
 
     readonly property real tickStep: 5
@@ -181,26 +180,26 @@ Item {
 
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: 36
+        anchors.top: parent.verticalCenter
+        anchors.topMargin: 20
         text: gaugeRoot.hasData
               ? gaugeRoot.value.toFixed(1) + "\u00B0C"
               : "--.-\u00B0C"
         color: gaugeRoot.valueColor
         font.family: "Menlo"
-        font.pixelSize: 16
-        font.weight: Font.Bold
+        font.pixelSize: 14
+        font.weight: Font.Medium
         z: 10
     }
 
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: 56
+        anchors.top: parent.verticalCenter
+        anchors.topMargin: 40
         text: "PHONE"
         color: gaugeRoot.accentDim
         font.family: "Helvetica Neue"
-        font.pixelSize: 10
+        font.pixelSize: 9
         font.weight: Font.Bold
         font.letterSpacing: 3
     }

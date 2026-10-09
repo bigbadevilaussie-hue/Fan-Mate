@@ -42,7 +42,7 @@ Item {
                     text: barRoot.names[lampGear]
                     color: active ? "#0d1216" : "#4a5568"
                     font.family: "Helvetica Neue"
-                    font.pixelSize: 11
+                    font.pixelSize: 10
                     font.weight: Font.Bold
                     font.letterSpacing: 1
                 }
