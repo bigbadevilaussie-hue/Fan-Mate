@@ -105,9 +105,9 @@ Item {
     }
 
     Repeater {
-        model: Math.floor(gaugeRoot.vmax)
+        model: Math.floor(gaugeRoot.vmax) + 1
         Rectangle {
-            property real v: index + 1
+            property real v: index
             property real d: gaugeRoot.angDeg(v)
             width: 2; height: 16
             color: gaugeRoot.zoneColor(v)
@@ -135,9 +135,9 @@ Item {
     }
 
     Repeater {
-        model: Math.floor(gaugeRoot.vmax)
+        model: Math.floor(gaugeRoot.vmax) + 1
         Text {
-            property real v: index + 1
+            property real v: index
             property real d: gaugeRoot.angDeg(v)
             text: v
             color: gaugeRoot.accentDim
@@ -173,13 +173,13 @@ Item {
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: 36
+        anchors.verticalCenterOffset: 58
         text: gaugeRoot.hasData
               ? gaugeRoot.value.toFixed(1) + " MB/s"
               : "--.- MB/s"
         color: gaugeRoot.valueColor
         font.family: "Menlo"
-        font.pixelSize: 14
+        font.pixelSize: 11
         font.weight: Font.Medium
         z: 10
     }
@@ -187,11 +187,11 @@ Item {
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: 56
+        anchors.verticalCenterOffset: 74
         text: "NET"
         color: gaugeRoot.accentDim
-        font.family: "Helvetica Neue"
-        font.pixelSize: 9
+        font.family: "Menlo"
+        font.pixelSize: 10
         font.weight: Font.Bold
         font.letterSpacing: 3
     }

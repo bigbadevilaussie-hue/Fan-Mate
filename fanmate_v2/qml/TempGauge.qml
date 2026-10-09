@@ -181,13 +181,13 @@ Item {
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.verticalCenter
-        anchors.topMargin: 20
+        anchors.topMargin: 58
         text: gaugeRoot.hasData
               ? gaugeRoot.value.toFixed(1) + "\u00B0C"
               : "--.-\u00B0C"
         color: gaugeRoot.valueColor
         font.family: "Menlo"
-        font.pixelSize: 14
+        font.pixelSize: 11
         font.weight: Font.Medium
         z: 10
     }
@@ -195,11 +195,11 @@ Item {
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.verticalCenter
-        anchors.topMargin: 40
+        anchors.topMargin: 74
         text: "PHONE"
         color: gaugeRoot.accentDim
-        font.family: "Helvetica Neue"
-        font.pixelSize: 9
+        font.family: "Menlo"
+        font.pixelSize: 10
         font.weight: Font.Bold
         font.letterSpacing: 3
     }
