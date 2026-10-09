@@ -48,6 +48,7 @@ class Bridge(QObject):
     serialChanged = Signal()
     otaProgress = Signal(int)
     otaDone     = Signal()
+    otaUploading = Signal()
     otaStatus   = Signal(str)
     otaError    = Signal(str)
 
@@ -232,11 +233,33 @@ class Bridge(QObject):
 
             # --- 3. POST .bin to device ---
             emit("[OTA] uploading to device...")
+            self.otaUploading.emit()
             t0 = time.time()
             try:
+                from requests_toolbelt.multipart.encoder import MultipartEncoder, MultipartEncoderMonitor
+                size_b = os.path.getsize(path)
+
+                last_kb = [0]
+
+                def _progress(monitor):
+                    kb = monitor.bytes_read // 1024
+                    if kb - last_kb[0] >= 128:
+                        last_kb[0] = kb
+                        pct = int(100 * monitor.bytes_read / size_b)
+                        self.otaProgress.emit(pct)
+                        emit("[OTA] device " + str(kb) + " KB / " + str(size_b // 1024) + " KB")
+
                 with open(path, "rb") as f:
-                    files = {"firmware": ("fanmate.ino.bin", f, "application/octet-stream")}
-                    r = requests.post("http://192.168.8.242/ota", files=files, timeout=120)
+                    me = MultipartEncoder(fields={
+                        "firmware": ("fanmate.ino.bin", f, "application/octet-stream")
+                    })
+                    mon = MultipartEncoderMonitor(me, _progress)
+                    r = requests.post(
+                        "http://192.168.8.242/ota",
+                        data=mon,
+                        headers={"Content-Type": mon.content_type},
+                        timeout=120,
+                    )
                 dt = time.time() - t0
                 if r.status_code == 200:
                     emit("[OTA] device HTTP 200 (" + "{:.1f}".format(dt) + "s)")

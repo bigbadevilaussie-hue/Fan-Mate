@@ -448,7 +448,7 @@ ApplicationWindow {
 
     Connections {
         target: dev
-        function onOtaDone() {
+        function onOtaUploading() {
             serialPanel.visible = true
             dev.fetchSerial()
         }
