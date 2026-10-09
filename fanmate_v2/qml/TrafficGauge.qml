@@ -49,7 +49,6 @@ Item {
     Behavior on needlePos {
         SpringAnimation { spring: 2.5; damping: 0.3; epsilon: 0.05 }
     }
-    onNeedleAngleChanged: needlePos = needleAngle
 
     Shape {
         anchors.fill: parent
@@ -63,11 +62,6 @@ Item {
                 startAngle: 135; sweepAngle: 270
             }
         }
-    }
-
-    Shape {
-        anchors.fill: parent
-        layer.enabled: true; layer.samples: 4
         ShapePath {
             strokeColor: gaugeRoot.cGreen; strokeWidth: 6; fillColor: "transparent"
             capStyle: ShapePath.FlatCap
@@ -78,10 +72,6 @@ Item {
                 sweepAngle: gaugeRoot.angDeg(gaugeRoot.boostThresholdMb * 1) - gaugeRoot.angDeg(gaugeRoot.vmin)
             }
         }
-    }
-    Shape {
-        anchors.fill: parent
-        layer.enabled: true; layer.samples: 4
         ShapePath {
             strokeColor: gaugeRoot.cYellow; strokeWidth: 6; fillColor: "transparent"
             capStyle: ShapePath.FlatCap
@@ -92,10 +82,6 @@ Item {
                 sweepAngle: gaugeRoot.angDeg(gaugeRoot.boostThresholdMb * 2) - gaugeRoot.angDeg(gaugeRoot.boostThresholdMb * 1)
             }
         }
-    }
-    Shape {
-        anchors.fill: parent
-        layer.enabled: true; layer.samples: 4
         ShapePath {
             strokeColor: gaugeRoot.cOrange; strokeWidth: 6; fillColor: "transparent"
             capStyle: ShapePath.FlatCap
@@ -106,10 +92,6 @@ Item {
                 sweepAngle: gaugeRoot.angDeg(gaugeRoot.boostThresholdMb * 3) - gaugeRoot.angDeg(gaugeRoot.boostThresholdMb * 2)
             }
         }
-    }
-    Shape {
-        anchors.fill: parent
-        layer.enabled: true; layer.samples: 4
         ShapePath {
             strokeColor: gaugeRoot.cRed; strokeWidth: 6; fillColor: "transparent"
             capStyle: ShapePath.FlatCap
