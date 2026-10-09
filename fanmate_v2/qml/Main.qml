@@ -85,11 +85,6 @@ ApplicationWindow {
         id: content
         anchors.fill: parent
 
-        // push content when drawer opens
-        transform: Translate {
-            x: menu.position * 200
-        }
-
         // hamburger button
         Rectangle {
             id: menuBtn
@@ -199,8 +194,6 @@ ApplicationWindow {
             autoScale: true
             minSpan: 1.0
             hardMin: 0
-            threshold: netGauge.boostThresholdMb
-            thresholdInScale: false
         }
 
         Sparkline {
