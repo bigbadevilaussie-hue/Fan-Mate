@@ -12,6 +12,12 @@ ApplicationWindow {
     color: "#000000"
     property string guiVersion: "1.11"
 
+    function openSerialPanel() {
+        serialPanel.visible = true
+        serialWeb.url = dev.freshSerialUrl()
+        dev.fetchSerial()
+    }
+
     // ---------- drawer ----------
     Drawer {
         id: menu
@@ -48,9 +54,7 @@ ApplicationWindow {
                 text: "📟  Serial"
                 onTriggered: {
                     menu.close()
-                    serialPanel.visible = true
-                    serialWeb.url = dev.freshSerialUrl()
-                    dev.fetchSerial()
+                    root.openSerialPanel()
                 }
             }
             MenuButton {
@@ -501,9 +505,7 @@ ApplicationWindow {
 
     Connections {
         target: dev
-        function onOtaUploading() {
-            serialPanel.visible = true
-            dev.fetchSerial()
-        }
+        function onOtaUploading() { root.openSerialPanel() }
+        function onOtaDone()      { root.openSerialPanel() }
     }
 }

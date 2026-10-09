@@ -218,7 +218,9 @@ Dialog {
                     anchors.fill: parent
                     enabled: otaDialog.fwExists
                     onClicked: {
-                        otaDialog.close()
+                        otaDialog.uploading = true
+                        otaDialog.progress = 0
+                        otaDialog.statusMsg = "Starting..."
                         dev.upload_firmware(dev.firmwarePath)
                     }
                 }
