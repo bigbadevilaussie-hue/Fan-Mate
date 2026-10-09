@@ -5,11 +5,11 @@ import QtQuick.Controls
 ApplicationWindow {
     id: root
     width: 900
-    height: 530
+    height: 440
     visible: true
     title: "Fan-Mate v2"
     color: "#000000"
-    property string guiVersion: "1.12"
+    property string guiVersion: "1.11"
 
     // ---------- drawer ----------
     Drawer {
@@ -107,148 +107,70 @@ ApplicationWindow {
             }
         }
         // (top info strip removed — content moved to bottom row)
-        // ================================================================
-        // LEFT: NET gauge + graph (in one bordered rectangle)
-        // ================================================================
-        Rectangle {
-            x: 30
-            y: 100
-            width: 220
-            height: 330
-            color: "transparent"
-            border.color: "#4a5568"
-            border.width: 1
-            radius: 6
-
-            TrafficGauge {
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: 20
-                width: 180
-                height: 180
-                value: (dev.netKbps || 0) / 1024.0
-                vmin: 0
-                vmax: 4
-                boostThresholdMb: (dev.boostThreshold || 900) / 1024.0
-            }
-
-            MiniGraph {
-                id: netGraph
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: 260
-                width: 180
-                height: 48
-                vmin: 0
-                vmax: 4
-                threshold: (dev.boostThreshold || 900) / 1024.0
-                dataJson: dev.netHistJson
-                lineColor: {
-                    var t = (dev.boostThreshold || 900) / 1024.0
-                    var v = (dev.netKbps || 0) / 1024.0
-                    if (v >= t * 3) return "#e74c3c"
-                    if (v >= t * 2) return "#e67e22"
-                    if (v >= t * 1) return "#f1c40f"
-                    return "#2ecc71"
-                }
-                fillColor: Qt.rgba(lineColor.r, lineColor.g, lineColor.b, 0.18)
-            }
-        }
-
-        // ================================================================
-        // MIDDLE: FAN gauge + graph (bigger rectangle)
-        // ================================================================
-        Rectangle {
-            x: 290
-            y: 100
+        // Three dials
+        StatusLamps {
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: 62
             width: 320
-            height: 330
-            color: "transparent"
-            border.color: "#4a5568"
-            border.width: 1
-            radius: 6
-
-            RpmGauge {
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: 20
-                width: 285
-                height: 285
-                value: dev.rpm || 0
-                vmin: 0
-                vmax: 7500
-                rpmWarn: 2000
-                rpmFast: 4000
-                rpmMax: 6000
-            }
-
-            MiniGraph {
-                id: rpmGraph
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: 260
-                width: 285
-                height: 48
-                vmin: 0
-                vmax: 7500
-                threshold: 3000
-                dataJson: dev.rpmHistJson
-                lineColor: {
-                    var v = dev.rpm || 0
-                    if (v >= 6000) return "#e74c3c"
-                    if (v >= 4500) return "#e67e22"
-                    if (v >= 3000) return "#f1c40f"
-                    return "#2ecc71"
-                }
-                fillColor: Qt.rgba(lineColor.r, lineColor.g, lineColor.b, 0.18)
-            }
+            height: 44
+            boostLvl: dev.boostLvl || 0
+            tempLvl: dev.tempLvl || 0
+            opal: dev.opal || 0
+            killMode: dev.killMode || 0
         }
 
-        // ================================================================
-        // RIGHT: PHONE gauge + graph (in one bordered rectangle)
-        // ================================================================
-        Rectangle {
-            x: 650
-            y: 100
-            width: 220
-            height: 330
-            color: "transparent"
-            border.color: "#4a5568"
-            border.width: 1
-            radius: 6
+        BoostBar {
+            x: 24
+            y: 90
+            width: 72
+            height: 260
+            gear: dev.boostLvl || 0
+        }
 
-            TempGauge {
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: 20
-                width: 180
-                height: 180
-                value: dev.temp || 0
-                vmin: 18.0
-                vmax: (dev.tempGear4 || 39.0) + 2.0
-                tempGear1: dev.tempGear1 || 33.0
-                tempGear2: dev.tempGear2 || 35.0
-                tempGear3: dev.tempGear3 || 37.0
-                tempGear4: dev.tempGear4 || 39.0
-            }
+        TempBar {
+            x: 800
+            y: 90
+            width: 72
+            height: 260
+            level: dev.tempLvl || 0
+        }
 
-            MiniGraph {
-                id: tempGraph
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: 260
-                width: 180
-                height: 48
-                vmin: 18
-                vmax: (dev.tempGear4 || 39) + 2
-                threshold: dev.tempGear2 || 35
-                dataJson: dev.tempHistJson
-                lineColor: {
-                    var v = dev.temp || 0
-                    var g4 = dev.tempGear4 || 39
-                    var g3 = dev.tempGear3 || 37
-                    var g2 = dev.tempGear2 || 35
-                    if (v >= g4) return "#e74c3c"
-                    if (v >= g3) return "#e67e22"
-                    if (v >= g2) return "#f1c40f"
-                    return "#2ecc71"
-                }
-                fillColor: Qt.rgba(lineColor.r, lineColor.g, lineColor.b, 0.18)
-            }
+        TrafficGauge {
+            x: 80
+            y: 140
+            width: 180
+            height: 180
+            value: (dev.netKbps || 0) / 1024.0
+            vmin: 0
+            vmax: 3
+            boostThresholdMb: (dev.boostThreshold || 700) / 1024.0
+        }
+
+        RpmGauge {
+            x: 280
+            y: 90
+            width: 285
+            height: 285
+            value: dev.rpm || 0
+            vmin: 0
+            vmax: 7500
+            rpmWarn: 2000
+            rpmFast: 4000
+            rpmMax: 6000
+        }
+
+        TempGauge {
+            x: 590
+            y: 140
+            width: 180
+            height: 180
+            value: dev.temp || 0
+            vmin: 18.0
+            vmax: (dev.tempGear4 || 36.0) + 2.0
+            tempGear1: dev.tempGear1 || 30.0
+            tempGear2: dev.tempGear2 || 32.0
+            tempGear3: dev.tempGear3 || 34.0
+            tempGear4: dev.tempGear4 || 36.0
         }
 
         // bottom info row
