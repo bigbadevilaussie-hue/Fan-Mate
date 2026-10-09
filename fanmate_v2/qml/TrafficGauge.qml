@@ -123,11 +123,12 @@ Item {
     }
 
     Repeater {
-        model: [1, 2, 3, 4]
+        model: Math.floor(gaugeRoot.vmax)
         Rectangle {
-            property real d: gaugeRoot.angDeg(modelData)
+            property real v: index + 1
+            property real d: gaugeRoot.angDeg(v)
             width: 2; height: 16
-            color: gaugeRoot.zoneColor(modelData)
+            color: gaugeRoot.zoneColor(v)
             antialiasing: true
             x: gaugeRoot.xAt(d, gaugeRoot.rArc - 8) - width / 2
             y: gaugeRoot.yAt(d, gaugeRoot.rArc - 8) - height / 2
@@ -137,9 +138,10 @@ Item {
     }
 
     Repeater {
-        model: [0.5, 1.5, 2.5, 3.5]
+        model: Math.floor(gaugeRoot.vmax)
         Rectangle {
-            property real d: gaugeRoot.angDeg(modelData)
+            property real v: index + 0.5
+            property real d: gaugeRoot.angDeg(v)
             width: 1; height: 8
             color: "#2a3a44"
             antialiasing: true
@@ -151,10 +153,11 @@ Item {
     }
 
     Repeater {
-        model: [1, 2, 3, 4]
+        model: Math.floor(gaugeRoot.vmax)
         Text {
-            property real d: gaugeRoot.angDeg(modelData)
-            text: modelData
+            property real v: index + 1
+            property real d: gaugeRoot.angDeg(v)
+            text: v
             color: gaugeRoot.accentDim
             font.family: "Menlo"
             font.pixelSize: 12
