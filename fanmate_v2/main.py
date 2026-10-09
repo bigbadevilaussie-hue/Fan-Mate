@@ -10,12 +10,15 @@ import signal
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtWebEngineQuick import QtWebEngineQuick
 
 from fanmate_v2.bridge import Bridge
 
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+    QtWebEngineQuick.initialize()
     app = QGuiApplication(sys.argv)
 
     engine = QQmlApplicationEngine()

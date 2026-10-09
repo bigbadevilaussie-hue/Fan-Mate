@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import QtQuick.Controls
+import QtWebEngine
 
 ApplicationWindow {
     id: root
@@ -44,8 +45,12 @@ ApplicationWindow {
             Rectangle { width: parent.width; height: 1; color: "#313145" }
 
             MenuButton {
-                text: "🌐  Serial page"
-                onTriggered: dev.open_url("http://fan-mate.local/serial")
+                text: "📟  Serial"
+                onTriggered: {
+                    menu.close()
+                    serialPanel.visible = true
+                    dev.fetchSerial()
+                }
             }
             MenuButton {
                 text: "📍  Dashboard"
@@ -305,7 +310,147 @@ ApplicationWindow {
         }
     }
 
+
+    // ================================================================
+    // Serial panel — card with WebEngine view of the device serial page
+    // ================================================================
+    Rectangle {
+        id: serialPanel
+        anchors.fill: parent
+        color: "#0a0a12"
+        visible: false
+        z: 100
+
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: 12
+            color: "#181825"
+            radius: 8
+            border.color: "#313145"
+            border.width: 1
+
+            Column {
+                anchors.fill: parent
+                anchors.margins: 10
+                spacing: 8
+
+                // --- top control row ---
+                Row {
+                    width: parent.width
+                    height: 30
+                    spacing: 8
+
+                    Text {
+                        text: "📟  Serial"
+                        color: "#89b4fa"
+                        font.family: "Helvetica Neue"
+                        font.pixelSize: 14
+                        font.bold: true
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Item { width: parent.width - 320; height: 1 }
+
+                    Rectangle {
+                        width: 80; height: 26; radius: 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: refArea.pressed ? "#313145" : "#232334"
+                        border.color: "#89b4fa"
+                        border.width: 1
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Refresh"
+                            color: "#cdd6f4"
+                            font.family: "Helvetica Neue"
+                            font.pixelSize: 11
+                        }
+                        MouseArea {
+                            id: refArea
+                            anchors.fill: parent
+                            onClicked: {
+                                serialWeb.reload()
+                                dev.fetchSerial()
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        width: 90; height: 26; radius: 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: copyArea.pressed ? "#1e66f5" : "#232334"
+                        border.color: "#89b4fa"
+                        border.width: 1
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Copy All"
+                            color: "#cdd6f4"
+                            font.family: "Helvetica Neue"
+                            font.pixelSize: 11
+                        }
+                        MouseArea {
+                            id: copyArea
+                            anchors.fill: parent
+                            onClicked: dev.copyToClipboard(dev.serialText)
+                        }
+                    }
+
+                    Rectangle {
+                        width: 60; height: 26; radius: 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: closeArea.pressed ? "#313145" : "#232334"
+                        border.color: "#313145"
+                        border.width: 1
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Close"
+                            color: "#cdd6f4"
+                            font.family: "Helvetica Neue"
+                            font.pixelSize: 11
+                        }
+                        MouseArea {
+                            id: closeArea
+                            anchors.fill: parent
+                            onClicked: serialPanel.visible = false
+                        }
+                    }
+                }
+
+                // --- WebEngine view ---
+                Rectangle {
+                    width: parent.width
+                    height: parent.height - 38
+                    color: "#ffffff"
+                    radius: 4
+                    clip: true
+
+                    WebEngineView {
+                        id: serialWeb
+                        anchors.fill: parent
+                        anchors.margins: 2
+                        url: dev.serialUrl
+                    }
+                }
+            }
+        }
+    }
+
+    // Auto-refresh /serial-raw for Copy while panel is visible
+    Timer {
+        interval: 2000
+        running: serialPanel.visible
+        repeat: true
+        onTriggered: dev.fetchSerial()
+    }
+
     OtaDialog {
         id: otaDialog
+    }
+
+    Connections {
+        target: dev
+        function onOtaDone() {
+            serialPanel.visible = true
+            dev.fetchSerial()
+        }
     }
 }

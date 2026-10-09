@@ -45,7 +45,9 @@ class Bridge(QObject):
     netHistChanged   = Signal()
     tempHistChanged  = Signal()
     rpmHistChanged   = Signal()
+    serialChanged = Signal()
     otaProgress = Signal(int)
+    otaDone     = Signal()
     otaStatus   = Signal(str)
     otaError    = Signal(str)
 
@@ -53,6 +55,7 @@ class Bridge(QObject):
         super().__init__()
         self._threads_started = False
         self._last = {}
+        self._serial_text = ""
 
         # Start backend polling threads
         threading.Thread(target=http_poll_loop, daemon=True).start()
@@ -150,32 +153,123 @@ class Bridge(QObject):
             pass
 
     def _ota_worker(self, path):
-        import os
-        try:
-            size = os.path.getsize(path)
-            self.otaStatus.emit("Uploading {} bytes...".format(size))
+        import os, shutil, time, base64, re as _re
+        from datetime import datetime
 
-            def progress_hook(monitor):
-                # called by requests during upload
+        LOG_DIR = os.path.expanduser("~/Documents/FanMate_logs")
+        REPO = os.path.expanduser("~/Documents/Arduino/fanmate")
+
+        def emit(msg):
+            self.otaStatus.emit(msg)
+
+        try:
+            # --- source version from Config.h ---
+            src_ver = "?"
+            try:
+                cfg = open(os.path.join(REPO, "Config.h")).read()
+                m = _re.search(r'#define\s+FAN_MATE_VERSION\s+"([^"]+)"', cfg)
+                if m: src_ver = m.group(1)
+            except Exception:
+                pass
+
+            size = os.path.getsize(path)
+            emit("[OTA] version: " + src_ver)
+            emit("[OTA] size: " + "{:,}".format(size) + " bytes")
+
+            # --- 1. archive locally ---
+            try:
+                fw_dir = os.path.join(LOG_DIR, "firmware")
+                os.makedirs(fw_dir, exist_ok=True)
+                ts = datetime.now().strftime("%Y%m%d-%H%M")
+                archived = os.path.join(fw_dir, "fanmate-v" + src_ver + "-" + ts + ".bin")
+                shutil.copy2(path, archived)
+                shutil.copy2(path, os.path.join(fw_dir, "fanmate-latest.bin"))
+                emit("[OTA] archived: " + os.path.basename(archived))
+            except Exception as e:
+                emit("[OTA] archive failed: " + str(e))
+
+            # --- 2. upload .bin to GitHub ---
+            try:
+                secrets_path = os.path.join(REPO, "secrets.h")
+                secrets_text = open(secrets_path).read()
+                def _secret(name):
+                    m = _re.search(r'#define\s+' + name + r'\s+"([^"]+)"', secrets_text)
+                    return m.group(1) if m else None
+                tok = _secret("GITHUB_TOKEN")
+                owner = _secret("GITHUB_OWNER")
+                repo = _secret("GITHUB_REPO")
+                branch = _secret("GITHUB_BRANCH")
+
+                if not (tok and owner and repo and branch):
+                    emit("[OTA] GitHub: token/owner/repo missing, skipping")
+                else:
+                    with open(path, "rb") as f:
+                        b64 = base64.b64encode(f.read()).decode("ascii")
+                    bin_name = "fanmate.ino.bin"
+                    url = "https://api.github.com/repos/" + owner + "/" + repo + "/contents/firmware/" + bin_name
+                    headers = {
+                        "Authorization": "Bearer " + tok,
+                        "Accept": "application/vnd.github+json",
+                        "User-Agent": "Fan-Mate-GUI",
+                    }
+                    emit("[OTA] GitHub: checking...")
+                    head = requests.get(url, headers=headers, timeout=15)
+                    payload = {
+                        "message": "firmware: v" + src_ver + " (" + bin_name + ")",
+                        "content": b64,
+                        "branch": branch,
+                    }
+                    if head.status_code == 200:
+                        payload["sha"] = head.json().get("sha")
+                    emit("[OTA] GitHub: uploading...")
+                    r = requests.put(url, json=payload, headers=headers, timeout=60)
+                    if r.status_code in (200, 201):
+                        emit("[OTA] GitHub: uploaded (" + str(r.status_code) + ")")
+                    else:
+                        emit("[OTA] GitHub: failed HTTP " + str(r.status_code))
+            except Exception as e:
+                emit("[OTA] GitHub error: " + str(e))
+
+            # --- 3. POST .bin to device ---
+            emit("[OTA] uploading to device...")
+            t0 = time.time()
+            try:
+                with open(path, "rb") as f:
+                    files = {"firmware": ("fanmate.ino.bin", f, "application/octet-stream")}
+                    r = requests.post("http://192.168.8.242/ota", files=files, timeout=120)
+                dt = time.time() - t0
+                if r.status_code == 200:
+                    emit("[OTA] device HTTP 200 (" + "{:.1f}".format(dt) + "s)")
+                    self.otaProgress.emit(100)
+                else:
+                    emit("[OTA] device HTTP " + str(r.status_code))
+                    self.otaError.emit("HTTP " + str(r.status_code))
+                    return
+            except Exception as e:
+                emit("[OTA] device error: " + str(e))
+                self.otaError.emit(str(e))
+                return
+
+            # --- 4. wait for reboot ---
+            emit("[OTA] rebooting...")
+            time.sleep(5)
+            back = False
+            for i in range(30):
                 try:
-                    pct = int(100 * monitor.bytes_read / monitor.len)
-                    self.otaProgress.emit(pct)
+                    r = requests.get("http://192.168.8.242/status", timeout=2)
+                    if r.status_code == 200:
+                        fw = r.json().get("fw", "?")
+                        emit("[OTA] device back, fw=" + str(fw))
+                        back = True
+                        break
                 except Exception:
                     pass
+                time.sleep(1)
+            if not back:
+                emit("[OTA] device did not return in 30s")
 
-            with open(path, "rb") as f:
-                files = {"firmware": ("fanmate.ino.bin", f, "application/octet-stream")}
-                r = requests.post(
-                    "http://fan-mate.local/ota",
-                    files=files,
-                    timeout=120
-                )
-
-            if r.status_code == 200:
-                self.otaStatus.emit("Done — device rebooting")
-                self.otaProgress.emit(100)
-            else:
-                self.otaError.emit("HTTP {}".format(r.status_code))
+            emit("[OTA] done")
+            self.otaDone.emit()
 
         except Exception as e:
             self.otaError.emit(str(e))
@@ -279,3 +373,104 @@ class Bridge(QObject):
         import json as _json
         h = state.latest.get("rpm_hist") or []
         return _json.dumps(h)
+
+
+    # ---------- Firmware metadata for OTA confirmation dialog ----------
+
+    def _fw_path(self):
+        return os.path.expanduser(
+            "~/Documents/Arduino/fanmate/build/esp32.esp32.esp32c3/fanmate.ino.bin")
+
+    def _config_h_path(self):
+        return os.path.expanduser("~/Documents/Arduino/fanmate/Config.h")
+
+    @Property(str, constant=True)
+    def firmwarePath(self):
+        p = self._fw_path()
+        return p if os.path.exists(p) else ""
+
+    @Property(str, constant=True)
+    def firmwareExists(self):
+        return "1" if os.path.exists(self._fw_path()) else "0"
+
+    @Property(str, constant=True)
+    def firmwareSourceVer(self):
+        import re as _re
+        try:
+            c = open(self._config_h_path()).read()
+            m = _re.search(r'#define\s+FAN_MATE_VERSION\s+"([^"]+)"', c)
+            return m.group(1) if m else "?"
+        except Exception:
+            return "?"
+
+    @Property(str, constant=True)
+    def firmwareSize(self):
+        import os as _os
+        p = self._fw_path()
+        if not _os.path.exists(p):
+            return "?"
+        sz = _os.path.getsize(p)
+        return "{:,} bytes ({:.2f} MB)".format(sz, sz / (1024 * 1024))
+
+    @Property(str, constant=True)
+    def firmwareMd5(self):
+        import hashlib, os as _os
+        p = self._fw_path()
+        if not _os.path.exists(p):
+            return "?"
+        h = hashlib.md5()
+        try:
+            with open(p, "rb") as f:
+                for chunk in iter(lambda: f.read(65536), b""):
+                    h.update(chunk)
+            return h.hexdigest()[:16] + "..."
+        except Exception:
+            return "?"
+
+    @Property(str, constant=True)
+    def firmwareBuilt(self):
+        import os as _os
+        from datetime import datetime
+        p = self._fw_path()
+        if not _os.path.exists(p):
+            return "?"
+        return datetime.fromtimestamp(_os.path.getmtime(p)).strftime("%Y-%m-%d %H:%M")
+
+    @Property(str, constant=True)
+    def firmwareStale(self):
+        import os as _os
+        p = self._fw_path()
+        c = self._config_h_path()
+        if not _os.path.exists(p) or not _os.path.exists(c):
+            return "0"
+        return "1" if _os.path.getmtime(c) > _os.path.getmtime(p) else "0"
+
+    @Property(str, notify=fwChanged)
+    def deviceVersion(self):
+        return str(self._get("fv", "?"))
+
+    @Slot(str)
+    def copyToClipboard(self, text):
+        from PySide6.QtGui import QGuiApplication
+        QGuiApplication.clipboard().setText(text)
+
+
+    # ---------- Serial ring buffer ----------
+
+    @Property(str, constant=True)
+    def serialUrl(self):
+        return "http://192.168.8.242/serial"
+
+    @Property(str, notify=serialChanged)
+    def serialText(self):
+        return self._serial_text
+
+    @Slot()
+    def fetchSerial(self):
+        try:
+            r = requests.get("http://192.168.8.242/serial-raw", timeout=3)
+            if r.status_code == 200:
+                self._serial_text = r.text
+                self.serialChanged.emit()
+        except Exception:
+            pass
