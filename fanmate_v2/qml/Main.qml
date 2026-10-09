@@ -111,7 +111,7 @@ ApplicationWindow {
                         onTriggered: {
                             menu.close()
                             reportsSection.expanded = false
-                            helloPanel.visible = true
+                            helloPanel.open()
                         }
                     }
                     MenuButton {

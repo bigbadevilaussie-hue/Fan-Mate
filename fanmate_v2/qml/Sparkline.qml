@@ -25,6 +25,12 @@ Item {
 
     onValidChanged: if (valid) push()
 
+    function setSamples(arr) {
+        samples = arr || []
+        _pts = linePoints()
+        rescale()
+    }
+
     function push() {
         if (!valid) return
         var s = samples.slice(-(maxSamples - 1))
