@@ -43,6 +43,10 @@ Item {
         return cRed
     }
 
+    readonly property real tickStep: 5
+    readonly property int  firstTick: Math.ceil(vmin / tickStep)
+    readonly property int  tickCount: Math.max(0, Math.floor(vmax / tickStep) - firstTick + 1)
+
     readonly property bool hasData: value > 0
     readonly property color valueColor: hasData ? zoneColor(value) : accentDim
 
@@ -125,11 +129,12 @@ Item {
     }
 
     Repeater {
-        model: [20, 25, 30, 35]
+        model: gaugeRoot.tickCount
         Rectangle {
-            property real d: gaugeRoot.angDeg(modelData)
+            property real v: (gaugeRoot.firstTick + index) * gaugeRoot.tickStep
+            property real d: gaugeRoot.angDeg(v)
             width: 2; height: 16
-            color: gaugeRoot.zoneColor(modelData)
+            color: gaugeRoot.zoneColor(v)
             antialiasing: true
             x: gaugeRoot.xAt(d, gaugeRoot.rArc - 8) - width / 2
             y: gaugeRoot.yAt(d, gaugeRoot.rArc - 8) - height / 2
@@ -139,9 +144,11 @@ Item {
     }
 
     Repeater {
-        model: [18, 22.5, 27.5, 32.5, 37.5]
+        model: gaugeRoot.tickCount
         Rectangle {
-            property real d: gaugeRoot.angDeg(modelData)
+            property real v: (gaugeRoot.firstTick + index) * gaugeRoot.tickStep + gaugeRoot.tickStep / 2
+            property real d: gaugeRoot.angDeg(v)
+            visible: v < gaugeRoot.vmax
             width: 1; height: 8
             color: "#2a3a44"
             antialiasing: true
@@ -153,10 +160,11 @@ Item {
     }
 
     Repeater {
-        model: [20, 25, 30, 35]
+        model: gaugeRoot.tickCount
         Text {
-            property real d: gaugeRoot.angDeg(modelData)
-            text: modelData
+            property real v: (gaugeRoot.firstTick + index) * gaugeRoot.tickStep
+            property real d: gaugeRoot.angDeg(v)
+            text: v
             color: gaugeRoot.accentDim
             font.family: "Menlo"
             font.pixelSize: 12
