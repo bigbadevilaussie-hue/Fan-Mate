@@ -12,6 +12,7 @@ ApplicationWindow {
     color: "#000000"
     property string guiVersion: "1.11"
 
+
     function openSerialPanel() {
         serialPanel.visible = true
         serialWeb.url = dev.freshSerialUrl()
@@ -25,6 +26,8 @@ ApplicationWindow {
         height: root.height
         edge: Qt.LeftEdge
         interactive: true
+
+        onOpened: reportsSection.expanded = false
 
         background: Rectangle {
             color: "#181825"
@@ -47,7 +50,7 @@ ApplicationWindow {
             Item {
                 id: reportsSection
                 width: parent.width
-                height: reportsHeader.height + reportsChildren.height
+                height: reportsHeader.height + (expanded ? reportsChildren.implicitHeight : 0)
 
                 property bool expanded: false
 
@@ -83,15 +86,25 @@ ApplicationWindow {
                         anchors.fill: parent
                         onClicked: reportsSection.expanded = !reportsSection.expanded
                     }
+
+                    // whole row highlights as clickable
+                    Rectangle {
+                        anchors.fill: parent
+                        color: "transparent"
+                        border.color: "#313145"
+                        border.width: reportsArea.pressed ? 1 : 0
+                        z: -1
+                    }
                 }
 
                 Column {
                     id: reportsChildren
                     anchors.top: reportsHeader.bottom
                     width: parent.width
-                    height: reportsSection.expanded ? childrenRect.height : 0
                     clip: true
-                    Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
+                    visible: reportsSection.expanded
+                    opacity: reportsSection.expanded ? 1 : 0
+                    Behavior on opacity { NumberAnimation { duration: 150 } }
 
                     MenuButton {
                         text: "   Last 2 Hours"

@@ -137,6 +137,90 @@ class Bridge(QObject):
     def open_url(self, url):
         QDesktopServices.openUrl(QUrl(url))
 
+    @Slot(result=str)
+    def report2hJson(self):
+        import json as _json
+        try:
+            from fanmate.config import LOG_DIR
+            import glob
+            from datetime import datetime, timedelta
+
+            pattern = os.path.join(LOG_DIR, "log-*.csv")
+            files = sorted(x for x in glob.glob(pattern) if not x.endswith(".part"))
+            if not files:
+                return "{}"
+
+            def _ftime(path):
+                base = os.path.basename(path).rsplit(".", 1)[0]
+                parts = base.split("-")
+                return datetime.strptime(parts[-2] + parts[-1], "%Y%m%d%H%M")
+
+            newest = None
+            for path in reversed(files):
+                try:
+                    newest = _ftime(path); break
+                except Exception:
+                    continue
+            if newest is None:
+                return "{}"
+
+            cutoff = newest - timedelta(hours=2)
+            use = []
+            for path in reversed(files):
+                try: t = _ftime(path)
+                except Exception: continue
+                use.append(path)
+                if t <= cutoff: break
+            use.sort()
+
+            from fanmate.reports import Report2H as _R
+            r = _R.__new__(_R)
+            rows = []
+            for f in use:
+                rows.extend(_R._parse(r, f))
+
+            if not rows:
+                return "{}"
+
+            def _down(arr, n=120):
+                if len(arr) <= n: return arr
+                step = len(arr) / n
+                return [arr[int(i * step)] for i in range(n)]
+
+            temps = [x["temp"] for x in rows if x["temp"] and x["temp"] > 0]
+            nets  = [x["net"] if x["net"] is not None else 0 for x in rows]
+            fans  = [x["fan"] for x in rows]
+            rpms  = [x["rpm"] for x in rows if x["rpm"] > 0]
+            rooms = [x["room"] for x in rows if x.get("room") is not None and x["room"] > -90]
+            boosts = [x["boost"] for x in rows]
+
+            out = {
+                "start": rows[0]["t"].strftime("%H:%M"),
+                "end":   rows[-1]["t"].strftime("%H:%M"),
+                "rows":  len(rows),
+                "span_min": int((rows[-1]["t"] - rows[0]["t"]).total_seconds() / 60),
+                "net":   {"peak": int(max(nets) if nets else 0),
+                          "avg":  int(sum(nets) / len(nets) if nets else 0),
+                          "samples": _down([int(x) for x in nets])},
+                "fan":   {"peak": int(max(fans) if fans else 0),
+                          "on_pct": int(100 * sum(1 for f in fans if f > 0) / len(fans)) if fans else 0,
+                          "samples": _down(fans)},
+                "phone": {"start": round(temps[0], 1) if temps else 0,
+                          "end":   round(temps[-1], 1) if temps else 0,
+                          "min":   round(min(temps), 1) if temps else 0,
+                          "max":   round(max(temps), 1) if temps else 0,
+                          "samples": _down([round(t, 1) for t in temps])},
+                "room":  round(rooms[-1], 1) if rooms else None,
+                "rpm_peak": int(max(rpms) if rpms else 0),
+                "gears": {"g0":  sum(1 for b in boosts if b == 0),
+                          "g12": sum(1 for b in boosts if 1 <= b <= 2),
+                          "g34": sum(1 for b in boosts if 3 <= b <= 4)},
+            }
+            return _json.dumps(out)
+        except Exception as e:
+            print("[REPORT2H]", e)
+            return "{}"
+
     @Slot()
     def quit_app(self):
         from PySide6.QtWidgets import QApplication
