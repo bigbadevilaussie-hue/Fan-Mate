@@ -7,11 +7,13 @@ Item {
     property int tempLvl: 0
     property int opal: 1
     property int killMode: 0
+    property int alertLvl: 0
 
     implicitWidth: 320
     implicitHeight: 44
 
     readonly property var zoneColors: ["#7a8194", "#2ecc71", "#f1c40f", "#e67e22", "#e74c3c"]
+    readonly property var tempColors: ["#7a8194", "#f1c40f", "#e67e22", "#e74c3c", "#d20f39"]
 
     // 0 = off (grey), 1 = on (with colour), 2 = amber-warn
     function boostState() {
@@ -21,10 +23,12 @@ Item {
         return boostLvl >= 1 ? zoneColors[boostLvl] : "#2a2a3a"
     }
     function tempState() {
-        return tempLvl >= 1 ? 1 : 0
+        return 1    // always lit
     }
     function tempColor() {
-        return tempLvl >= 1 ? zoneColors[tempLvl] : "#2a2a3a"
+        if (tempLvl >= 1) return tempColors[tempLvl]
+        if (alertLvl === 1) return "#e67e22"     // delta guard
+        return "#2ecc71"                          // idle: green
     }
     function opalState() {
         return opal === 1 ? 1 : 1   // always on

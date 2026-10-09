@@ -117,6 +117,7 @@ ApplicationWindow {
             tempLvl: dev.tempLvl || 0
             opal: dev.opal || 0
             killMode: dev.killMode || 0
+            alertLvl: dev.alert || 0
         }
 
         BoostBar {
@@ -133,6 +134,7 @@ ApplicationWindow {
             width: 72
             height: 260
             level: dev.tempLvl || 0
+            alertLvl: dev.alert || 0
         }
 
         TrafficGauge {
