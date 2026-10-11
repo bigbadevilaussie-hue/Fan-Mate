@@ -7,9 +7,9 @@ ApplicationWindow {
     width: 900
     height: 440
     visible: true
-    title: "Fan-Mate v2"
+    title: "Fan-Mate  ·  GUI v" + guiVersion + "  ·  FW " + (dev.fw || "?")
     color: "#000000"
-    property string guiVersion: "1.11"
+    property string guiVersion: "1.12"
 
 
     function openSerialPanel() {
