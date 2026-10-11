@@ -582,7 +582,8 @@ class Bridge(QObject):
         try:
             r = requests.get("http://192.168.8.242/serial-raw", timeout=3)
             if r.status_code == 200:
-                self._serial_text = r.text
-                self.serialChanged.emit()
+                if r.text != self._serial_text:
+                    self._serial_text = r.text
+                    self.serialChanged.emit()
         except Exception:
             pass

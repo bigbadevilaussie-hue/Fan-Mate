@@ -14,7 +14,6 @@ ApplicationWindow {
 
     function openSerialPanel() {
         serialPanel.visible = true
-        serialWeb.url = dev.freshSerialUrl()
         dev.fetchSerial()
     }
 
@@ -491,10 +490,7 @@ ApplicationWindow {
                         MouseArea {
                             id: refArea
                             anchors.fill: parent
-                            onClicked: {
-                                serialWeb.reload()
-                                dev.fetchSerial()
-                            }
+                            onClicked: dev.fetchSerial()
                         }
                     }
 
@@ -539,23 +535,29 @@ ApplicationWindow {
                     }
                 }
 
-                // --- WebEngine view ---
+                // --- serial text view ---
                 Rectangle {
                     width: parent.width
                     height: parent.height - 38
-                    color: "#ffffff"
+                    color: "#0a0a12"
                     radius: 4
                     clip: true
 
-                    Rectangle {
+                    ScrollView {
                         anchors.fill: parent
-                        color: "#0a0a12"
-                        Text {
-                            anchors.centerIn: parent
-                            text: "Serial view not available in this build"
-                            color: "#7a8194"
+                        anchors.margins: 4
+
+                        TextArea {
+                            id: serialArea
+                            text: dev.serialText
+                            readOnly: true
+                            selectByMouse: true
+                            color: "#cdd6f4"
                             font.family: "Menlo"
                             font.pixelSize: 11
+                            wrapMode: TextArea.WrapAnywhere
+                            background: null
+                            onTextChanged: cursorPosition = length
                         }
                     }
                 }
