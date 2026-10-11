@@ -22,3 +22,8 @@ __pycache__/
 # PyInstaller
 dist/
 build/Fan-Mate/
+
+# Nuitka output
+main.dist/
+main.build/
+main.onefile-build/

@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Window
 import QtQuick.Controls
-import QtWebEngine
 
 ApplicationWindow {
     id: root
@@ -548,17 +547,17 @@ ApplicationWindow {
                     radius: 4
                     clip: true
 
-                    WebEngineView {
-                        id: serialWeb
+                    Rectangle {
                         anchors.fill: parent
-                        anchors.margins: 2
-                        zoomFactor: 1.15
+                        color: "#0a0a12"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Serial view not available in this build"
+                            color: "#7a8194"
+                            font.family: "Menlo"
+                            font.pixelSize: 11
+                        }
                     }
-                }
-            }
-        }
-    }
-
     // Auto-refresh /serial-raw for Copy while panel is visible
     Timer {
         interval: 2000
