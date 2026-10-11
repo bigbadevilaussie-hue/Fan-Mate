@@ -46,6 +46,9 @@ class Bridge(QObject):
     tempHistChanged  = Signal()
     rpmHistChanged   = Signal()
     serialChanged = Signal()
+    dynaTuneChanged = Signal()
+    dynaTuneLoadingChanged = Signal()
+    _dynaTuneReady = Signal(object)
     otaProgress = Signal(int)
     otaDone     = Signal()
     otaUploading = Signal()
@@ -66,6 +69,11 @@ class Bridge(QObject):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._refresh)
         self._timer.start(200)
+
+        # DynaTune state (worker thread -> GUI thread via signal)
+        self._dyna = {}
+        self._dyna_loading = False
+        self._dynaTuneReady.connect(self._on_dyna_ready)
 
     def _get(self, key, default):
         v = state.latest.get(key, default)
@@ -555,6 +563,39 @@ class Bridge(QObject):
     @Property(str, notify=fwChanged)
     def deviceVersion(self):
         return str(self._get("fv", "?"))
+
+    @Property("QVariantMap", notify=dynaTuneChanged)
+    def dynaTune(self):
+        return self._dyna
+
+    @Property(bool, notify=dynaTuneLoadingChanged)
+    def dynaTuneLoading(self):
+        return self._dyna_loading
+
+    @Slot()
+    def loadDynaTune(self):
+        if self._dyna_loading:
+            return
+        self._dyna_loading = True
+        self.dynaTuneLoadingChanged.emit()
+
+        def work():
+            try:
+                from fanmate_v2.dynatune_model import build_dynatune
+                result = build_dynatune()
+            except Exception as e:
+                print("[DYNATUNE]", e)
+                result = {"hasData": False, "message": "Dyna Tune error: " + str(e)}
+            self._dynaTuneReady.emit(result)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    @Slot(object)
+    def _on_dyna_ready(self, result):
+        self._dyna = result
+        self._dyna_loading = False
+        self.dynaTuneChanged.emit()
+        self.dynaTuneLoadingChanged.emit()
 
     @Slot(str)
     def copyToClipboard(self, text):

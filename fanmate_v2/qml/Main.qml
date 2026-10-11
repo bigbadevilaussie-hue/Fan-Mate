@@ -131,7 +131,10 @@ ApplicationWindow {
 
             MenuButton {
                 text: "🎛️  Dyna Tune"
-                onTriggered: { menu.close() }
+                onTriggered: {
+                    menu.close()
+                    dynaPanel.open()
+                }
             }
 
             MenuButton {
@@ -579,6 +582,10 @@ ApplicationWindow {
 
     OtaDialog {
         id: otaDialog
+    }
+
+    DynaTunePanel {
+        id: dynaPanel
     }
 
     Connections {
