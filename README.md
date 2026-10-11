@@ -61,6 +61,48 @@ OTA: Tk GUI menu → 📡 Update Firmware.
 
 **Web dashboard** — served by ESP32 at `/`. Read-only except kill-mode banner.
 
+## Building the QML app (standalone .app)
+
+The QML GUI2 packages as a clickable macOS .app with PyInstaller.
+Spec file: `Fan-Mate-QML.spec` in the repo root.
+
+Build from the repo root:
+
+    cd ~/Documents/Arduino/fanmate
+    ~/fanmate-venv-test/bin/pyinstaller Fan-Mate-QML.spec --noconfirm
+
+Output: `dist/Fan-Mate-QML.app`. Copy to Desktop and clear quarantine:
+
+    rm -rf ~/Desktop/Fan-Mate-QML.app
+    cp -R dist/Fan-Mate-QML.app ~/Desktop/
+    xattr -dr com.apple.quarantine ~/Desktop/Fan-Mate-QML.app
+
+Icon is at `/tmp/fanmate.icns`, built from `fanmate.png` with `sips` + `iconutil`.
+Rebuild if missing (see git history for the exact sizes).
+
+### Why not Nuitka
+
+Tried and abandoned. Nuitka (4.2.2 stable and 4.4rc1 factory) fails on macOS with
+`bundle format unrecognized, invalid, or unsuitable` from `codesign` because it
+tries to sign the `Contents/MacOS/.` directory. No flag exists to skip the codesign
+pass in 4.4rc1. It also fails to bundle `QtWebEngineCore.framework` correctly — only
+the `Helpers` subdirectory gets copied.
+
+PyInstaller handles both. It splits data files between `Contents/Resources` and
+`Contents/Frameworks` and signs each separately, which is what codesign expects.
+
+### WebEngine is stripped
+
+`fanmate_v2/main.py` and `fanmate_v2/qml/Main.qml` have QtWebEngine removed so the
+standalone build doesn't depend on the broken framework bundling. The serial panel
+shows a placeholder. Re-enable when the tooling is fixed.
+
+### Frozen path
+
+`fanmate_v2/main.py` uses `sys._MEIPASS` in the frozen branch. PyInstaller 6 on
+macOS puts bundled data files in `Contents/Frameworks/`, which `sys._MEIPASS`
+points at. Symlinks land in `Contents/Resources/`.
+
 ## Repo
 
 https://github.com/bigbadevilaussie-hue/Fan-Mate

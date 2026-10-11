@@ -24,8 +24,7 @@ def main():
     engine.rootContext().setContextProperty("dev", bridge)
 
     if getattr(sys, "frozen", False):
-        # Nuitka / PyInstaller bundle: QML files are extracted next to the exe
-        qml_path = os.path.join(os.path.dirname(sys.executable), "Main.qml")
+        qml_path = os.path.join(sys._MEIPASS, "fanmate_v2", "qml", "Main.qml")
     else:
         qml_path = os.path.join(os.path.dirname(__file__), "qml", "Main.qml")
     print("Loading:", qml_path)

@@ -558,6 +558,11 @@ ApplicationWindow {
                             font.pixelSize: 11
                         }
                     }
+                }
+            }
+        }
+    }
+
     // Auto-refresh /serial-raw for Copy while panel is visible
     Timer {
         interval: 2000
