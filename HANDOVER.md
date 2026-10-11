@@ -57,6 +57,21 @@ For Alexa integration: enable the Sinric Pro skill in the Alexa app
 both switches. Create a routine: "When Fan-Mate turns on -> Alexa says"
 ...
 
+## Open items
+
+1. **Fan-Mate → /fanpanic POST.** Firmware side. Fire when kill mode latches
+   or fan stall alarm trips. Same wifi/HTTP pattern as Bike-Mate. Server route
+   exists and works; no throttle on /fanpanic yet.
+2. **Move log_sync into OSA Server.** Python process already runs 24/7 at
+   login. Same code as fanmate/log_sync.py, threaded, 30s cadence, CRC verify.
+   Delete fanmate/log_sync.py and its thread from fanmate/app.py once moved.
+   GUIs read from ~/Documents/FanMate_logs/ off disk either way.
+3. **Menu bar indicator (xbar plugin).** Script at
+   ~/Library/Application Support/xbar/plugins/fanmate.10s.py. Hits
+   http://192.168.8.242/status, prints phone temp + RPM for the bar, full
+   detail in the dropdown. xbar already installed (Mac fan monitor icon).
+   No bundle, no daemon, no compile.
+
 ## Adding more to the OSA Server
 
 The server is a Python process. It can do anything a Python script can:
