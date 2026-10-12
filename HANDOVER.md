@@ -1,67 +1,99 @@
-# Fan-Mate handover — OSA Server
+# Fan-Mate handover — OSA Server v1.4
 
-The Mac-side automation hub is now live. Repo:
-github.com/bigbadevilaussie-hue/OSA-Server (private).
+The OSA Server on the Mac (github.com/bigbadevilaussie-hue/OSA-Server, v1.4)
+now accepts a universal POST endpoint with per-channel control.
 
-## What it does
+## What changed since the last handover
 
-The OSA Server runs 24/7 on Nick's iMac as a LaunchAgent. Receives HTTP
-POSTs from ESP32 devices on the LAN and fires Mac-side alerts. Two ESP32
-projects use it:
+The old routes /panic and /fanpanic fired a fixed bundle
+(iMessage + Reminder + Sinric). That’s replaced by a flexible
+/notify endpoint. Fan-Mate chooses exactly which channels fire per
+event.
 
-- Bike-Mate POSTs to /panic
-- Fan-Mate POSTs to /fanpanic
+## The new endpoint
 
-Each POST triggers a chain: iMessage, Reminder, sound on the Mac, and a
-Sinric Pro switch that Alexa picks up as a smart-home device. Alexa
-routines on the Echo Show announce the alert.
+    POST http://192.168.8.187:9999/notify
+    Content-Type: application/json
+    Body: {"channels": ["say", "alarm"], "msg": "Fan stall", "source": "fanmate"}
 
-## What Fan-Mate needs to send
+Fields:
 
-When Fan-Mate needs to alert (fan stalled, temp too high, whatever):
+- channels (required, array) — any subset of:
+  - sms — iMessage to Nick’s Apple ID
+  - reminder — Reminder (fires immediately, syncs to iPhone)
+  - alexa — Echo Show speaks the routine message
+  - say — Mac speaks the message aloud
+  - alarm — Glass.aiff loops on the Mac for 10 seconds
+- msg (required, string) — 200 chars max, newlines stripped
+- source (optional, string) — "fanmate" picks the Fan-Mate Sinric
+  motion sensor. Default is "bikemate". Set this to "fanmate" or your
+  alerts will trigger the Bike-Mate routine instead.
+- repeat (optional, int) — fires the alexa channel N times, 2s apart.
+  Cap 5.
 
-    POST http://192.168.8.187:9999/fanpanic
-    Body: "Fan-Mate: <message>"
+Response: {"status": "ok", "channels": ["say", "alarm"]}
 
-The OSA Server flips the Fan-Mate Sinric switch on. Alexa's routine
-fires on the Echo Show. The switch auto-flips off 10 seconds later, ready
-for the next alert.
+## Example Fan-Mate calls
 
-Throttle: the server throttles /panic to once per 5 min but /fanpanic
-has no throttle yet. If Fan-Mate alerts frequently, add one.
+Fan stall detected:
 
-## Status page
+    {"channels": ["say", "alarm"], "msg": "Fan stall detected", "source": "fanmate"}
 
-http://localhost:9999/ shows server state, weather, both switch states,
-and Fan-Mate live data — the server proxies http://192.168.8.242/status
-with a 10s cache. So Fan-Mate's existing /status endpoint feeds the OSA
-status page automatically. No firmware change needed on Fan-Mate for that.
+Fan stall with escalation — Echo alert too:
 
-## IPs
+    {"channels": ["sms", "alexa", "say", "alarm"], "msg": "Fan stall - overheating", "source": "fanmate"}
+
+Room too hot, don’t fire the full chain:
+
+    {"channels": ["alexa"], "msg": "Room is too hot, turn on AC", "source": "fanmate", "repeat": 2}
+
+## Old routes (deprecated but still work)
+
+- POST /fanpanic — fires sms + reminder + alexa. Fixed bundle. Kept
+  as an alias. Do not use for new work.
+
+## What Fan-Mate needs to do
+
+Replace the current Fan-Mate firmware’s POST to /fanpanic with a
+POST to /notify using the JSON body above. Set source: "fanmate" in
+every call.
+
+Update Fan-Mate’s README / HANDOVER to point at /notify and
+document which channels Fan-Mate uses for which events.
+
+## IPs and infrastructure
 
 - OSA Server (iMac): 192.168.8.187
 - Bike-Mate (ESP32): 192.168.8.196
 - Fan-Mate (ESP32): 192.168.8.242
 
-## Sinric Pro
+Fan-Mate’s /status endpoint is proxied by the OSA server at
+GET /fan/status (10s cache). No change needed on the Fan-Mate side for
+that.
 
-Two switches registered:
+## Sinric device IDs
 
-- Bike-Mate — 6acc0adac07d082fb430a0b0
-- Fan-Mate — 6acc0b658039cc7898da9d9d
+- BikeMate motion sensor: 6acc2a5bc07d082fb430b899
+- FanMate motion sensor: 6acc2b22c07d082fb430b94e
 
-Free tier = 3 devices. One slot spare.
+Motion sensors, not switches. Alexa refuses switches as routine triggers.
 
-For Alexa integration: enable the Sinric Pro skill in the Alexa app
-(iOS/iPad), sign in with the same Sinric Pro account. Alexa discovers
-both switches. Create a routine: "When Fan-Mate turns on -> Alexa says"
-...
+## Notes
+
+- Mac must be logged in and awake for any channel to fire. Screen off
+  is fine.
+- No authentication on /notify. LAN only.
+- msg is required. Empty string is OK if the channel doesn’t use it
+  (e.g. alarm on its own).
+- /notify has no throttle. Fan-Mate must rate-limit itself if it can
+  fire rapidly.
 
 ## Open items
 
-1. **Fan-Mate → /fanpanic POST.** Firmware side. Fire when kill mode latches
-   or fan stall alarm trips. Same wifi/HTTP pattern as Bike-Mate. Server route
-   exists and works; no throttle on /fanpanic yet.
+1. **Fan-Mate → /notify POST.** Firmware side. Fire when kill mode latches
+   or fan stall alarm trips. Same wifi/HTTP pattern as Bike-Mate. Set
+   source: "fanmate" so the Fan-Mate Sinric motion sensor fires, not
+   Bike-Mate. Rate-limit on the device — /notify has no throttle.
 2. **Move log_sync into OSA Server.** Python process already runs 24/7 at
    login. Same code as fanmate/log_sync.py, threaded, 30s cadence, CRC verify.
    Delete fanmate/log_sync.py and its thread from fanmate/app.py once moved.
