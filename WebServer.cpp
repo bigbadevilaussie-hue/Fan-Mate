@@ -150,7 +150,11 @@ static void handle_status() {
     json += "\"delta_trigger\":" + String(config.deltaTrigger, 1) + ",";
     json += "\"temp_panic\":" + String(config.tempGear3, 1) + ",";
     json += "\"temp_kill\":" + String(config.tempGear4, 1) + ",";
-    json += "\"boost_threshold\":" + String(config.boostThreshold);
+    json += "\"boost_threshold\":" + String(config.boostThreshold) + ",";
+    extern float auto_boost_cold_temp();
+    extern bool auto_boost_cooling();
+    json += "\"boost_cold_c\":" + String(auto_boost_cold_temp(), 1) + ",";
+    json += "\"boost_cooling\":" + String(auto_boost_cooling() ? 1 : 0);
 
     json += "}";
 

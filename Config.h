@@ -22,7 +22,7 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "4.60"
+#define FAN_MATE_VERSION "4.61"
 
 #define DEBUG_VERBOSE 0
 
@@ -85,5 +85,12 @@ extern unsigned long phone_absent_since;
 
 #define NVS_LOG_NS               "log"
 #define NVS_LOG_START_KEY        "live_start"
+
+
+
+// v4.61 black box - flight recorder for crash/hang forensics
+#define BLACKBOX_ENABLED 1
+#define SERIAL_BUF_LINES 100
+#define BB_HEARTBEAT_MS 60000
 
 #endif

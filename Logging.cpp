@@ -715,3 +715,33 @@ bool log_delete_sealed(const char* name) {
     if (ok) log_print("[LOG] deleted %s\n", p);
     return ok;
 }
+
+// ------------------------------------------------------------
+//  v4.61 black box - heartbeat writer
+//  Called from tick_15s every BB_HEARTBEAT_MS.
+//  Writes one HB row with free heap, min heap, stack mark,
+//  RSSI, and uptime into the log CSV.
+// ------------------------------------------------------------
+void black_box_heartbeat() {
+#if BLACKBOX_ENABLED
+    static unsigned long last_hb = 0;
+    unsigned long now = millis();
+    if (now - last_hb < BB_HEARTBEAT_MS) return;
+    last_hb = now;
+
+    uint32_t free_heap  = ESP.getFreeHeap();
+    uint32_t min_heap   = ESP.getMinFreeHeap();
+    uint32_t stack_mark = uxTaskGetStackHighWaterMark(NULL);
+    int rssi = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
+
+    File f = LittleFS.open(LOG_FILE, "a");
+    if (!f) return;
+    String t = log_time_string();
+    char ev[80];
+    snprintf(ev, sizeof(ev), "HB heap=%u min=%u stack=%u rssi=%d up=%lu",
+             (unsigned)free_heap, (unsigned)min_heap,
+             (unsigned)stack_mark, rssi, (unsigned long)(now / 1000));
+    f.printf("%s,%.1f,,0,0,0,%s,,\n", t.c_str(), currentTemp, ev);
+    f.close();
+#endif
+}

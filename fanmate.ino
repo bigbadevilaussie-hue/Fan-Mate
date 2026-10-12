@@ -174,6 +174,7 @@ static void tick_15s() {
 
     log_rotate_check();
     log_check_full();
+    black_box_heartbeat();
 
 #if DEBUG_VERBOSE
     log_print("[TICK] temp=%.1f fan=%d%% net=%.1f KB/s boost=%d rpm=%d\n",

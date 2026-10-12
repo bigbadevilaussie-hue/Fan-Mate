@@ -26,5 +26,6 @@ bool   log_delete_sealed(const char* name);
 size_t log_sealed_count();
 size_t log_sealed_bytes();
 bool   log_rotation_paused();
+void   black_box_heartbeat();
 
 #endif
