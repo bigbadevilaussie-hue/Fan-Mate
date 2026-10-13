@@ -1,0 +1,7 @@
+# Fan-Mate runtime dependencies (Tk GUI + QML GUI2)
+# Python 3.13 via MacPorts at /opt/local/bin/python3.13
+#
+# build-time only: pyinstaller (for Fan-Mate-QML.spec)
+# not used: bleak
+PySide6>=6.4
+requests>=2.28

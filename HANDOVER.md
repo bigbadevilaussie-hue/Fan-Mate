@@ -1,112 +1,73 @@
-# Fan-Mate handover — OSA Server v1.4
+# Fan-Mate handover — current state
 
-The OSA Server on the Mac (github.com/bigbadevilaussie-hue/OSA-Server, v1.4)
-now accepts a universal POST endpoint with per-channel control.
+Read this before touching the repo. Supersedes anything in git history.
 
-## What changed since the last handover
+## What Fan-Mate is
 
-The old routes /panic and /fanpanic fired a fixed bundle
-(iMessage + Reminder + Sinric). That’s replaced by a flexible
-/notify endpoint. Fan-Mate chooses exactly which channels fire per
-event.
+ESP32-C3 fan controller. Cools an iPhone on a 24/7 hotspot mount in rural
+Queensland. Watches router WAN traffic, spins a 40mm PWM fan when downloads
+are detected, logs hourly. Runs autonomously whether the Mac is on or off.
 
-## The new endpoint
+## Versions (actual, as of 2026-10-13)
 
-    POST http://192.168.8.187:9999/notify
-    Content-Type: application/json
-    Body: {"channels": ["say", "alarm"], "msg": "Fan stall", "source": "fanmate"}
+- Firmware:  `FAN_MATE_VERSION` in `Config.h`            -> 4.61
+- Tk GUI:    `GUI_VERSION` in `fanmate/config.py`        -> 4.61
+- QML GUI2:  `guiVersion` in `fanmate_v2/qml/Main.qml`   -> 1.12
 
-Fields:
+Bump all three BEFORE compiling. Bump, compile, commit — in that order.
+If the bump lands after the compile, the firmware reports the old version
+and log filenames carry the old prefix.
 
-- channels (required, array) — any subset of:
-  - sms — iMessage to Nick’s Apple ID
-  - reminder — Reminder (fires immediately, syncs to iPhone)
-  - alexa — Echo Show speaks the routine message
-  - say — Mac speaks the message aloud
-  - alarm — Glass.aiff loops on the Mac for 10 seconds
-- msg (required, string) — 200 chars max, newlines stripped
-- source (optional, string) — "fanmate" picks the Fan-Mate Sinric
-  motion sensor. Default is "bikemate". Set this to "fanmate" or your
-  alerts will trigger the Bike-Mate routine instead.
-- repeat (optional, int) — fires the alexa channel N times, 2s apart.
-  Cap 5.
+## Verified working on Sonoma (2026-10-13)
 
-Response: {"status": "ok", "channels": ["say", "alarm"]}
+- ESP32 reachable at 192.168.8.242. Firmware v4.61 serving `/status`
+  and `/log/list`. Web dashboard serves.
+- Tk GUI:  ~/fanmate-venv-test/bin/python fanmate.py
+  Telemetry live. Log sync pulling sealed CSVs into
+  ~/Documents/FanMate_logs/ via CRC32. Confirmed on 15+ hourly files.
+- QML GUI2:  ~/fanmate-venv-test/bin/python -m fanmate_v2.main
+  All gauges live. Reads /status through fanmate_v2/bridge.py.
+- ~/fanmate-venv-test/ holds PySide6 6.12.0 + requests.
+  bleak was installed by mistake. Unused. Safe to remove.
 
-## Example Fan-Mate calls
+## What the firmware does NOT do
 
-Fan stall detected:
+- No POST to OSA Server. No /notify, no /fanpanic, no Sinric.
+  Grep of *.cpp/*.h/*.ino returned zero hits. Any doc describing
+  this behaviour is a stale plan, not current code.
+- Does not depend on any Mac-side process for its core function.
+  The Mac runs GUI + OTA only. The ESP32 cools and logs standalone.
 
-    {"channels": ["say", "alarm"], "msg": "Fan stall detected", "source": "fanmate"}
+## Where things live
 
-Fan stall with escalation — Echo alert too:
+- fanmate/log_sync.py          log sync. Threaded into app.py:149.
+                                Do not move it, do not delete it.
+- fanmate/dynatune.py          pure-Python KPI analysis. No GUI imports.
+- fanmate_v2/dynatune_model.py Tk-free wrapper for the QML side.
+- ~/Documents/FanMate_logs/    sealed CSVs + firmware/ archive of .bin files.
 
-    {"channels": ["sms", "alexa", "say", "alarm"], "msg": "Fan stall - overheating", "source": "fanmate"}
+## Three things that will bite you
 
-Room too hot, don’t fire the full chain:
+1. Custom SSD1306 fork required.
+   ~/Documents/Arduino/libraries/Adafruit_SSD1306_72x40/
+   Not the upstream Adafruit library. Compile fails without it.
+2. ESP32 core must be 2.0.17. Not 3.x.
+   fanmate.ino has a #error guard, so a wrong core fails loudly.
+3. Version bump before compile. See top of this file.
 
-    {"channels": ["alexa"], "msg": "Room is too hot, turn on AC", "source": "fanmate", "repeat": 2}
+## Known cosmetic issues
 
-## Old routes (deprecated but still work)
+- fanmate/config.py GUI_VERSION was 4.59, now 4.61. Aligned 2026-10-13.
+- fanmate_v2/requirements.txt pin was ==6.4.3, now >=6.4.
 
-- POST /fanpanic — fires sms + reminder + alexa. Fixed bundle. Kept
-  as an alias. Do not use for new work.
+## Pending
 
-## What Fan-Mate needs to do
+- FanMate_temp_vs_data.csv (4229 rows, Sept 25) still on the Catalina
+  volume at /Volumes/Home — Data/Users/Nick/Documents/. Low priority.
+  sudo cp, then sudo chown nick:staff.
 
-Replace the current Fan-Mate firmware’s POST to /fanpanic with a
-POST to /notify using the JSON body above. Set source: "fanmate" in
-every call.
+## Patching convention (from README)
 
-Update Fan-Mate’s README / HANDOVER to point at /notify and
-document which channels Fan-Mate uses for which events.
-
-## IPs and infrastructure
-
-- OSA Server (iMac): 192.168.8.187
-- Bike-Mate (ESP32): 192.168.8.196
-- Fan-Mate (ESP32): 192.168.8.242
-
-Fan-Mate’s /status endpoint is proxied by the OSA server at
-GET /fan/status (10s cache). No change needed on the Fan-Mate side for
-that.
-
-## Sinric device IDs
-
-- BikeMate motion sensor: 6acc2a5bc07d082fb430b899
-- FanMate motion sensor: 6acc2b22c07d082fb430b94e
-
-Motion sensors, not switches. Alexa refuses switches as routine triggers.
-
-## Notes
-
-- Mac must be logged in and awake for any channel to fire. Screen off
-  is fine.
-- No authentication on /notify. LAN only.
-- msg is required. Empty string is OK if the channel doesn’t use it
-  (e.g. alarm on its own).
-- /notify has no throttle. Fan-Mate must rate-limit itself if it can
-  fire rapidly.
-
-## Open items
-
-1. **Fan-Mate → /notify POST.** Firmware side. Fire when kill mode latches
-   or fan stall alarm trips. Same wifi/HTTP pattern as Bike-Mate. Set
-   source: "fanmate" so the Fan-Mate Sinric motion sensor fires, not
-   Bike-Mate. Rate-limit on the device — /notify has no throttle.
-2. **Move log_sync into OSA Server.** Python process already runs 24/7 at
-   login. Same code as fanmate/log_sync.py, threaded, 30s cadence, CRC verify.
-   Delete fanmate/log_sync.py and its thread from fanmate/app.py once moved.
-   GUIs read from ~/Documents/FanMate_logs/ off disk either way.
-3. **Menu bar indicator (xbar plugin).** Script at
-   ~/Library/Application Support/xbar/plugins/fanmate.10s.py. Hits
-   http://192.168.8.242/status, prints phone temp + RPM for the bar, full
-   detail in the dropdown. xbar already installed (Mac fan monitor icon).
-   No bundle, no daemon, no compile.
-
-## Adding more to the OSA Server
-
-The server is a Python process. It can do anything a Python script can:
-smtplib, open, shortcuts run, POST to Slack/Discord/ntfy, HomeKit via
-Shortcuts. Add as a named route. Never add a generic command execution
-endpoint.
+Write each patch as a Python heredoc into /tmp/patch.py. Back up first
+with shutil.copy2. End with a verification print. Patch and run in one
+block. Never paste standalone multi-line shell that edits files.

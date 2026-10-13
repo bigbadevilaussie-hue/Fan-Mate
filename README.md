@@ -4,7 +4,9 @@ ESP32-C3 fan controller that keeps an iPhone cool on a 24/7 hotspot mount.
 
 The iPhone is the sole internet uplink (weak signal, rural Queensland). Every byte through the network heats its cellular modem. Fan-Mate watches the router WAN traffic rate and spins a 40mm PWM fan when downloads are detected — before the phone gets hot, not after.
 
-Current: **FW v4.50** · **Tk GUI v4.50** · **QML GUI2 v1.11** (parked)
+Current: **FW v4.61**  ·  **Tk GUI v4.61**  ·  **QML GUI2 v1.12**
+
+For current-state brief and migration notes, see `HANDOVER.md`.
 
 Repo: https://github.com/bigbadevilaussie-hue/Fan-Mate
 
@@ -80,28 +82,6 @@ Output: `dist/Fan-Mate-QML.app`. Copy to Desktop and clear quarantine:
 Icon is at `/tmp/fanmate.icns`, built from `fanmate.png` with `sips` + `iconutil`.
 Rebuild if missing (see git history for the exact sizes).
 
-### Why not Nuitka
-
-Tried and abandoned. Nuitka (4.2.2 stable and 4.4rc1 factory) fails on macOS with
-`bundle format unrecognized, invalid, or unsuitable` from `codesign` because it
-tries to sign the `Contents/MacOS/.` directory. No flag exists to skip the codesign
-pass in 4.4rc1. It also fails to bundle `QtWebEngineCore.framework` correctly — only
-the `Helpers` subdirectory gets copied.
-
-PyInstaller handles both. It splits data files between `Contents/Resources` and
-`Contents/Frameworks` and signs each separately, which is what codesign expects.
-
-### WebEngine is stripped
-
-`fanmate_v2/main.py` and `fanmate_v2/qml/Main.qml` have QtWebEngine removed so the
-standalone build doesn't depend on the broken framework bundling. The serial panel
-shows a placeholder. Re-enable when the tooling is fixed.
-
-### Frozen path
-
-`fanmate_v2/main.py` uses `sys._MEIPASS` in the frozen branch. PyInstaller 6 on
-macOS puts bundled data files in `Contents/Frameworks/`, which `sys._MEIPASS`
-points at. Symlinks land in `Contents/Resources/`.
 
 ## Repo
 
