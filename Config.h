@@ -22,7 +22,12 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "4.62"
+#define FAN_MATE_VERSION "4.64"
+
+// v4.63: OSA Server owns GitHub pushes and receives HB beats.
+// Set to 0 to restore firmware-side uploads (needs a valid token).
+#define OSA_OWNS_GITHUB_PUSH 1
+#define OSA_HB_URL "http://192.168.8.187:9999/fan/hb"
 
 #define DEBUG_VERBOSE 0
 

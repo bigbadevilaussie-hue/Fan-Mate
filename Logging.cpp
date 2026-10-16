@@ -280,8 +280,12 @@ static bool seal_live(time_t name_epoch) {
 
     log_print("[LOG] sealed %s\n", sealed_path);
 
-    // Upload to Drive (best-effort, non-fatal)
+#if !OSA_OWNS_GITHUB_PUSH
+    // Upload to GitHub (best-effort, non-fatal)
     upload_to_github(sealed_path, sealed, "logs");
+#else
+    log_print("[LOG] OSA owns push, skipping %s\n", sealed);
+#endif
 
     time_t now = time(nullptr);
     open_fresh_live(now);
@@ -433,7 +437,11 @@ void log_write_config_snapshot() {
     f.close();
 
     log_print("[CFG] snapshot: %s\n", name);
+#if !OSA_OWNS_GITHUB_PUSH
     upload_to_github(path, name, "config");
+#else
+    log_print("[CFG] OSA owns push, skipping %s\n", name);
+#endif
 }
 
 void log_flush_seal() {
@@ -729,6 +737,31 @@ bool log_delete_sealed(const char* name) {
 //  Writes one HB row with free heap, min heap, stack mark,
 //  RSSI, and uptime into the log CSV.
 // ------------------------------------------------------------
+// v4.63: post one HB beat to OSA Server. Bounded by upstream_reachable();
+// skipped silently when the internet is down. Never blocks more than ~1.5 s.
+static void osa_hb_post(uint32_t heap, uint32_t min_heap,
+                        uint32_t stack, int rssi, unsigned long up_s) {
+#if OSA_OWNS_GITHUB_PUSH
+    if (!upstream_reachable()) return;
+    char url[180];
+    snprintf(url, sizeof(url),
+             OSA_HB_URL "?heap=%u&min=%u&stack=%u&rssi=%d&up=%lu",
+             (unsigned)heap, (unsigned)min_heap, (unsigned)stack,
+             rssi, up_s);
+    HTTPClient http;
+    http.setConnectTimeout(800);
+    http.setTimeout(800);
+    if (!http.begin(url)) return;
+    int code = http.GET();
+    if (code != 200) {
+        log_print("[HB] get HTTP %d\n", code);
+    }
+    http.end();
+#else
+    (void)heap; (void)min_heap; (void)stack; (void)rssi; (void)up_s;
+#endif
+}
+
 void black_box_heartbeat() {
 #if BLACKBOX_ENABLED
     static unsigned long last_hb = 0;
@@ -750,5 +783,7 @@ void black_box_heartbeat() {
              (unsigned)stack_mark, rssi, (unsigned long)(now / 1000));
     f.printf("%s,%.1f,,0,0,0,%s,,\n", t.c_str(), currentTemp, ev);
     f.close();
+
+    osa_hb_post(free_heap, min_heap, stack_mark, rssi, now / 1000);
 #endif
 }
