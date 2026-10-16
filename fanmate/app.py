@@ -38,6 +38,7 @@ from .log_sync import *
 from .widgets import *
 from .dialogs import *
 from .reports import *
+from . import osa_client
 
 
 class App:
@@ -241,76 +242,27 @@ class App:
         except Exception as e:
             print(f"[OTA] archive failed: {e}")
 
-        # Upload .bin to GitHub repo (main source repo, not uploads)
+        # v4.64: OSA owns the OTA. Post the .bin to OSA; OSA archives it,
+        # pushes to GitHub on the next cycle, and forwards the OTA to the
+        # ESP32 itself. The GUI does nothing else.
+        print(f"[OTA] posting {os.path.basename(BUILD_BIN)} to OSA...")
         try:
-            import base64
-            import re
-            secrets_path = os.path.join(FANMATE_DIR, "secrets.h")
-            secrets_text = open(secrets_path).read()
-
-            def _secret(name):
-                m = re.search(r'#define\s+' + name + r'\s+"([^"]+)"', secrets_text)
-                return m.group(1) if m else None
-
-            tok = _secret("GITHUB_TOKEN")
-            src_owner = _secret("GITHUB_OWNER")
-            src_repo = _secret("GITHUB_REPO")
-            src_branch = _secret("GITHUB_BRANCH")
-
-            if not tok:
-                print("[OTA] GITHUB_TOKEN not in secrets.h, skipping bin upload")
+            with open(BUILD_BIN, "rb") as bf:
+                bin_bytes = bf.read()
+            bin_name = os.path.basename(BUILD_BIN)
+            ok = osa_client.post_bin(bin_name, bin_bytes)
+            if ok:
+                print(f"[OTA] OSA accepted {bin_name} ({len(bin_bytes)} bytes)")
+                print("[OTA] OSA will forward the OTA to the ESP32 now")
             else:
-                bin_path = BUILD_BIN
-                bin_name = os.path.basename(bin_path)
-                with open(bin_path, "rb") as bf:
-                    b64 = base64.b64encode(bf.read()).decode("ascii")
-
-                api_url = f"https://api.github.com/repos/{src_owner}/{src_repo}/contents/firmware/{bin_name}"
-                headers = {
-                    "Authorization": f"Bearer {tok}",
-                    "Accept": "application/vnd.github+json",
-                    "User-Agent": "Fan-Mate-GUI",
-                }
-                payload = {
-                    "message": f"firmware: v{src_ver} ({bin_name})",
-                    "content": b64,
-                    "branch": src_branch,
-                }
-
-                print(f"[OTA] uploading {bin_name} ({len(b64)} b64 chars) to GitHub...")
-
-                # Check if file already exists — need SHA to update
-                head = requests.get(api_url, headers=headers, timeout=15)
-                if head.status_code == 200:
-                    payload["sha"] = head.json().get("sha")
-
-                r = requests.put(api_url, json=payload, headers=headers, timeout=60)
-                if r.status_code in (200, 201):
-                    print(f"[OTA] bin uploaded to GitHub: {bin_name} ({r.status_code})")
-                else:
-                    print(f"[OTA] bin upload failed: HTTP {r.status_code}")
-                    print(f"[OTA] response: {r.text[:200]}")
-        except Exception as e:
-            print(f"[OTA] bin upload error: {e}")
-
-        print(f"[OTA] uploading...")
-        t0 = time.time()
-        try:
-            with open(BUILD_BIN, "rb") as f:
-                r = requests.post(f"{FANMATE_URL}/ota",
-                                  files={"firmware": f},
-                                  timeout=120)
-            dt = time.time() - t0
-            print(f"[OTA] HTTP {r.status_code} ({dt:.1f}s)")
-
-            if r.status_code != 200:
+                print(f"[OTA] OSA POST failed")
                 self.root.after(0, lambda: messagebox.showerror(
-                    "OTA", f"Failed: HTTP {r.status_code}"))
+                    "OTA", "OSA refused the .bin — check /tmp/osa_server.log"))
         except Exception as e:
-            print(f"[OTA] EXCEPTION: {e}")
+            print(f"[OTA] OSA POST exception: {e}")
             err = str(e)
             self.root.after(0, lambda m=err: messagebox.showerror(
-                "OTA", f"Failed:\n{m}"))
+                "OTA", f"OSA POST failed:\n{m}"))
 
         print("[OTA] done")
         print("=" * 50)

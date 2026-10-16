@@ -9,6 +9,7 @@ from .config import *
 from . import state
 from .helpers import current_theme, local_time_str
 from .widgets import ReportPlot
+from . import osa_client
 
 
 class Report2H(tk.Toplevel):
@@ -92,48 +93,61 @@ class Report2H(tk.Toplevel):
         return out
 
     def _parse(self, path):
-        """Parse a sealed CSV via csv.reader — handles quoted fields and
-        tolerates 8-column (pre-room_c) and 9-column rows."""
-        import csv
+        """Parse a sealed CSV. Prefer OSA's copy; fall back to local."""
+        import csv, io
         out = []
+        name = os.path.basename(path)
+        payload = osa_client.get_file("logs", name)
+        if payload:
+            f = io.StringIO(payload.decode("utf-8", "replace"))
+            close_f = False
+        else:
+            try:
+                f = open(path, newline="")
+                close_f = True
+            except Exception:
+                return out
         try:
-            with open(path, newline="") as f:
-                reader = csv.reader(f)
-                for parts in reader:
-                    if not parts or len(parts) < 6:
-                        continue
-                    if parts[0].strip() == "timestamp" or parts[0].startswith("#"):
-                        continue
-                    try:
-                        ts = datetime.strptime(parts[0].strip(), "%Y-%m-%d %H:%M:%S")
-                    except Exception:
-                        continue
-                    try:
-                        temp = float(parts[1])
-                    except Exception:
-                        continue
-                    net = None
-                    if len(parts) > 2 and parts[2].strip():
-                        try: net = float(parts[2])
-                        except: pass
-                    try:
-                        boost = int(parts[3]) if parts[3].strip() else 0
-                        fan   = int(parts[4]) if parts[4].strip() else 0
-                        rpm   = int(parts[5]) if parts[5].strip() else 0
-                    except Exception:
-                        continue
-                    room = None
-                    if len(parts) > 8 and parts[8].strip():
-                        try: room = float(parts[8])
-                        except: pass
-                    event = parts[6].strip() if len(parts) > 6 else ""
-                    out.append({
-                        "t": ts, "temp": temp, "net": net,
-                        "boost": boost, "fan": fan, "rpm": rpm,
-                        "room": room, "event": event,
-                    })
+            reader = csv.reader(f)
+            for parts in reader:
+                if not parts or len(parts) < 6:
+                    continue
+                if parts[0].strip() == "timestamp" or parts[0].startswith("#"):
+                    continue
+                try:
+                    ts = datetime.strptime(parts[0].strip(), "%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    continue
+                try:
+                    temp = float(parts[1])
+                except Exception:
+                    continue
+                net = None
+                if len(parts) > 2 and parts[2].strip():
+                    try: net = float(parts[2])
+                    except: pass
+                try:
+                    boost = int(parts[3]) if parts[3].strip() else 0
+                    fan   = int(parts[4]) if parts[4].strip() else 0
+                    rpm   = int(parts[5]) if parts[5].strip() else 0
+                except Exception:
+                    continue
+                room = None
+                if len(parts) > 8 and parts[8].strip():
+                    try: room = float(parts[8])
+                    except: pass
+                event = parts[6].strip() if len(parts) > 6 else ""
+                out.append({
+                    "t": ts, "temp": temp, "net": net,
+                    "boost": boost, "fan": fan, "rpm": rpm,
+                    "room": room, "event": event,
+                })
         except Exception as e:
             print(f"[REPORT] parse {path}: {e}")
+        finally:
+            if close_f:
+                try: f.close()
+                except Exception: pass
         return out
 
     def _summarise(self, rows, files):

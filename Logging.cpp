@@ -743,18 +743,19 @@ static void osa_hb_post(uint32_t heap, uint32_t min_heap,
                         uint32_t stack, int rssi, unsigned long up_s) {
 #if OSA_OWNS_GITHUB_PUSH
     if (!upstream_reachable()) return;
-    char url[180];
-    snprintf(url, sizeof(url),
-             OSA_HB_URL "?heap=%u&min=%u&stack=%u&rssi=%d&up=%lu",
+    char body[160];
+    snprintf(body, sizeof(body),
+             "{\"heap\":%u,\"min\":%u,\"stack\":%u,\"rssi\":%d,\"up\":%lu}",
              (unsigned)heap, (unsigned)min_heap, (unsigned)stack,
              rssi, up_s);
     HTTPClient http;
     http.setConnectTimeout(800);
     http.setTimeout(800);
-    if (!http.begin(url)) return;
-    int code = http.GET();
+    if (!http.begin(OSA_HB_URL)) return;
+    http.addHeader("Content-Type", "application/json");
+    int code = http.POST((uint8_t*)body, strlen(body));
     if (code != 200) {
-        log_print("[HB] get HTTP %d\n", code);
+        log_print("[HB] post HTTP %d\n", code);
     }
     http.end();
 #else
