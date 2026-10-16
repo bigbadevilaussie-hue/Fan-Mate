@@ -22,7 +22,7 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "4.61"
+#define FAN_MATE_VERSION "4.62"
 
 #define DEBUG_VERBOSE 0
 

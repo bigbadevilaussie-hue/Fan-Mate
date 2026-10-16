@@ -30,3 +30,6 @@ build/Fan-Mate/
 main.dist/
 main.build/
 main.onefile-build/
+
+# patch backups
+*.bak-*

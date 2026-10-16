@@ -123,6 +123,11 @@ static void open_fresh_live(time_t start_epoch) {
 //  HTTP 302 is treated as success (Apps Script redirect pattern).
 // ------------------------------------------------------------
 bool upload_to_github(const char* sealed_path, const char* name, const char* subdir) {
+    // v4.62: no route out -> skip. Sealed file stays on LittleFS for the Mac to pull.
+    if (!upstream_reachable()) {
+        log_print("[GH] no upstream, skipping %s\n", name);
+        return false;
+    }
     File f = LittleFS.open(sealed_path, "r");
     if (!f) {
         log_print("[GH] cannot open %s\n", sealed_path);
@@ -171,6 +176,7 @@ bool upload_to_github(const char* sealed_path, const char* name, const char* sub
     {
         HTTPClient h;
         h.setReuse(false);
+        h.setConnectTimeout(5000);
         h.setTimeout(8000);
         if (h.begin(url)) {
             h.addHeader("Authorization", String("Bearer ") + GITHUB_TOKEN);
@@ -214,6 +220,7 @@ bool upload_to_github(const char* sealed_path, const char* name, const char* sub
 
     HTTPClient http;
     http.setReuse(false);
+    http.setConnectTimeout(8000);
     http.setTimeout(20000);
     http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
 

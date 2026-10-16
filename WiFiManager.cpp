@@ -98,6 +98,7 @@ void clock_sync() {
     log_print("[CLOCK] querying %s\n", url);
 
     HTTPClient http;
+    http.setConnectTimeout(CLOCK_HTTP_TIMEOUT_MS);
     http.setTimeout(CLOCK_HTTP_TIMEOUT_MS);
     if (!http.begin(url)) {
         log_print("[CLOCK] http.begin failed\n");
@@ -129,6 +130,24 @@ void clock_sync() {
 
     _clock_synced_flag = true;
     log_print("[CLOCK] %s -> %lu\n", dateHdr.c_str(), (unsigned long)epoch);
+}
+
+// v4.62: can we reach the internet right now? Bounded (800 ms per probe), cached 20 s.
+bool upstream_reachable() {
+    static unsigned long checked_at = 0;
+    static bool          last       = false;
+    unsigned long now = millis();
+    if (checked_at != 0 && now - checked_at < 20000UL) return last;
+    checked_at = now;
+    if (WiFi.status() != WL_CONNECTED) { last = false; return false; }
+    WiFiClient c;
+    last = c.connect(IPAddress(1, 1, 1, 1), 443, 800);
+    c.stop();
+    if (!last) {
+        last = c.connect(IPAddress(8, 8, 8, 8), 443, 800);
+        c.stop();
+    }
+    return last;
 }
 
 bool clock_synced() { return _clock_synced_flag; }

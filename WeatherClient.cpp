@@ -1,5 +1,6 @@
 #include "WeatherClient.h"
 #include "Config.h"
+#include "WiFiManager.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
@@ -27,13 +28,24 @@ void weather_init() {
 }
 
 void weather_loop() {
+    static unsigned long lastAttempt = 0;
+    static uint8_t       fails       = 0;
     unsigned long now = millis();
     if (lastFetch > 0 && now - lastFetch < REFRESH_MS) return;
     if (WiFi.status() != WL_CONNECTED) return;
 
+    // v4.62: back off after failures (60 s, 2 m, 4 m, 8 m, 15 m cap).
+    // Before this, a failed fetch retried on every loop() pass.
+    unsigned long backoff = fails == 0 ? 0UL
+                          : (fails >= 5 ? 900000UL : (30000UL << fails));
+    if (lastAttempt > 0 && now - lastAttempt < backoff) return;
+    lastAttempt = now;
+    if (!upstream_reachable()) { if (fails < 255) fails++; return; }
+
     HTTPClient http;
     http.begin(URL);
-    http.setTimeout(3000);
+    http.setConnectTimeout(1500);
+    http.setTimeout(2000);
     int code = http.GET();
 
     if (code == 200) {
@@ -54,6 +66,7 @@ void weather_loop() {
         Serial.printf("[WEATHER] HTTP %d\n", code);
     }
     http.end();
+    if (lastFetch == now) fails = 0; else if (fails < 255) fails++;
 }
 
 float weather_get_temp() {

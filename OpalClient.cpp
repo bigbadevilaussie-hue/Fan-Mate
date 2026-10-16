@@ -33,9 +33,13 @@ static String sha256_hex(const String &input) {
 static bool rpc_call(const String &json_body, String &response) {
     digitalWrite(LED_PIN, LOW);
 
+    if (WiFi.RSSI() < OPAL_RSSI_FLOOR) {      // v4.62: LED was left on here
+        digitalWrite(LED_PIN, HIGH);
+        return false;
+    }
     HTTPClient http;
+    http.setConnectTimeout(OPAL_HTTP_TIMEOUT_MS);   // v4.62: connect had no cap
     http.setTimeout(OPAL_HTTP_TIMEOUT_MS);
-    if (WiFi.RSSI() < OPAL_RSSI_FLOOR) return false;
     String url = String("http://") + OPAL_IP + "/rpc";
 
     if (!http.begin(url)) {

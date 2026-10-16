@@ -12,6 +12,7 @@
 #include "Songs.h"
 
 #include <esp_arduino_version.h>
+#include <Preferences.h>
 
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
 #error "Fan-Mate requires Arduino ESP32 core 2.x (2.0.17)"
@@ -24,6 +25,25 @@ int   alertState   = 0;
 bool  phonePresent = false;
 
 volatile bool otaInProgress = false;
+
+// v4.62: software watchdog. A separate task restarts the chip if loop()
+// has not run for 90 s, and records it so the next boot logs SWDOG_RESTART.
+static volatile unsigned long g_loop_beat = 0;
+#define SWDOG_TIMEOUT_MS 90000UL
+static void swdog_task(void*) {
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        if (g_loop_beat == 0 || otaInProgress) continue;
+        if (millis() - g_loop_beat > SWDOG_TIMEOUT_MS) {
+            Preferences p;
+            p.begin("swdog", false);
+            p.putUInt("n", p.getUInt("n", 0) + 1);
+            p.putUInt("up_s", (uint32_t)(millis() / 1000UL));
+            p.end();
+            ESP.restart();
+        }
+    }
+}
 
 SystemState   sys_state = STATE_ACTIVE;
 static unsigned long sleep_start_ms = 0;
@@ -105,6 +125,18 @@ void setup() {
     log_init();
     log_write_reset_reason();
 
+    {   // v4.62: report a software-watchdog restart from the previous run
+        Preferences p;
+        p.begin("swdog", false);
+        if (p.getUInt("n", 0) > 0) {
+            char ev[48];
+            snprintf(ev, sizeof(ev), "SWDOG_RESTART up_s=%u", (unsigned)p.getUInt("up_s", 0));
+            log_write_event(ev);
+            p.putUInt("n", 0);
+        }
+        p.end();
+    }
+
     drawSplashScreen();
     delay(5000);
 
@@ -124,14 +156,19 @@ void setup() {
 
     log_boot_recovery();
 
+    xTaskCreate(swdog_task, "swdog", 4096, NULL, 2, NULL);
     log_print("[BOOT] Fan-Mate V%s ready\n", FAN_MATE_VERSION);
 }
 
 float lastNetKbps = 0.0;
 
 static void tick_15s() {
+    // v4.62b: serve pending HTTP around the Opal poll so a slow-but-reachable
+    // upstream can't starve server_loop() for a full tick.
+    server_loop();
     uint64_t rx_now = 0;
     bool opal_ok = opal_poll(rx_now);
+    server_loop();
 
     float kbps = 0.0f;
     if (opal_ok) {
@@ -184,6 +221,7 @@ static void tick_15s() {
 }
 
 void loop() {
+  g_loop_beat = millis();
   server_loop();
     static unsigned long lastOLED     = 0;
     static bool          server_ready = false;
