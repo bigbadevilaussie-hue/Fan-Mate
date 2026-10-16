@@ -1,5 +1,0 @@
-timestamp,temp_c,net_kbps,boost,fan,rpm,event,outdoor_c,room_c
-2026-10-09 19:56:47,28.2,,0,0,0,SEAL,21.4,25.8
-uptime:3,27.4,,0,0,0,POWERON,21.4,25.3
-uptime:3,24.6,,0,0,0,POWERON,21.4,25.9
-uptime:3,24.4,,0,0,0,POWERON,21.4,25.4
