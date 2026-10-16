@@ -1,0 +1,2 @@
+timestamp,temp_c,net_kbps,boost,fan,rpm,event,outdoor_c,room_c
+2026-10-09 20:33:34,25.6,,0,0,0,SLEEP,20.8,26.3
