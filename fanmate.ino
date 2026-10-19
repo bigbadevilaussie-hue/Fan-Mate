@@ -251,6 +251,7 @@ void loop() {
         if (!phone_now &&
             phone_absent_since > 0 &&
             now - phone_absent_since >= PHONE_SLEEP_DELAY_MS) {
+            // v4.67 test: sleep transition disabled while tuning sensor distance
             enter_sleep();
         }
     } else if (sys_state == STATE_LIGHT_SLEEP) {

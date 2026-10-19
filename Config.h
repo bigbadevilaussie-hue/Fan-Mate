@@ -22,7 +22,7 @@ enum SystemState {
 extern SystemState   sys_state;
 extern unsigned long phone_absent_since;
 
-#define FAN_MATE_VERSION "4.65"
+#define FAN_MATE_VERSION "4.70"
 
 // v4.63: OSA Server owns GitHub pushes and receives HB beats.
 // Set to 0 to restore firmware-side uploads (needs a valid token).
@@ -40,10 +40,10 @@ extern unsigned long phone_absent_since;
 #define TACH_PIN         3
 #define DS18B20_PIN      4
 #define PHONE_SENSE_PIN  1
-// v4.60: hall sensor temporarily disabled (shorted VCC/GND)
-// Set to 1 once the wiring is fixed. When 0, phonePresent is
-// forced true so the device never enters light sleep.
-#define HALL_SENSOR_ENABLED 0
+// v4.69: hall sensor enabled, 5-sample 1Hz debounce in FanController.
+// Sleep/wake delay = 0; the debounce IS the delay.
+// Set HALL_SENSOR_ENABLED 0 to force phonePresent=true and skip sleep.
+#define HALL_SENSOR_ENABLED 1
 #define NTC_PIN          0
 
 #define PWM_FREQ      25000
@@ -72,8 +72,8 @@ extern unsigned long phone_absent_since;
 #define WIFI_RETRY_INTERVAL_MS   30000
 
 #define SERIAL_BUF_LINES        20
-#define PHONE_SLEEP_DELAY_MS    30000UL
-#define PHONE_WAKE_DELAY_MS      5000UL
+#define PHONE_SLEEP_DELAY_MS    0UL
+#define PHONE_WAKE_DELAY_MS      0UL
 #define OPAL_LOGIN_REFRESH_MS   3000000
 
 #define LOG_SEAL_MIN_ROWS        3

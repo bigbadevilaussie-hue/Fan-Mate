@@ -101,8 +101,6 @@ float readNTC() {
 
 void updatePhoneDetection() {
 #if !HALL_SENSOR_ENABLED
-    // Hall sensor disconnected. Force phone present so the device
-    // never enters light sleep and the fan runs autonomously.
     static bool reported = false;
     if (!reported) {
         reported = true;
@@ -112,41 +110,64 @@ void updatePhoneDetection() {
         log_print("[PHONE] sensor disabled, forcing present\n");
     }
     return;
-#endif
-    static bool lastState = false;
-    static unsigned long lastChange = 0;
-    static bool initialized = false;
-    bool present = (digitalRead(PHONE_SENSE_PIN) == LOW);
+#else
+    // 1Hz loop with latch and 5-sample confirmation.
+    static bool          latched_state = false;
+    static bool          initialized   = false;
+    static int           count         = 0;
+    static unsigned long last_sample   = 0;
+
+    unsigned long now = millis();
+    if (now - last_sample < 1000) return;
+    last_sample = now;
+
+    // A3144 pulls LOW when magnet is present
+    bool present_raw = (digitalRead(PHONE_SENSE_PIN) == LOW);
 
     if (!initialized) {
         initialized = true;
-        lastState = present;
-        phonePresent = present;
-        if (present) {
-            phone_present_since = millis();
+        latched_state = present_raw;
+        phonePresent  = present_raw;
+        if (present_raw) {
+            phone_present_since = now;
+            phone_absent_since = 0;
         } else {
-            phone_absent_since = millis();
+            phone_absent_since = now;
+            phone_present_since = 0;
         }
-        log_print("[PHONE] initial: %s\n", present ? "present" : "absent");
+        log_print("[PHONE] initial: %s (raw=%d)\n", present_raw ? "present" : "absent", (int)present_raw);
         return;
     }
 
-    if (present != lastState) {
-        unsigned long now = millis();
-        if (now - lastChange > 500) {
-            lastState = present;
-            lastChange = now;
-            phonePresent = present;
-            if (present) {
+    // Check if the raw reading differs from the latched state
+    if (present_raw != latched_state) {
+        count++;
+        log_print("[PHONE] %d/5\n", count);
+        
+        if (count >= 5) {
+            // 5 seconds confirmed: flip the latch
+            latched_state = present_raw;
+            phonePresent  = present_raw;
+            count         = 0;
+            
+            if (present_raw) {
                 phone_present_since = now;
-                phone_absent_since  = 0;
+                phone_absent_since = 0;
+                log_print("[PHONE] detected (latched)\n");
             } else {
-                phone_absent_since  = now;
+                phone_absent_since = now;
                 phone_present_since = 0;
+                log_print("[PHONE] removed (latched)\n");
             }
-            log_print("[PHONE] %s\n", present ? "detected" : "removed");
+        }
+    } else {
+        // Reading matches latched state, reset any pending countdown
+        if (count > 0) {
+            log_print("[PHONE] reset\n");
+            count = 0;
         }
     }
+#endif
 }
 
 // ------------------------------------------------------------
