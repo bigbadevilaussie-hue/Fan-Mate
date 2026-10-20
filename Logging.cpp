@@ -122,6 +122,34 @@ static void open_fresh_live(time_t start_epoch) {
 //  Google Drive upload — POST sealed log to Apps Script
 //  HTTP 302 is treated as success (Apps Script redirect pattern).
 // ------------------------------------------------------------
+
+// v4.71: Direct POST to OSA
+bool upload_to_osa(const char* local_path, const char* name, const char* url) {
+    File f = LittleFS.open(local_path, "r");
+    if (!f) return false;
+    size_t fileSize = f.size();
+    if (fileSize == 0) { f.close(); return true; }
+    uint8_t* buf = (uint8_t*)malloc(fileSize);
+    if (!buf) { f.close(); return false; }
+    f.read(buf, fileSize);
+    f.close();
+
+    char full_url[128];
+    snprintf(full_url, sizeof(full_url), "%s?name=%s", url, name);
+
+    HTTPClient http;
+    http.setConnectTimeout(3000);
+    http.setTimeout(5000);
+    if (!http.begin(full_url)) { free(buf); return false; }
+    
+    http.addHeader("Content-Type", "application/octet-stream");
+    int code = http.POST(buf, fileSize);
+    http.end();
+    free(buf);
+    
+    return (code == 200);
+}
+
 bool upload_to_github(const char* sealed_path, const char* name, const char* subdir) {
     // v4.62: no route out -> skip. Sealed file stays on LittleFS for the Mac to pull.
     if (!upstream_reachable()) {
@@ -280,11 +308,23 @@ static bool seal_live(time_t name_epoch) {
 
     log_print("[LOG] sealed %s\n", sealed_path);
 
+    // v4.71: direct to OSA
+    bool osa_ok = false;
+    if (upstream_reachable()) {
+        osa_ok = upload_to_osa(sealed_path, sealed, OSA_LOG_URL);
+        log_print("[LOG] direct OSA push: %s\n", osa_ok ? "OK" : "FAIL");
+    }
+
 #if !OSA_OWNS_GITHUB_PUSH
     // Upload to GitHub (best-effort, non-fatal)
     upload_to_github(sealed_path, sealed, "logs");
 #else
-    log_print("[LOG] OSA owns push, skipping %s\n", sealed);
+    if (!osa_ok) {
+        log_print("[LOG] OSA push failed, keeping %s\n", sealed);
+    } else {
+        LittleFS.remove(sealed_path);
+        log_print("[LOG] deleted local %s (sent to OSA)\n", sealed);
+    }
 #endif
 
     time_t now = time(nullptr);
@@ -437,10 +477,23 @@ void log_write_config_snapshot() {
     f.close();
 
     log_print("[CFG] snapshot: %s\n", name);
+    
+    // v4.71: direct to OSA
+    bool cfg_ok = false;
+    if (upstream_reachable()) {
+        cfg_ok = upload_to_osa(path, name, OSA_CFG_URL);
+        log_print("[CFG] direct OSA push: %s\n", cfg_ok ? "OK" : "FAIL");
+    }
+
 #if !OSA_OWNS_GITHUB_PUSH
     upload_to_github(path, name, "config");
 #else
-    log_print("[CFG] OSA owns push, skipping %s\n", name);
+    if (cfg_ok) {
+        LittleFS.remove(path);
+        log_print("[CFG] deleted local %s\n", name);
+    } else {
+        log_print("[CFG] OSA push failed, keeping %s\n", name);
+    }
 #endif
 }
 
